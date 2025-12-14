@@ -1,0 +1,14 @@
+services:
+  envoy:
+    image: envoyproxy/envoy:v1.30-latest
+    ports:
+      - "443:443"
+      - "9901:9901"
+    volumes:
+      - ../envoy/envoy.yaml:/etc/envoy/envoy.yaml
+      - ../envoy/certs:/etc/envoy/certs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: always
+
+

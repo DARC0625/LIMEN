@@ -1,0 +1,144 @@
+# Global
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.log
+*.log.*
+*.tmp
+*.temp
+Thumbs.db
+
+# Environment Variables
+.env
+.env.*
+.env.local
+.env.*.local
+!.env.example
+
+# Node.js / Next.js (Frontend)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/dist/
+frontend/.vercel/
+frontend/.turbo/
+frontend/*.log
+frontend/.next/
+frontend/next-env.d.ts
+
+# Go (Backend)
+backend/bin/
+backend/dist/
+backend/vendor/
+backend/coverage.txt
+backend/coverage.out
+backend/profile.out
+backend/*.test
+backend/server
+backend/backend
+backend/limen-server
+backend/*.exe
+backend/*.dll
+backend/*.so
+backend/*.dylib
+
+# Rust (Agent)
+backend/agent/target/
+backend/agent/**/*.rs.bk
+backend/agent/Cargo.lock
+backend/agent/*.log
+
+# Database
+database/*.db
+database/*.sqlite
+database/*.sqlite3
+database/backups/
+database/dumps/
+
+# Build Artifacts & Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/temp_*/
+*.tar.gz
+*.zip
+*.tar
+limen-release.tar.gz
+
+# Docker
+.docker/
+docker-compose.override.yaml
+
+# IDE
+*.iml
+*.ipr
+*.iws
+.idea/
+.vscode/
+*.code-workspace
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# Logs
+logs/
+*.log
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+.jest/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+
+# Keys & Secrets
+*.pem
+*.key
+*.crt
+*.cert
+secrets/
+*.secret
+.env.secret
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Python (if any)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Misc
+*.swp
+*.swo
+*~
+.cache/

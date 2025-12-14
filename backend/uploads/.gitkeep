@@ -1,0 +1,4 @@
+# This directory stores uploaded files (agent binaries, deployment archives, etc.)
+# Actual files are ignored by .gitignore
+
+

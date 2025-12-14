@@ -1,0 +1,55 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+README.md
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Node modules (will be installed in container)
+frontend/node_modules/
+frontend/.next/
+
+# Build artifacts
+backend/bin/
+backend/dist/
+backend/server
+backend/agent/target/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+
+# Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Database files
+database/*.db
+database/*.sqlite
+
+# OS
+.DS_Store
+Thumbs.db
+
+

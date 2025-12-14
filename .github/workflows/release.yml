@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  GO_VERSION: '1.24'
+  NODE_VERSION: '18'
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build backend
+        working-directory: ./backend
+        run: go build -o limen-server ./cmd/server
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm ci && npm run build
+
+      - name: Create release archive
+        run: |
+          mkdir -p release
+          cp backend/limen-server release/
+          cp -r frontend/.next release/frontend
+          tar -czf limen-release.tar.gz release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: limen-release.tar.gz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
