@@ -40,7 +40,7 @@ func (s *VMService) SyncVMStatus(vm *models.VM) error {
 
 	// Only update if status changed
 	if oldStatus != vm.Status {
-		logger.Log.Info("VM status synced from libvirt", 
+		logger.Log.Info("VM status synced from libvirt",
 			zap.String("vm_name", vm.Name),
 			zap.String("old_status", string(oldStatus)),
 			zap.String("new_status", string(vm.Status)))
@@ -59,8 +59,8 @@ func (s *VMService) SyncAllVMStatuses() error {
 
 	for i := range vms {
 		if err := s.SyncVMStatus(&vms[i]); err != nil {
-			logger.Log.Warn("Failed to sync VM status", 
-				zap.String("vm_name", vms[i].Name), 
+			logger.Log.Warn("Failed to sync VM status",
+				zap.String("vm_name", vms[i].Name),
 				zap.Error(err))
 			// Continue with other VMs even if one fails
 		}
@@ -108,4 +108,3 @@ func (s *VMService) EnsureVMExists(vm *models.VM) error {
 	defer dom.Free()
 	return nil
 }
-

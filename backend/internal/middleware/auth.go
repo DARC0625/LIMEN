@@ -20,8 +20,57 @@ const UsernameKey contextKey = "username"
 func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Fix path if Envoy rewrites incorrectly (missing slashes)
+			originalPath := r.URL.Path
+			fixed := false
+
+			// Fix common Envoy rewrite issues
+			pathFixes := map[string]string{
+				"/apiauth/":        "/api/auth/",
+				"/apiquota":        "/api/quota",
+				"/apivms":          "/api/vms",
+				"/apihealth_proxy": "/api/health_proxy",
+				"/apiadmin/":       "/api/admin/",
+			}
+
+			for wrong, correct := range pathFixes {
+				if strings.HasPrefix(originalPath, wrong) {
+					r.URL.Path = strings.Replace(originalPath, wrong, correct, 1)
+					fixed = true
+					break
+				}
+			}
+
+			// Also handle paths that start with /api but missing slash after /api
+			if !fixed && strings.HasPrefix(originalPath, "/api") && len(originalPath) > 4 {
+				// Check if /api is followed by a letter (missing slash)
+				if originalPath[4] >= 'a' && originalPath[4] <= 'z' {
+					// Insert slash after /api
+					r.URL.Path = "/api/" + originalPath[4:]
+					fixed = true
+				}
+			}
+
+			if fixed {
+				logger.Log.Info("Fixed path from Envoy rewrite",
+					zap.String("original", originalPath),
+					zap.String("fixed", r.URL.Path))
+			}
+
+			// Log ALL requests to auth middleware
+			logger.Log.Info("Auth middleware - request received",
+				zap.String("path", r.URL.Path),
+				zap.String("method", r.Method),
+				zap.String("remote_addr", r.RemoteAddr),
+				zap.String("host", r.Host),
+				zap.String("user_agent", r.Header.Get("User-Agent")),
+				zap.Bool("is_public", isPublicEndpoint(r.URL.Path)))
+
 			// Skip authentication for public endpoints
 			if isPublicEndpoint(r.URL.Path) {
+				logger.Log.Info("Public endpoint accessed - allowing",
+					zap.String("path", r.URL.Path),
+					zap.String("method", r.Method))
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -30,6 +79,10 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 			authHeader := r.Header.Get("Authorization")
 			tokenString, err := auth.ExtractTokenFromHeader(authHeader)
 			if err != nil {
+				logger.Log.Warn("Auth middleware - no token found, returning 401",
+					zap.String("path", r.URL.Path),
+					zap.String("method", r.Method),
+					zap.String("error", err.Error()))
 				errors.WriteUnauthorized(w, "Authentication required")
 				return
 			}
@@ -49,7 +102,7 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 			// Check if user is approved (admin users are always approved)
 			// This is a critical security check - unapproved users should not access the system
 			if !claims.Approved && claims.Role != "admin" {
-				logger.Log.Warn("Unapproved user attempted access", 
+				logger.Log.Warn("Unapproved user attempted access",
 					zap.Uint("user_id", claims.UserID),
 					zap.String("username", claims.Username),
 					zap.String("path", r.URL.Path))
@@ -69,15 +122,29 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 
 // isPublicEndpoint checks if the endpoint is public (doesn't require authentication).
 func isPublicEndpoint(path string) bool {
+	// Normalize path - handle missing slashes
+	normalizedPath := path
+	if !strings.HasPrefix(normalizedPath, "/") {
+		normalizedPath = "/" + normalizedPath
+	}
+
 	publicPaths := []string{
 		"/api/health",
+		"/api/health_proxy", // Health check proxy endpoint
 		"/api/auth/login",
 		"/api/auth/register",
-		"/ws/vnc", // WebSocket endpoints need special handling
+		"/agent",            // Agent reverse-proxy path (public metrics)
+		"/apiauth/login",    // Handle Envoy rewrite issue
+		"/apiauth/register", // Handle Envoy rewrite issue
+		"/ws/vnc",           // WebSocket endpoints need special handling
 	}
 
 	for _, publicPath := range publicPaths {
-		if path == publicPath || strings.HasPrefix(path, publicPath+"/") {
+		if normalizedPath == publicPath || strings.HasPrefix(normalizedPath, publicPath+"/") {
+			return true
+		}
+		// Also check without leading slash
+		if strings.HasPrefix(normalizedPath, publicPath[1:]) {
 			return true
 		}
 	}
@@ -96,4 +163,3 @@ func GetUsername(ctx context.Context) (string, bool) {
 	username, ok := ctx.Value(UsernameKey).(string)
 	return username, ok
 }
-

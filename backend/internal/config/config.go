@@ -11,8 +11,9 @@ import (
 // Config holds the application configuration.
 type Config struct {
 	// Server Configuration
-	Port     string // HTTP server port
-	GRPCPort string // gRPC server port (for future use)
+	Port        string // HTTP server port
+	BindAddress string // HTTP server bind address (default: "0.0.0.0" for all interfaces, or specific IP like "10.0.0.100")
+	GRPCPort    string // gRPC server port (for future use)
 
 	// Database Configuration
 	DBHost      string // PostgreSQL host
@@ -31,60 +32,105 @@ type Config struct {
 	VMDir  string // VM disk images directory
 
 	// Security Configuration
-	AdminUser      string   // Default admin username
-	AdminPassword  string   // Default admin password (should be changed on first login)
-	AllowedOrigins []string // CORS allowed origins
-	JWTSecret      string   // JWT signing secret
+	AdminUser            string   // Default admin username
+	AdminPassword        string   // Default admin password (should be changed on first login)
+	AllowedOrigins       []string // CORS allowed origins
+	JWTSecret            string   // JWT signing secret (HMAC, deprecated - use Ed25519)
+	JWTEd25519PrivateKey string   // Ed25519 private key for JWT signing (preferred)
+	JWTEd25519PublicKey  string   // Ed25519 public key for JWT verification (preferred)
 
 	// Logging Configuration
 	LogLevel string // Log level: debug, info, warn, error
+	LogDir   string // Log directory for file rotation (empty = console only)
 
 	// Rate Limiting
 	RateLimitEnabled bool    // Enable rate limiting
 	RateLimitRPS     float64 // Requests per second per IP
 	RateLimitBurst   int     // Burst size
 
+	// IP Whitelist
+	AdminIPWhitelist []string // IP whitelist for admin endpoints (empty = allow all)
+
 	// Environment
 	Env string // Environment: development, production, etc.
+
+	// Alerting Configuration
+	AlertingEnabled    bool     // Enable alerting
+	AlertWebhookURL    string   // Webhook URL for alerts (e.g., Slack, Discord)
+	AlertEmailEnabled  bool     // Enable email alerts
+	AlertEmailSMTPHost string   // SMTP host
+	AlertEmailSMTPPort int      // SMTP port
+	AlertEmailSMTPUser string   // SMTP username
+	AlertEmailSMTPPass string   // SMTP password
+	AlertEmailFrom     string   // Email sender address
+	AlertEmailTo       []string // Email recipient addresses
+	AlertDedupWindow   int      // Deduplication window in minutes
 }
 
 // Load reads environment variables and returns a Config instance.
 // If an environment variable is not set, it uses the provided default value.
 func Load() *Config {
 	cfg := &Config{
-		Port:             getEnv("PORT", "8080"),
+		Port:             getEnv("PORT", "18443"),           // Custom port for security (default: 18443)
+		BindAddress:      getEnv("BIND_ADDRESS", "0.0.0.0"), // Bind all interfaces by default
 		GRPCPort:         getEnv("GRPC_PORT", "9090"),
 		DBHost:           getEnv("DB_HOST", "localhost"),
 		DBPort:           getEnv("DB_PORT", "5432"),
 		DBUser:           getEnv("DB_USER", "postgres"),
 		DBPassword:       getEnv("DB_PASSWORD", ""),
-		DBName:           getEnv("DB_NAME", "project_alpha"),
+		DBName:           getEnv("DB_NAME", "limen"),
 		DBSSLMode:        getEnv("DB_SSL_MODE", "disable"),
 		LibvirtURI:       getEnv("LIBVIRT_URI", "qemu:///system"),
-		ISODir:           getEnv("ISO_DIR", "/home/darc0/projects/LIMEN/database/iso"),
-		VMDir:            getEnv("VM_DIR", "/home/darc0/projects/LIMEN/database/vms"),
+		ISODir:           getEnv("ISO_DIR", "../database/iso"),
+		VMDir:            getEnv("VM_DIR", "../database/vms"),
 		AdminUser:        getEnv("ADMIN_USER", "admin"),
 		AdminPassword:    getEnv("ADMIN_PASSWORD", ""),
 		JWTSecret:        getEnv("JWT_SECRET", ""),
 		LogLevel:         getEnv("LOG_LEVEL", "info"),
+		LogDir:           getEnv("LOG_DIR", ""), // Empty = console only, set to enable file rotation
 		RateLimitEnabled: getEnv("RATE_LIMIT_ENABLED", "true") == "true",
 		RateLimitRPS:     parseFloat(getEnv("RATE_LIMIT_RPS", "10"), 10),
 		RateLimitBurst:   parseInt(getEnv("RATE_LIMIT_BURST", "20"), 20),
 		Env:              getEnv("ENV", "development"),
+
+		// IP Whitelist
+		AdminIPWhitelist: parseStringSlice(getEnv("ADMIN_IP_WHITELIST", "")),
+
+		// Alerting
+		AlertingEnabled:    getEnv("ALERTING_ENABLED", "false") == "true",
+		AlertWebhookURL:    getEnv("ALERT_WEBHOOK_URL", ""),
+		AlertEmailEnabled:  getEnv("ALERT_EMAIL_ENABLED", "false") == "true",
+		AlertEmailSMTPHost: getEnv("ALERT_EMAIL_SMTP_HOST", ""),
+		AlertEmailSMTPPort: parseInt(getEnv("ALERT_EMAIL_SMTP_PORT", "587"), 587),
+		AlertEmailSMTPUser: getEnv("ALERT_EMAIL_SMTP_USER", ""),
+		AlertEmailSMTPPass: getEnv("ALERT_EMAIL_SMTP_PASS", ""),
+		AlertEmailFrom:     getEnv("ALERT_EMAIL_FROM", ""),
+		AlertDedupWindow:   parseInt(getEnv("ALERT_DEDUP_WINDOW", "5"), 5),
 	}
 
 	// Build DatabaseURL from components
 	cfg.DatabaseURL = buildDatabaseURL(cfg)
 
 	// Parse allowed origins (comma-separated)
-	originsStr := getEnv("ALLOWED_ORIGINS", "*")
-	if originsStr == "*" {
-		cfg.AllowedOrigins = []string{"*"}
+	originsStr := getEnv("ALLOWED_ORIGINS", "")
+	if originsStr == "" {
+		cfg.AllowedOrigins = []string{}
 	} else {
 		cfg.AllowedOrigins = strings.Split(originsStr, ",")
 		for i := range cfg.AllowedOrigins {
 			cfg.AllowedOrigins[i] = strings.TrimSpace(cfg.AllowedOrigins[i])
 		}
+	}
+
+	// Parse alert email recipients (comma-separated)
+	emailToStr := getEnv("ALERT_EMAIL_TO", "")
+	if emailToStr != "" {
+		cfg.AlertEmailTo = strings.Split(emailToStr, ",")
+		for i := range cfg.AlertEmailTo {
+			cfg.AlertEmailTo[i] = strings.TrimSpace(cfg.AlertEmailTo[i])
+		}
+	} else {
+		cfg.AlertEmailTo = []string{}
 	}
 
 	return cfg
@@ -130,6 +176,22 @@ func parseFloat(s string, fallback float64) float64 {
 		return val
 	}
 	return fallback
+}
+
+// parseStringSlice parses a comma-separated string into a slice of strings.
+func parseStringSlice(s string) []string {
+	if s == "" {
+		return []string{}
+	}
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 // IsProduction returns true if the environment is production.

@@ -22,5 +22,3 @@ func (r UserRole) String() string {
 func (r UserRole) IsAdmin() bool {
 	return r == RoleAdmin
 }
-
-

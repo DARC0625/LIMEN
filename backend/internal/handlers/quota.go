@@ -59,7 +59,7 @@ func (h *Handler) HandleGetQuota(w http.ResponseWriter, r *http.Request) {
 	var usage QuotaUsage
 	usage.Quota = *quota
 	usage.Usage.VMs = len(allVMs) // Total VM count across all users (including stopped)
-	
+
 	// Only count Running VMs for CPU and Memory usage (system-wide)
 	for _, vm := range allVMs {
 		if vm.Status == models.VMStatusRunning {
@@ -145,4 +145,3 @@ func (h *Handler) HandleUpdateQuota(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(quota)
 }
-

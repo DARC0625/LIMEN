@@ -1,0 +1,25 @@
+version: '3.8'
+
+# Development override for docker-compose.yml
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  backend:
+    build:
+      target: builder  # Use builder stage for development
+    volumes:
+      # Mount source code for hot reload (if using air or similar)
+      - ./backend:/app:ro
+      # Override with development paths
+      - ./database/vms:/data/vms:rw
+      - ./database/iso:/data/iso:rw
+    environment:
+      LOG_LEVEL: debug
+      ENV: development
+    # Override command for development
+    # command: ["go", "run", "./cmd/server"]
+
+  postgres:
+    ports:
+      - "5432:5432"  # Expose for local development tools
+

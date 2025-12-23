@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/DARC0625/LIMEN/backend/internal/auth"
 	"github.com/DARC0625/LIMEN/backend/internal/config"
@@ -30,9 +31,9 @@ type UserResponse struct {
 // UserWithStats includes user information with resource usage statistics
 type UserWithStats struct {
 	UserResponse
-	VMCount      int `json:"vm_count"`
-	TotalCPU     int `json:"total_cpu"`
-	TotalMemory  int `json:"total_memory"` // in MB
+	VMCount     int `json:"vm_count"`
+	TotalCPU    int `json:"total_cpu"`
+	TotalMemory int `json:"total_memory"` // in MB
 }
 
 // CreateUserRequest represents a request to create a new user
@@ -63,10 +64,32 @@ func (h *Handler) HandleListUsers(w http.ResponseWriter, r *http.Request, cfg *c
 		return
 	}
 
-	// Get resource usage for each user
+	// Optimize: Fetch all VMs in a single query instead of N+1 queries
+	var allVMs []models.VM
+	if err := h.DB.Select("owner_id, cpu, memory").Find(&allVMs).Error; err != nil {
+		logger.Log.Warn("Failed to fetch VMs for stats", zap.Error(err))
+		// Continue without stats if VM fetch fails
+	}
+
+	// Build a map of user ID to VM stats for O(1) lookup
+	vmStats := make(map[uint]struct {
+		count  int
+		cpu    int
+		memory int
+	})
+	for _, vm := range allVMs {
+		stats := vmStats[vm.OwnerID]
+		stats.count++
+		stats.cpu += vm.CPU
+		stats.memory += vm.Memory
+		vmStats[vm.OwnerID] = stats
+	}
+
+	// Build response with pre-calculated stats
 	usersWithStats := make([]UserWithStats, 0, len(users))
 	for _, user := range users {
-		stats := UserWithStats{
+		stats := vmStats[user.ID]
+		usersWithStats = append(usersWithStats, UserWithStats{
 			UserResponse: UserResponse{
 				ID:        user.ID,
 				UUID:      user.UUID,
@@ -76,19 +99,10 @@ func (h *Handler) HandleListUsers(w http.ResponseWriter, r *http.Request, cfg *c
 				CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 				UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 			},
-		}
-
-		// Count VMs and calculate resource usage
-		var vms []models.VM
-		if err := h.DB.Where("owner_id = ?", user.ID).Find(&vms).Error; err == nil {
-			stats.VMCount = len(vms)
-			for _, vm := range vms {
-				stats.TotalCPU += vm.CPU
-				stats.TotalMemory += vm.Memory
-			}
-		}
-
-		usersWithStats = append(usersWithStats, stats)
+			VMCount:     stats.count,
+			TotalCPU:    stats.cpu,
+			TotalMemory: stats.memory,
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -321,7 +335,7 @@ func (h *Handler) HandleDeleteUser(w http.ResponseWriter, r *http.Request, cfg *
 			errors.WriteNotFound(w, "User not found")
 		} else {
 			logger.Log.Error("Failed to fetch user", zap.Error(err))
-			errors.WriteInternalError(w, err, false)
+			errors.WriteInternalError(w, err, cfg.Env == "development")
 		}
 		return
 	}
@@ -329,14 +343,21 @@ func (h *Handler) HandleDeleteUser(w http.ResponseWriter, r *http.Request, cfg *
 	// Soft delete
 	if err := h.DB.Delete(&user).Error; err != nil {
 		logger.Log.Error("Failed to delete user", zap.Error(err))
-		errors.WriteInternalError(w, err, false)
+		errors.WriteInternalError(w, err, cfg.Env == "development")
 		return
 	}
 
 	logger.Log.Info("User deleted by admin", zap.Uint("user_id", user.ID), zap.String("username", user.Username))
 
+	// Return JSON to satisfy frontend parsing
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNoContent)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"deleted":   true,
+		"user_id":   user.ID,
+		"username":  user.Username,
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
 }
 
 // HandleUpdateUserRole handles PUT /api/admin/users/{id}/role - Update user role
@@ -434,4 +455,3 @@ func (h *Handler) HandleApproveUser(w http.ResponseWriter, r *http.Request, cfg 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
-

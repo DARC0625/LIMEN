@@ -4,7 +4,7 @@ use axum::{
     Json,
 };
 use serde::Serialize;
-use sysinfo::{System, Networks};
+use sysinfo::System;
 use std::sync::{Arc, Mutex};
 use std::net::SocketAddr;
 

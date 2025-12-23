@@ -3,6 +3,7 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -55,23 +56,81 @@ func (i *IPRateLimiter) cleanup() {
 	}()
 }
 
+// RateLimitConfig defines rate limit configuration for different endpoint types.
+type RateLimitConfig struct {
+	DefaultRPS   float64            // Default requests per second
+	DefaultBurst int                // Default burst size
+	EndpointRPS  map[string]float64 // Endpoint-specific RPS overrides
+	EndpointBurst map[string]int    // Endpoint-specific burst overrides
+}
+
 // RateLimit creates a rate limiting middleware.
 // requestsPerSecond: maximum requests per second per IP
 // burstSize: maximum burst size
 func RateLimit(requestsPerSecond float64, burstSize int) func(http.Handler) http.Handler {
-	limiter := NewIPRateLimiter(rate.Limit(requestsPerSecond), burstSize)
-	limiter.cleanup()
+	return RateLimitWithConfig(RateLimitConfig{
+		DefaultRPS:   requestsPerSecond,
+		DefaultBurst: burstSize,
+		EndpointRPS:  make(map[string]float64),
+		EndpointBurst: make(map[string]int),
+	})
+}
+
+// RateLimitWithConfig creates a rate limiting middleware with endpoint-specific configurations.
+func RateLimitWithConfig(config RateLimitConfig) func(http.Handler) http.Handler {
+	// Create default limiter
+	defaultLimiter := NewIPRateLimiter(rate.Limit(config.DefaultRPS), config.DefaultBurst)
+	defaultLimiter.cleanup()
+
+	// Create endpoint-specific limiters
+	endpointLimiters := make(map[string]*IPRateLimiter)
+	for path, rps := range config.EndpointRPS {
+		burst := config.DefaultBurst
+		if b, ok := config.EndpointBurst[path]; ok {
+			burst = b
+		}
+		limiter := NewIPRateLimiter(rate.Limit(rps), burst)
+		limiter.cleanup()
+		endpointLimiters[path] = limiter
+	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Skip rate limiting for public endpoints (health check, auth)
+			if isPublicEndpointForRateLimit(r.URL.Path) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// Get client IP
 			ip := getClientIP(r)
 
-			// Get limiter for this IP
-			limiter := limiter.getLimiter(ip)
+			// Find endpoint-specific limiter or use default
+			var limiter *rate.Limiter
+			path := r.URL.Path
+
+			// Check for exact path match first
+			if endpointLimiter, ok := endpointLimiters[path]; ok {
+				limiter = endpointLimiter.getLimiter(ip)
+			} else {
+				// Check for prefix match (e.g., /api/vms/*)
+				matched := false
+				for endpointPath, endpointLimiter := range endpointLimiters {
+					if strings.HasPrefix(path, endpointPath) {
+						limiter = endpointLimiter.getLimiter(ip)
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					// Use default limiter
+					limiter = defaultLimiter.getLimiter(ip)
+				}
+			}
 
 			// Check if request is allowed
 			if !limiter.Allow() {
+				w.Header().Set("Retry-After", "1")
 				http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 				return
 			}
@@ -79,6 +138,23 @@ func RateLimit(requestsPerSecond float64, burstSize int) func(http.Handler) http
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// isPublicEndpointForRateLimit checks if the endpoint should skip rate limiting.
+func isPublicEndpointForRateLimit(path string) bool {
+	publicPaths := []string{
+		"/api/health",
+		"/api/auth/login",
+		"/api/auth/register",
+	}
+
+	for _, publicPath := range publicPaths {
+		if path == publicPath || strings.HasPrefix(path, publicPath+"/") {
+			return true
+		}
+	}
+
+	return false
 }
 
 // getClientIP extracts the client IP address from the request.
@@ -98,5 +174,3 @@ func getClientIP(r *http.Request) string {
 	// Fallback to RemoteAddr
 	return r.RemoteAddr
 }
-
-

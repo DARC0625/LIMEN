@@ -171,4 +171,3 @@ func (h *Handler) HandleVMStatusWebSocket(w http.ResponseWriter, r *http.Request
 	// Unregister client
 	h.VMStatusBroadcaster.unregister <- conn
 }
-

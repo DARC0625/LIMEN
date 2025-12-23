@@ -152,5 +152,3 @@ func TestBuildDatabaseURL(t *testing.T) {
 		t.Errorf("buildDatabaseURL() = %v, want %v", url, expected)
 	}
 }
-
-

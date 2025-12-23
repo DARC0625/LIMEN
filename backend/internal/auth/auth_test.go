@@ -98,10 +98,10 @@ func TestValidateToken_InvalidSecret(t *testing.T) {
 
 func TestExtractTokenFromHeader(t *testing.T) {
 	tests := []struct {
-		name        string
-		header      string
-		wantToken   string
-		wantErr     bool
+		name      string
+		header    string
+		wantToken string
+		wantErr   bool
 	}{
 		{"valid header", "Bearer test-token", "test-token", false},
 		{"valid header with spaces", "Bearer  test-token  ", " test-token  ", false},
@@ -123,4 +123,3 @@ func TestExtractTokenFromHeader(t *testing.T) {
 		})
 	}
 }
-

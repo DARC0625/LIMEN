@@ -128,5 +128,3 @@ func UpdateVMMetrics(vmCountByStatus map[string]int, cpuByStatus map[string]int,
 		VMMemoryUsage.WithLabelValues(status).Set(float64(memory))
 	}
 }
-
-

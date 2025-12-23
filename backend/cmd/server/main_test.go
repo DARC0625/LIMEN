@@ -55,13 +55,14 @@ func setupTestServer(t *testing.T) *httptest.Server {
 	}
 
 	// Create handler (will handle nil VMService in health check)
-	h := handlers.NewHandler(db, vmService)
+	cfg := config.Load()
+	h := handlers.NewHandler(db, vmService, cfg)
 
 	// Create a minimal config for testing
 	cfg := &config.Config{
 		JWTSecret: "test-secret-key",
 	}
-	
+
 	// Setup routes
 	r := router.SetupRoutes(h, cfg)
 
@@ -114,9 +115,9 @@ func TestCreateVMEndpoint_InvalidInput(t *testing.T) {
 
 	// Test with invalid CPU
 	reqBody := map[string]interface{}{
-		"name":   "test-vm",
-		"cpu":    0, // Invalid
-		"memory": 1024,
+		"name":    "test-vm",
+		"cpu":     0, // Invalid
+		"memory":  1024,
 		"os_type": "ubuntu-desktop",
 	}
 
@@ -197,4 +198,3 @@ func TestRequestIDHeader(t *testing.T) {
 	requestID := resp.Header.Get("X-Request-ID")
 	assert.NotEmpty(t, requestID)
 }
-

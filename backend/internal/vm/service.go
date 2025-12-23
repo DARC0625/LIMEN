@@ -3,9 +3,12 @@ package vm
 import (
 	"encoding/xml"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
@@ -26,7 +29,7 @@ func NewVMService(db *gorm.DB, libvirtURI, isoDir, vmDir string) (*VMService, er
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Ensure directories exist with proper permissions
 	if err := os.MkdirAll(isoDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create ISO directory: %v", err)
@@ -67,6 +70,20 @@ func (s *VMService) EnsureISO(osType string) (string, error) {
 	}
 
 	imagePath := image.Path
+
+	// Ensure path uses correct project directory (LIMEN)
+	if strings.Contains(imagePath, "/home/darc0/projects/") && !strings.Contains(imagePath, "/home/darc0/projects/LIMEN") {
+		// Replace any old project paths with LIMEN
+		imagePath = strings.Replace(imagePath, "/home/darc0/projects/", "/home/darc0/projects/LIMEN/", 1)
+		// Update DB with corrected path
+		image.Path = imagePath
+		if err := s.db.Save(&image).Error; err != nil {
+			logger.Log.Warn("Failed to update image path in DB", zap.String("os_type", osType), zap.Error(err))
+		} else {
+			logger.Log.Info("Updated image path in DB", zap.String("os_type", osType), zap.String("new_path", imagePath))
+		}
+	}
+
 	if _, err := os.Stat(imagePath); err == nil {
 		return imagePath, nil
 	}
@@ -74,7 +91,7 @@ func (s *VMService) EnsureISO(osType string) (string, error) {
 	return "", fmt.Errorf("iso file not found at %s. please upload it manually", imagePath)
 }
 
-func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string) error {
+func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string, vmUUID string) error {
 	// 0. Cleanup existing resources (Libvirt domain and Disk)
 	// Check if domain exists in libvirt and cleanup
 	if dom, err := s.conn.LookupDomainByName(name); err == nil {
@@ -85,13 +102,13 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string)
 		dom.Free()
 	}
 
-	// 1. Create empty disk for VM in vmDir
-	vmDiskPath := filepath.Join(s.vmDir, name+".qcow2")
+	// 1. Create empty disk for VM in vmDir using UUID instead of name
+	vmDiskPath := filepath.Join(s.vmDir, vmUUID+".qcow2")
 	// Remove existing disk if any
 	os.Remove(vmDiskPath)
 
 	diskSize := "20G" // Default size
-	
+
 	cmd := exec.Command("qemu-img", "create", "-f", "qcow2", vmDiskPath, diskSize)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to create vm disk: %v, output: %s", err, string(out))
@@ -254,7 +271,7 @@ func (s *VMService) DeleteVM(name string) error {
 	} else {
 		logger.Log.Info("VM disk file removed", zap.String("path", vmDiskPath))
 	}
-	
+
 	// Also remove any snapshot files or other related files
 	// Pattern: name.* (e.g., name.qcow2, name-snapshot1.qcow2, etc.)
 	vmDirEntries, err := os.ReadDir(s.vmDir)
@@ -274,7 +291,7 @@ func (s *VMService) DeleteVM(name string) error {
 			}
 		}
 	}
-	
+
 	// 3. Remove from DB (Hard delete)
 	if err := s.db.Unscoped().Where("name = ?", name).Delete(&models.VM{}).Error; err != nil {
 		logger.Log.Error("Failed to delete VM from DB", zap.String("vm_name", name), zap.Error(err))
@@ -296,45 +313,108 @@ func (s *VMService) StopVM(name string) error {
 func (s *VMService) StartVM(name string) error {
 	dom, err := s.conn.LookupDomainByName(name)
 	if err != nil {
-		return err
+		return fmt.Errorf("VM not found: %v", err)
 	}
 	defer dom.Free()
 
-	return dom.Create()
+	// Check if VM is already running
+	active, err := dom.IsActive()
+	if err != nil {
+		return fmt.Errorf("failed to check VM status: %v", err)
+	}
+	if active {
+		logger.Log.Info("VM is already running", zap.String("vm_name", name))
+		return nil
+	}
+
+	// Start VM
+	if err := dom.Create(); err != nil {
+		// Check if error is related to ISO file
+		errStr := err.Error()
+		if strings.Contains(errStr, "Cannot access storage file") {
+			// Extract ISO path from error
+			return fmt.Errorf("ISO file not found. Please check VM configuration. Original error: %v", err)
+		}
+		return fmt.Errorf("failed to start VM: %v", err)
+	}
+
+	// Wait a moment for VNC to initialize
+	time.Sleep(1 * time.Second)
+
+	return nil
 }
 
 func (s *VMService) GetVNCPort(name string) (string, error) {
 	dom, err := s.conn.LookupDomainByName(name)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("VM not found: %v", err)
 	}
 	defer dom.Free()
 
+	// Check if VM is running
+	active, err := dom.IsActive()
+	if err != nil {
+		return "", fmt.Errorf("failed to check VM status: %v", err)
+	}
+	if !active {
+		return "", fmt.Errorf("VM is not running")
+	}
+
 	xmlDesc, err := dom.GetXMLDesc(0)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get VM XML: %v", err)
 	}
 
 	var domainXML struct {
 		Devices struct {
 			Graphics []struct {
-				Type string `xml:"type,attr"`
-				Port string `xml:"port,attr"`
+				Type     string `xml:"type,attr"`
+				Port     string `xml:"port,attr"`
+				AutoPort string `xml:"autoport,attr"`
 			} `xml:"graphics"`
 		} `xml:"devices"`
 	}
 
 	if err := xml.Unmarshal([]byte(xmlDesc), &domainXML); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to parse VM XML: %v", err)
 	}
 
 	for _, g := range domainXML.Devices.Graphics {
 		if g.Type == "vnc" {
-			return g.Port, nil
+			// If autoport is enabled, get the actual port from libvirt
+			if g.AutoPort == "yes" || g.Port == "-1" {
+				// Use virsh vncdisplay command to get the actual port
+				cmd := exec.Command("virsh", "vncdisplay", name)
+				output, err := cmd.CombinedOutput()
+				if err == nil {
+					// Output format: :0 or :1 etc, port is 5900 + display number
+					outputStr := strings.TrimSpace(string(output))
+					if strings.HasPrefix(outputStr, ":") {
+						var displayNum int
+						if _, err := fmt.Sscanf(outputStr, ":%d", &displayNum); err == nil {
+							port := 5900 + displayNum
+							return fmt.Sprintf("%d", port), nil
+						}
+					}
+				}
+				// Fallback: try common VNC ports
+				for port := 5900; port < 6000; port++ {
+					conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", port), 100*time.Millisecond)
+					if err == nil {
+						conn.Close()
+						// This is a heuristic - check if port is actually listening
+						return fmt.Sprintf("%d", port), nil
+					}
+				}
+				return "", fmt.Errorf("VNC port not found (autoport enabled but port not determined)")
+			}
+			if g.Port != "" && g.Port != "-1" {
+				return g.Port, nil
+			}
 		}
 	}
 
-	return "", fmt.Errorf("vnc port not found")
+	return "", fmt.Errorf("VNC graphics not found in VM configuration")
 }
 
 func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
@@ -367,7 +447,7 @@ func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
 	// Update Memory (Config)
 	// DOMAIN_AFFECT_CONFIG = 2
 	memFlags := libvirt.DomainMemoryModFlags(2)
-	
+
 	if err := dom.SetMemoryFlags(uint64(memoryMB*1024), memFlags); err != nil {
 		return fmt.Errorf("failed to set memory: %v", err)
 	}

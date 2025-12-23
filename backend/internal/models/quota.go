@@ -8,12 +8,12 @@ import (
 
 // ResourceQuota represents system-wide resource limits (shared by all users).
 type ResourceQuota struct {
-	ID        uint   `gorm:"primaryKey" json:"id"`
-	MaxVMs    int    `gorm:"default:32" json:"max_vms"`            // Maximum number of VMs (same as MaxCPU)
-	MaxCPU    int    `gorm:"default:32" json:"max_cpu"`           // Maximum total CPU cores
-	MaxMemory int    `gorm:"default:192512" json:"max_memory"`    // Maximum total memory in MB (188GB)
-	CreatedAt int64  `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt int64  `gorm:"autoUpdateTime" json:"updated_at"`
+	ID        uint  `gorm:"primaryKey" json:"id"`
+	MaxVMs    int   `gorm:"default:32" json:"max_vms"`        // Maximum number of VMs (same as MaxCPU)
+	MaxCPU    int   `gorm:"default:32" json:"max_cpu"`        // Maximum total CPU cores
+	MaxMemory int   `gorm:"default:192512" json:"max_memory"` // Maximum total memory in MB (188GB)
+	CreatedAt int64 `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt int64 `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 // GetOrCreateQuota retrieves or creates the system-wide quota (shared by all users).
@@ -38,13 +38,13 @@ func GetOrCreateQuota(db *gorm.DB) (*ResourceQuota, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Ensure MaxVMs equals MaxCPU
 	if quota.MaxVMs != quota.MaxCPU {
 		quota.MaxVMs = quota.MaxCPU
 		db.Save(&quota)
 	}
-	
+
 	return &quota, nil
 }
 
@@ -74,9 +74,9 @@ func (q *ResourceQuota) CheckQuota(db *gorm.DB, cpu, memory int) error {
 	// Check limits (system-wide)
 	if int(currentVMs) >= q.MaxVMs {
 		return &QuotaError{
-			Resource: "VMs",
-			Current:  int(currentVMs),
-			Limit:    q.MaxVMs,
+			Resource:  "VMs",
+			Current:   int(currentVMs),
+			Limit:     q.MaxVMs,
 			Requested: 1,
 		}
 	}
@@ -111,7 +111,6 @@ type QuotaError struct {
 }
 
 func (e *QuotaError) Error() string {
-	return fmt.Sprintf("quota exceeded for %s: current %d + requested %d > limit %d", 
+	return fmt.Sprintf("quota exceeded for %s: current %d + requested %d > limit %d",
 		e.Resource, e.Current, e.Requested, e.Limit)
 }
-

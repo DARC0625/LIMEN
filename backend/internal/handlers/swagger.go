@@ -2,90 +2,51 @@ package handlers
 
 import (
 	"net/http"
-	"os"
-	"path/filepath"
 
-	"github.com/DARC0625/LIMEN/backend/internal/logger"
-	"go.uber.org/zap"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
+
+// @title           LIMEN API
+// @version         1.0
+// @description     LIMEN (Linux Infrastructure Management Engine) - VM Management API
+// @description     Comprehensive API for managing virtual machines, users, and system resources.
+// @description
+// @description     ## Security
+// @description     - Authentication: JWT Bearer Token
+// @description     - Authorization: Role-based access control (Admin/User)
+// @description     - Encryption: Argon2id, ChaCha20-Poly1305, Ed25519
+// @description
+// @description     ## Features
+// @description     - VM lifecycle management (create, start, stop, delete)
+// @description     - User management and authentication
+// @description     - Resource quota management
+// @description     - Real-time VM status via WebSocket
+// @description     - Hardware specification detection
+// @description     - Security chain monitoring
+
+// @contact.name   LIMEN Support
+// @contact.url    https://github.com/DARC0625/LIMEN
+// @contact.email  support@limen.local
+
+// @license.name  MIT
+// @license.url   https://opensource.org/licenses/MIT
+
+// @host      localhost:18443
+// @BasePath  /api
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token. Example: "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
 
 // HandleSwaggerUI serves the Swagger UI
 func (h *Handler) HandleSwaggerUI(w http.ResponseWriter, r *http.Request) {
-	// Read the swagger.yaml file
-	swaggerPath := filepath.Join("docs", "swagger.yaml")
-	swaggerData, err := os.ReadFile(swaggerPath)
-	if err != nil {
-		logger.Log.Error("Failed to read swagger.yaml", zap.Error(err))
-		http.Error(w, "Swagger documentation not found", http.StatusNotFound)
-		return
-	}
-
-	// Serve Swagger UI HTML with embedded swagger.yaml
-	html := `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>LIMEN API Documentation</title>
-  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.10.0/swagger-ui.css" />
-  <style>
-    html {
-      box-sizing: border-box;
-      overflow: -moz-scrollbars-vertical;
-      overflow-y: scroll;
-    }
-    *, *:before, *:after {
-      box-sizing: inherit;
-    }
-    body {
-      margin:0;
-      background: #fafafa;
-    }
-  </style>
-</head>
-<body>
-  <div id="swagger-ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist@5.10.0/swagger-ui-bundle.js"></script>
-  <script src="https://unpkg.com/swagger-ui-dist@5.10.0/swagger-ui-standalone-preset.js"></script>
-  <script>
-    window.onload = function() {
-      const spec = ` + string(swaggerData) + `;
-      const ui = SwaggerUIBundle({
-        spec: spec,
-        dom_id: '#swagger-ui',
-        deepLinking: true,
-        presets: [
-          SwaggerUIBundle.presets.apis,
-          SwaggerUIStandalonePreset
-        ],
-        plugins: [
-          SwaggerUIBundle.plugins.DownloadUrl
-        ],
-        layout: "StandaloneLayout",
-        tryItOutEnabled: true
-      });
-    };
-  </script>
-</body>
-</html>`
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(html))
+	// Use http-swagger for automatic Swagger UI serving
+	handler := httpSwagger.Handler(
+		httpSwagger.URL("/api/swagger/doc.json"), // Swagger JSON endpoint
+		httpSwagger.DeepLinking(true),
+		httpSwagger.DocExpansion("list"),
+		httpSwagger.DomID("swagger-ui"),
+	)
+	handler.ServeHTTP(w, r)
 }
-
-// HandleSwaggerJSON serves the swagger.yaml as JSON
-func (h *Handler) HandleSwaggerJSON(w http.ResponseWriter, r *http.Request) {
-	swaggerPath := filepath.Join("docs", "swagger.yaml")
-	swaggerData, err := os.ReadFile(swaggerPath)
-	if err != nil {
-		logger.Log.Error("Failed to read swagger.yaml", zap.Error(err))
-		http.Error(w, "Swagger documentation not found", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/yaml")
-	w.WriteHeader(http.StatusOK)
-	w.Write(swaggerData)
-}
-
-

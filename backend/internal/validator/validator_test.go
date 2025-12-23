@@ -130,5 +130,3 @@ func TestValidateVMAction(t *testing.T) {
 		})
 	}
 }
-
-

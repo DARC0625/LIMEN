@@ -44,4 +44,3 @@ func (h *Handler) UpdateMetrics() error {
 
 	return nil
 }
-

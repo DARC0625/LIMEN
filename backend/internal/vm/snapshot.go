@@ -217,4 +217,3 @@ func (s *VMService) ListAllSnapshots() ([]models.VMSnapshot, error) {
 	}
 	return snapshots, nil
 }
-

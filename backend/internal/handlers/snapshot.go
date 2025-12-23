@@ -76,10 +76,10 @@ func (h *Handler) HandleCreateSnapshot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Log.Info("Snapshot created", zap.Uint("snapshot_id", snapshot.ID), zap.Uint("vm_id", uint(vmID)))
-	
+
 	// Update metrics
 	metrics.VMSnapshotTotal.Inc()
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(snapshot)
@@ -186,7 +186,7 @@ func (h *Handler) HandleRestoreSnapshot(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Snapshot restored successfully",
+		"message":     "Snapshot restored successfully",
 		"snapshot_id": snapshotID,
 	})
 }
@@ -244,8 +244,7 @@ func (h *Handler) HandleDeleteSnapshot(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Snapshot deleted successfully",
+		"message":     "Snapshot deleted successfully",
 		"snapshot_id": snapshotID,
 	})
 }
-

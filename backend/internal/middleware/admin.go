@@ -41,7 +41,7 @@ func Admin(cfg *config.Config) func(http.Handler) http.Handler {
 
 			// Check if user is admin
 			if role != string(models.RoleAdmin) {
-				logger.Log.Warn("Admin access denied", 
+				logger.Log.Warn("Admin access denied",
 					zap.String("role", role))
 				errors.WriteForbidden(w, "Admin access required")
 				return
@@ -67,5 +67,3 @@ func IsAdmin(ctx context.Context) bool {
 	}
 	return role == string(models.RoleAdmin)
 }
-
-

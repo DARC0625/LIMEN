@@ -1,18 +1,57 @@
+// @title           LIMEN API
+// @version         1.0
+// @description     LIMEN (Linux Infrastructure Management Engine) - VM Management API
+// @description     Comprehensive API for managing virtual machines, users, and system resources.
+// @description
+// @description     ## Security
+// @description     - Authentication: JWT Bearer Token
+// @description     - Authorization: Role-based access control (Admin/User)
+// @description     - Encryption: Argon2id, ChaCha20-Poly1305, Ed25519
+// @description
+// @description     ## Features
+// @description     - VM lifecycle management (create, start, stop, delete)
+// @description     - User management and authentication
+// @description     - Resource quota management
+// @description     - Real-time VM status via WebSocket
+// @description     - Hardware specification detection
+// @description     - Security chain monitoring
+
+// @contact.name   LIMEN Support
+// @contact.url    https://github.com/DARC0625/LIMEN
+// @contact.email  support@limen.local
+
+// @license.name  MIT
+// @license.url   https://opensource.org/licenses/MIT
+
+// @host      localhost:18443
+// @BasePath  /api
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token. Example: "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+
 package main
 
 import (
+	"context"
+	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/DARC0625/LIMEN/backend/internal/auth"
 	"github.com/DARC0625/LIMEN/backend/internal/config"
 	"github.com/DARC0625/LIMEN/backend/internal/database"
 	"github.com/DARC0625/LIMEN/backend/internal/handlers"
+	"github.com/DARC0625/LIMEN/backend/internal/hardware"
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
 	"github.com/DARC0625/LIMEN/backend/internal/middleware"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
 	"github.com/DARC0625/LIMEN/backend/internal/router"
-	"github.com/DARC0625/LIMEN/backend/internal/vm"
+	"github.com/DARC0625/LIMEN/backend/internal/security"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
@@ -28,13 +67,57 @@ func main() {
 	// Load configuration
 	cfg := config.Load()
 
-	// Initialize logger
-	if err := logger.Init(cfg.LogLevel); err != nil {
-		panic("Failed to initialize logger: " + err.Error())
+	// Initialize logger with rotation support
+	if cfg.LogDir != "" {
+		if err := logger.InitWithRotation(cfg.LogLevel, cfg.LogDir); err != nil {
+			panic("Failed to initialize logger: " + err.Error())
+		}
+		logger.Log.Info("Log rotation enabled", zap.String("log_dir", cfg.LogDir))
+	} else {
+		if err := logger.Init(cfg.LogLevel); err != nil {
+			panic("Failed to initialize logger: " + err.Error())
+		}
+		logger.Log.Info("Console logging enabled (no file rotation)")
 	}
 	defer logger.Sync()
 
 	logger.Log.Info("Starting server", zap.String("env", cfg.Env), zap.String("port", cfg.Port))
+
+	// Initialize hardware specification detection
+	if err := hardware.Initialize(); err != nil {
+		logger.Log.Warn("Failed to initialize hardware detection", zap.Error(err))
+	} else {
+		// Validate hardware security
+		warnings := hardware.ValidateHardwareSecurity()
+		for _, warning := range warnings {
+			logger.Log.Warn("Hardware security warning", zap.String("warning", warning))
+		}
+		
+		// Get optimal security configuration
+		secConfig := hardware.GetOptimalSecurityConfig()
+		logger.Log.Info("Optimal security configuration determined",
+			zap.String("encryption", secConfig.PreferredEncryption),
+			zap.Uint32("argon2id_memory_kb", secConfig.Argon2idConfig.Memory),
+			zap.Uint32("argon2id_iterations", secConfig.Argon2idConfig.Iterations),
+			zap.Uint8("argon2id_parallelism", secConfig.Argon2idConfig.Parallelism),
+			zap.Bool("hardware_rng", secConfig.UseHardwareRNG),
+			zap.Bool("hardware_accel", secConfig.EnableHardwareAccel),
+		)
+		
+		// Start hardware monitoring (check every 5 minutes)
+		hardware.StartMonitor(5 * time.Minute)
+		defer hardware.StopMonitor()
+	}
+
+	// Initialize security chain monitoring
+	ctx := context.Background()
+	if _, err := security.ValidateSecurityChain(ctx); err != nil {
+		logger.Log.Warn("Failed to validate security chain", zap.Error(err))
+	} else {
+		// Start security chain monitoring (check every 10 minutes)
+		security.StartChainMonitoring(ctx, 10*time.Minute)
+		logger.Log.Info("Security chain monitoring started")
+	}
 
 	// Connect to database
 	if err := database.Connect(cfg); err != nil {
@@ -52,203 +135,170 @@ func main() {
 		logger.Log.Fatal("Failed to initialize images", zap.Error(err))
 	}
 
-	// Create VM service
-	vmService, err := vm.NewVMService(database.DB, cfg.LibvirtURI, cfg.ISODir, cfg.VMDir)
-	if err != nil {
-		logger.Log.Fatal("Failed to create VM service", zap.Error(err))
-	}
-	defer vmService.Close()
-
-	// Create handler
-	h := handlers.NewHandler(database.DB, vmService)
-
-	// Initialize metrics
-	if err := h.UpdateMetrics(); err != nil {
-		logger.Log.Warn("Failed to initialize metrics", zap.Error(err))
+	// Create handlers
+	h := &handlers.Handler{
+		DB: database.DB,
 	}
 
 	// Setup routes
 	router := router.SetupRoutes(h, cfg)
 
-	// WebSocket endpoints need to bypass middleware that wraps ResponseWriter
-	// because WebSocket upgrade requires http.Hijacker interface
-	// Create a separate handler for WebSocket routes
-	wsHandler := router
-	
 	// Apply middleware to regular HTTP routes (excluding WebSocket)
-	// WebSocket routes are handled separately to avoid ResponseWriter wrapping issues
 	handler := middleware.Recovery(router)
 	handler = middleware.Logging(handler)
 	handler = middleware.RequestID(handler)
-	
+
+	// Security headers
+	isHTTPS := cfg.Port == "443" || cfg.Port == "8443"
+	handler = middleware.SecurityHeaders(isHTTPS)(handler)
+
+	// CORS must be before Auth to handle OPTIONS preflight requests
+	handler = middleware.CORS(cfg.AllowedOrigins)(handler)
+
+	// IP Whitelist for Admin routes is handled in router.go
+
 	// Rate limiting (if enabled)
 	if cfg.RateLimitEnabled {
-		handler = middleware.RateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst)(handler)
-	}
-	
-	handler = middleware.Auth(cfg)(handler) // Authentication middleware
-	handler = middleware.CORS(cfg.AllowedOrigins)(handler)
-	
-	// Wrap handler to route WebSocket requests to wsHandler
-	// This allows WebSocket to bypass middleware that wraps ResponseWriter
-	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Check if this is a WebSocket upgrade request
-		if r.Header.Get("Upgrade") == "websocket" {
-			// Route WebSocket requests directly (only CORS and Auth middleware applied via router)
-			wsHandler.ServeHTTP(w, r)
-			return
+		rateLimitConfig := middleware.RateLimitConfig{
+			DefaultRPS:   cfg.RateLimitRPS,
+			DefaultBurst: cfg.RateLimitBurst,
+			EndpointRPS: map[string]float64{
+				"/api/vms":           5.0,  // VM operations: 5 req/s
+				"/api/admin":         2.0,  // Admin operations: 2 req/s
+				"/api/snapshots":     3.0,  // Snapshot operations: 3 req/s
+				"/api/quota":         5.0,  // Quota queries: 5 req/s
+				"/api/metrics":       10.0, // Metrics: 10 req/s
+				"/agent/metrics":    10.0, // Agent metrics: 10 req/s
+			},
 		}
-		// Regular HTTP requests go through all middleware
-		handler.ServeHTTP(w, r)
-	})
+		handler = middleware.RateLimitWithConfig(rateLimitConfig)(handler)
+	}
 
-	logger.Log.Info("Server starting", zap.String("port", cfg.Port))
-	if err := http.ListenAndServe(":"+cfg.Port, finalHandler); err != nil {
+	handler = middleware.Auth(cfg)(handler) // Authentication middleware
+
+	// HTTP Response Compression (gzip)
+	handler = middleware.Compression(handler)
+
+	// Start HTTP server
+	addr := ":" + cfg.Port
+	logger.Log.Info("Server starting", zap.String("address", addr))
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		logger.Log.Fatal("Server failed", zap.Error(err))
 	}
 }
 
+// ensureAdminUser ensures that an admin user exists in the database
 func ensureAdminUser(cfg *config.Config) error {
 	var adminUser models.User
-	result := database.DB.First(&adminUser, 1)
-	if result.Error == gorm.ErrRecordNotFound {
-		// Use configured admin credentials, but require password change if default
-		adminPassword := cfg.AdminPassword
-		if adminPassword == "" {
-			adminPassword = "password" // Default fallback, but should be set via env
-			logger.Log.Warn("Using default admin password. Please set ADMIN_PASSWORD environment variable.")
-		}
+	result := database.DB.Where("username = ?", cfg.AdminUser).First(&adminUser)
 
-		// Hash password before storing
-		hashedPassword, err := auth.HashPassword(adminPassword)
+	if result.Error == gorm.ErrRecordNotFound {
+		// Admin user doesn't exist, create it
+		hashedPassword, err := auth.HashPassword(cfg.AdminPassword)
 		if err != nil {
 			return err
 		}
 
 		adminUser = models.User{
-			ID:       1,
 			UUID:     uuid.New().String(),
 			Username: cfg.AdminUser,
 			Password: hashedPassword,
-			Role:     models.RoleAdmin, // Set admin role
-			Approved: true,              // Admin is auto-approved
+			Role:     models.RoleAdmin,
+			Approved: true, // Admin is always approved
 		}
+
 		if err := database.DB.Create(&adminUser).Error; err != nil {
 			return err
 		}
-		logger.Log.Info("Created default admin user", zap.String("username", cfg.AdminUser), zap.String("role", string(models.RoleAdmin)))
-		if cfg.AdminPassword == "" {
-			logger.Log.Warn("Using default admin password. Please set ADMIN_PASSWORD environment variable.")
-		}
+
+		logger.Log.Info("Admin user created", zap.String("username", cfg.AdminUser))
+	} else if result.Error != nil {
+		return result.Error
 	} else {
-		// Ensure existing admin user has admin role and is approved (for migration)
-		needsUpdate := false
-		if adminUser.Role != models.RoleAdmin {
-			adminUser.Role = models.RoleAdmin
-			needsUpdate = true
-		}
-		if !adminUser.Approved {
-			adminUser.Approved = true
-			needsUpdate = true
-		}
-		// Ensure UUID exists (for migration)
-		if adminUser.UUID == "" {
-			adminUser.UUID = uuid.New().String()
-			needsUpdate = true
-		}
-		if needsUpdate {
+		// Admin user exists, update password if needed
+		if cfg.AdminPassword != "" {
+			hashedPassword, err := auth.HashPassword(cfg.AdminPassword)
+			if err != nil {
+				return err
+			}
+			adminUser.Password = hashedPassword
 			if err := database.DB.Save(&adminUser).Error; err != nil {
-				logger.Log.Warn("Failed to update admin user", zap.Error(err))
-			} else {
-				logger.Log.Info("Updated admin user", zap.String("username", adminUser.Username))
+				return err
 			}
+			logger.Log.Info("Admin user password updated", zap.String("username", cfg.AdminUser))
 		}
-	}
-
-	// Migrate existing users without UUID (including soft-deleted)
-	var usersWithoutUUID []models.User
-	if err := database.DB.Unscoped().Where("uuid = '' OR uuid IS NULL").Find(&usersWithoutUUID).Error; err == nil {
-		if len(usersWithoutUUID) > 0 {
-			logger.Log.Info("Migrating users without UUID", zap.Int("count", len(usersWithoutUUID)))
-			for i := range usersWithoutUUID {
-				if usersWithoutUUID[i].UUID == "" {
-					usersWithoutUUID[i].UUID = uuid.New().String()
-					if err := database.DB.Unscoped().Save(&usersWithoutUUID[i]).Error; err != nil {
-						logger.Log.Warn("Failed to update user UUID", zap.Uint("user_id", usersWithoutUUID[i].ID), zap.Error(err))
-					} else {
-						logger.Log.Info("Updated user UUID", zap.Uint("user_id", usersWithoutUUID[i].ID), zap.String("username", usersWithoutUUID[i].Username))
-					}
-				}
-			}
-		}
-		// Check if all users have UUID before setting NOT NULL
-		var count int64
-		database.DB.Unscoped().Model(&models.User{}).Where("uuid = '' OR uuid IS NULL").Count(&count)
-		if count == 0 {
-			if err := database.DB.Exec("ALTER TABLE users ALTER COLUMN uuid SET NOT NULL").Error; err != nil {
-				logger.Log.Warn("Failed to set UUID column to NOT NULL", zap.Error(err))
-			} else {
-				logger.Log.Info("UUID column set to NOT NULL")
-			}
-		} else {
-			logger.Log.Warn("Cannot set UUID to NOT NULL, some users still have NULL UUID", zap.Int64("count", count))
-		}
-	} else {
-		logger.Log.Warn("Failed to query users without UUID", zap.Error(err))
-	}
-
-	// Migrate existing VMs without UUID (including soft-deleted)
-	var vmsWithoutUUID []models.VM
-	if err := database.DB.Unscoped().Where("uuid = '' OR uuid IS NULL").Find(&vmsWithoutUUID).Error; err == nil {
-		if len(vmsWithoutUUID) > 0 {
-			logger.Log.Info("Migrating VMs without UUID", zap.Int("count", len(vmsWithoutUUID)))
-			for i := range vmsWithoutUUID {
-				if vmsWithoutUUID[i].UUID == "" {
-					vmsWithoutUUID[i].UUID = uuid.New().String()
-					if err := database.DB.Unscoped().Save(&vmsWithoutUUID[i]).Error; err != nil {
-						logger.Log.Warn("Failed to update VM UUID", zap.Uint("vm_id", vmsWithoutUUID[i].ID), zap.Error(err))
-					} else {
-						logger.Log.Info("Updated VM UUID", zap.Uint("vm_id", vmsWithoutUUID[i].ID), zap.String("vm_name", vmsWithoutUUID[i].Name))
-					}
-				}
-			}
-		}
-		// Check if all VMs have UUID before setting NOT NULL
-		var count int64
-		database.DB.Unscoped().Model(&models.VM{}).Where("uuid = '' OR uuid IS NULL").Count(&count)
-		if count == 0 {
-			if err := database.DB.Exec("ALTER TABLE vms ALTER COLUMN uuid SET NOT NULL").Error; err != nil {
-				logger.Log.Warn("Failed to set VM UUID column to NOT NULL", zap.Error(err))
-			} else {
-				logger.Log.Info("VM UUID column set to NOT NULL")
-			}
-		} else {
-			logger.Log.Warn("Cannot set VM UUID to NOT NULL, some VMs still have NULL UUID", zap.Int64("count", count))
-		}
-	} else {
-		logger.Log.Warn("Failed to query VMs without UUID", zap.Error(err))
 	}
 
 	return nil
 }
 
+// initImages initializes VM images in the database
 func initImages(db *gorm.DB, isoDir string) error {
-	images := []models.VMImage{
-		{Name: "Ubuntu Desktop 22.04", OSType: "ubuntu-desktop", Path: filepath.Join(isoDir, "ubuntu-desktop.iso"), IsISO: true, Description: "GUI Installer"},
-		{Name: "Ubuntu Server 22.04", OSType: "ubuntu-server", Path: filepath.Join(isoDir, "ubuntu-server.iso"), IsISO: true, Description: "CLI Installer"},
-		{Name: "Kali Linux 2023.4", OSType: "kali", Path: filepath.Join(isoDir, "kali.iso"), IsISO: true, Description: "GUI Installer"},
-		{Name: "Windows 10/11", OSType: "windows", Path: filepath.Join(isoDir, "windows.iso"), IsISO: true, Description: "Manual ISO Required"},
+	// Check if ISO directory exists
+	if isoDir == "" {
+		logger.Log.Warn("ISO directory not configured, skipping image initialization")
+		return nil
 	}
 
-	for _, img := range images {
-		var count int64
-		db.Model(&models.VMImage{}).Where("name = ?", img.Name).Count(&count)
-		if count == 0 {
-			if err := db.Create(&img).Error; err != nil {
-				return err
+	// Read ISO directory
+	files, err := os.ReadDir(isoDir)
+	if err != nil {
+		logger.Log.Warn("Failed to read ISO directory", zap.String("dir", isoDir), zap.Error(err))
+		return nil // Don't fail if ISO directory doesn't exist
+	}
+
+	// Process each file
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		filename := file.Name()
+		filePath := filepath.Join(isoDir, filename)
+
+		// Check if it's an ISO or disk image
+		isISO := strings.HasSuffix(strings.ToLower(filename), ".iso")
+		if !isISO && !strings.HasSuffix(strings.ToLower(filename), ".img") && !strings.HasSuffix(strings.ToLower(filename), ".qcow2") {
+			continue
+		}
+
+		// Determine OS type from filename (simple heuristic)
+		osType := "unknown"
+		filenameLower := strings.ToLower(filename)
+		if strings.Contains(filenameLower, "ubuntu") {
+			osType = "ubuntu"
+		} else if strings.Contains(filenameLower, "debian") {
+			osType = "debian"
+		} else if strings.Contains(filenameLower, "centos") || strings.Contains(filenameLower, "rhel") {
+			osType = "centos"
+		} else if strings.Contains(filenameLower, "fedora") {
+			osType = "fedora"
+		} else if strings.Contains(filenameLower, "windows") {
+			osType = "windows"
+		}
+
+		// Check if image already exists in database
+		var existingImage models.VMImage
+		result := db.Where("path = ?", filePath).First(&existingImage)
+
+		if result.Error == gorm.ErrRecordNotFound {
+			// Image doesn't exist, create it
+			image := models.VMImage{
+				Name:        filename,
+				OSType:      osType,
+				Path:        filePath,
+				IsISO:       isISO,
+				Description: fmt.Sprintf("Auto-detected %s image", osType),
 			}
-			logger.Log.Info("Initialized image", zap.String("name", img.Name))
+
+			if err := db.Create(&image).Error; err != nil {
+				logger.Log.Warn("Failed to create image record", zap.String("file", filename), zap.Error(err))
+				continue
+			}
+
+			logger.Log.Info("VM image initialized", zap.String("name", filename), zap.String("os_type", osType))
 		}
 	}
+
 	return nil
 }

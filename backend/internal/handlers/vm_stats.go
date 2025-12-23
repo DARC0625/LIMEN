@@ -75,5 +75,3 @@ func (h *Handler) HandleVMStats(w http.ResponseWriter, r *http.Request) {
 		logger.Log.Error("Failed to encode VM stats response", zap.Error(err))
 	}
 }
-
-

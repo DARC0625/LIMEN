@@ -1,10 +1,12 @@
 // Package auth provides authentication and authorization functionality.
+// Uses state-of-the-art cryptographic techniques for maximum security and performance.
 package auth
 
 import (
 	"errors"
 	"time"
 
+	"github.com/DARC0625/LIMEN/backend/internal/crypto"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -15,14 +17,29 @@ var (
 	ErrInvalidToken       = errors.New("invalid token")
 )
 
-// HashPassword hashes a password using bcrypt.
+// HashPassword hashes a password using Argon2id.
+// Argon2id is the winner of the Password Hashing Competition (PHC)
+// and provides superior security compared to bcrypt:
+// - Memory-hard (resistant to GPU attacks)
+// - Configurable memory/time trade-offs
+// - Faster than bcrypt on modern systems
+// - Post-quantum resistant design
+// Uses hardware-optimized configuration if available.
 func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	return string(bytes), err
+	// Use hardware-optimized configuration
+	config := crypto.GetOptimalArgon2idConfig()
+	return crypto.HashPasswordWithConfig(password, config)
 }
 
-// CheckPassword compares a password with a hash.
+// CheckPassword verifies a password against an Argon2id hash.
+// Supports both Argon2id (new) and bcrypt (legacy) hashes for backward compatibility.
 func CheckPassword(password, hash string) bool {
+	// Try Argon2id first (new format)
+	if crypto.CheckPassword(password, hash) {
+		return true
+	}
+	
+	// Fallback to bcrypt for backward compatibility
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
@@ -31,7 +48,7 @@ func CheckPassword(password, hash string) bool {
 type Claims struct {
 	UserID   uint   `json:"user_id"`
 	Username string `json:"username"`
-	Role     string `json:"role"` // User role: admin or user
+	Role     string `json:"role"`     // User role: admin or user
 	Approved bool   `json:"approved"` // User approval status
 	jwt.RegisteredClaims
 }
@@ -98,4 +115,3 @@ func ExtractTokenFromHeader(authHeader string) (string, error) {
 
 	return authHeader[len(bearerPrefix):], nil
 }
-

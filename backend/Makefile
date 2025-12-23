@@ -24,6 +24,15 @@ test-integration:
 build:
 	go build -o server ./cmd/server
 
+# Build optimized release version
+build-release:
+	go build -ldflags="-s -w" -trimpath -o server ./cmd/server
+	@echo "Optimized release build complete"
+
+# Build with race detector (for testing)
+build-race:
+	go build -race -o server ./cmd/server
+
 # Run the server
 run: build
 	./server

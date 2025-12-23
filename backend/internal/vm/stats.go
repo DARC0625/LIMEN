@@ -49,7 +49,7 @@ func (s *VMService) getVMStatsFallback(dom *libvirt.Domain, vmName string) (*VMS
 	if err != nil {
 		return nil, fmt.Errorf("failed to get domain XML: %v", err)
 	}
-	
+
 	var domainXML struct {
 		Memory struct {
 			Unit string `xml:"unit,attr"`
@@ -60,14 +60,14 @@ func (s *VMService) getVMStatsFallback(dom *libvirt.Domain, vmName string) (*VMS
 			Text string `xml:",chardata"`
 		} `xml:"currentMemory"`
 	}
-	
+
 	if err := xml.Unmarshal([]byte(xmlDesc), &domainXML); err != nil {
 		return nil, fmt.Errorf("failed to parse domain XML: %v", err)
 	}
-	
+
 	var totalMemMB uint64
 	var currentMemMB uint64
-	
+
 	// Parse total memory (configured maximum)
 	if domainXML.Memory.Unit == "KiB" {
 		fmt.Sscanf(domainXML.Memory.Text, "%d", &totalMemMB)
@@ -78,7 +78,7 @@ func (s *VMService) getVMStatsFallback(dom *libvirt.Domain, vmName string) (*VMS
 		fmt.Sscanf(domainXML.Memory.Text, "%d", &totalMemMB)
 		totalMemMB = totalMemMB * 1024
 	}
-	
+
 	// Parse current memory (actual allocated/used)
 	if domainXML.CurrentMemory.Unit == "KiB" {
 		fmt.Sscanf(domainXML.CurrentMemory.Text, "%d", &currentMemMB)
@@ -89,7 +89,7 @@ func (s *VMService) getVMStatsFallback(dom *libvirt.Domain, vmName string) (*VMS
 		fmt.Sscanf(domainXML.CurrentMemory.Text, "%d", &currentMemMB)
 		currentMemMB = currentMemMB * 1024
 	}
-	
+
 	stats.MemoryTotalMB = totalMemMB
 	if currentMemMB > 0 {
 		stats.MemoryUsedMB = currentMemMB
@@ -97,7 +97,7 @@ func (s *VMService) getVMStatsFallback(dom *libvirt.Domain, vmName string) (*VMS
 		// If currentMemory is not set, use total memory as estimate
 		stats.MemoryUsedMB = totalMemMB
 	}
-	
+
 	if totalMemMB > 0 && stats.MemoryUsedMB > 0 {
 		stats.MemoryUsagePercent = (float64(stats.MemoryUsedMB) / float64(totalMemMB)) * 100
 	}
@@ -114,4 +114,3 @@ func (s *VMService) getVMStatsFallback(dom *libvirt.Domain, vmName string) (*VMS
 
 	return stats, nil
 }
-

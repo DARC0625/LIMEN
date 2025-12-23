@@ -49,5 +49,3 @@ func (a VMAction) IsValid() bool {
 	}
 	return false
 }
-
-

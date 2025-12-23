@@ -1,51 +1,84 @@
-# LIMEN 문서
+# LIMEN 문서 위키
 
-이 폴더에는 LIMEN 프로젝트의 모든 문서가 포함되어 있습니다.
+> **위키 형식으로 재구성된 통합 문서 시스템**
 
-## 📚 문서 목록
+## 🗺️ 시작하기
 
-### 프로젝트 개요
-- [프로젝트 구조](./PROJECT_STRUCTURE.md) - 프로젝트 디렉토리 구조 및 컴포넌트 설명
+**[00-home.md](./00-home.md)**에서 시작하세요.
 
-### 개선 작업 기록
-- [최종 보고서](./FINAL_REPORT.md) - 전체 개선 작업 요약
-- [Phase 1 완료](./PHASE1_COMPLETE.md) - 보안 강화 작업
-- [Phase 2 완료](./PHASE2_COMPLETE.md) - 코드 품질 개선 작업
-- [Phase 3 완료](./PHASE3_COMPLETE.md) - 테스트 및 문서화 작업
-- [개선 사항 목록](./IMPROVEMENTS.md) - 상세 개선 항목 및 우선순위
-- [빠른 수정 가이드](./QUICK_FIXES.md) - 빠른 개선을 위한 코드 예제
+---
 
-### 변경 이력
-- [CHANGELOG](./CHANGELOG.md) - 프로젝트 변경 이력
-- [요약](./SUMMARY.md) - 개선 작업 요약
+## 📁 위키 구조
 
-## 📖 문서 읽기 순서
+### 대폴더 (카테고리)
 
-### 신규 개발자
-1. [프로젝트 구조](./PROJECT_STRUCTURE.md) - 프로젝트 이해
-2. [최종 보고서](./FINAL_REPORT.md) - 전체 개선 사항 파악
-3. [빠른 수정 가이드](./QUICK_FIXES.md) - 코드 예제 참고
+- **[00-home.md](./00-home.md)** - 메인 페이지 및 네비게이션
+- **[01-architecture/](./01-architecture/)** - 아키텍처 및 설계
+- **[02-development/](./02-development/)** - 개발 가이드
+- **[03-deployment/](./03-deployment/)** - 배포 가이드
+- **[04-operations/](./04-operations/)** - 운영 가이드
+- **[05-frontend/](./05-frontend/)** - 프론트엔드 문서 (과거 기록)
+- **[99-archive/](./99-archive/)** - 아카이브
 
-### 기존 개발자
-1. [CHANGELOG](./CHANGELOG.md) - 최근 변경 사항 확인
-2. [개선 사항 목록](./IMPROVEMENTS.md) - 향후 개선 계획 확인
+### 중폴더 (세부 주제)
 
-### 기여자
-1. [개선 사항 목록](./IMPROVEMENTS.md) - 개선 제안 확인
-2. [빠른 수정 가이드](./QUICK_FIXES.md) - 코드 예제 참고
+각 대폴더 내부의 중폴더 구조:
 
-## 🔄 문서 업데이트
+- **01-architecture/**
+  - `components/` - 컴포넌트 상세
+  - `design-patterns/` - 디자인 패턴
+  
+- **02-development/**
+  - `api/` - API 문서
+  - `testing/` - 테스트 가이드
+  - `guides/` - 개발 가이드
+  
+- **03-deployment/**
+  - `docker/` - Docker 배포
+  - `ci-cd/` - CI/CD 파이프라인
+  - `operations/` - 운영 배포
+  
+- **04-operations/**
+  - `monitoring/` - 모니터링
+  - `alerting/` - 알림 시스템
+  - `backup/` - 백업
+  - `troubleshooting/` - 문제 해결
+  
+- **05-frontend/**
+  - `guides/` - 개발 가이드
+  - `deployment/` - 배포 전략
+  
+- **99-archive/**
+  - `legacy/` - 레거시 문서
+  - `phases/` - Phase별 기록
 
-문서는 프로젝트 변경 시 함께 업데이트됩니다:
-- 새로운 기능 추가 시 → CHANGELOG.md 업데이트
-- 개선 작업 완료 시 → 해당 Phase 문서 업데이트
-- 구조 변경 시 → PROJECT_STRUCTURE.md 업데이트
+---
 
-## 📝 문서 작성 가이드
+## 🔍 빠른 검색
 
-새로운 문서를 추가할 때:
-1. 적절한 파일명 사용 (영문, 하이픈 구분)
-2. 이 README.md에 링크 추가
-3. 관련 섹션에 분류
+- **키워드**: 각 문서의 태그 참조
+- **연관 문서**: 각 문서 하단의 "관련 문서" 섹션
+- **네비게이션**: 각 문서 상단의 브레드크럼
 
+---
 
+## 📝 위키 서비스 준비
+
+이 위키 구조는 향후 위키 서비스 개발 시 빅데이터로 활용될 예정입니다.
+
+### 특징
+
+- **계층적 구조**: 대폴더 → 중폴더 → 소폴더
+- **연관성 기반**: 문서 간 연결 및 네비게이션
+- **태그 시스템**: 검색 및 분류 최적화
+- **메타데이터**: 각 문서의 구조화된 정보
+
+---
+
+**시작**: [00-home.md](./00-home.md)
+
+**태그**: `#위키` `#문서` `#시작하기`
+
+**카테고리**: 문서 > 시작하기
+
+**마지막 업데이트**: 2024-12-23

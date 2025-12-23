@@ -1,26 +1,145 @@
-name: CI/CD Pipeline
+name: CI Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
 
 env:
   GO_VERSION: '1.24'
-  NODE_VERSION: '18'
+  RUST_VERSION: 'stable'
 
 jobs:
+  # Go 백엔드 빌드 및 테스트
   backend:
-    name: Backend Build & Test
+    name: Backend (Go)
     runs-on: ubuntu-latest
-    
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ./backend/go.sum
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run Go linter (golangci-lint)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: ./backend
+          args: --timeout=5m
+
+      - name: Format check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not formatted. Run 'gofmt -s -w .'"
+            gofmt -s -d .
+            exit 1
+          fi
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./backend/coverage.out
+          flags: backend
+          name: backend-coverage
+        continue-on-error: true
+
+      - name: Build backend
+        run: go build -ldflags="-s -w" -trimpath -o server ./cmd/server
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-binary
+          path: ./backend/server
+          retention-days: 7
+
+  # Rust 에이전트 빌드 및 테스트
+  agent:
+    name: Agent (Rust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend/agent
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          override: true
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            backend/agent/target/
+          key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Run Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Run tests
+        run: cargo test --verbose
+
+      - name: Build agent (release)
+        run: cargo build --release
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-binary
+          path: ./backend/agent/target/release/agent
+          retention-days: 7
+
+  # 통합 테스트 (선택적)
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [backend, agent]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
     services:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: limen_test
         options: >-
           --health-cmd pg_isready
@@ -38,87 +157,18 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: backend/go.sum
 
-      - name: Install dependencies
+      - name: Download dependencies
         working-directory: ./backend
         run: go mod download
 
-      - name: Run linter
-        working-directory: ./backend
-        run: |
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest || true
-          golangci-lint run --timeout=5m || echo "Linter not available"
-
-      - name: Run tests
+      - name: Run integration tests
         working-directory: ./backend
         env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: test
-          DB_PASSWORD: test
-          DB_NAME: limen_test
-        run: go test ./... -v -coverprofile=coverage.out
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/limen_test?sslmode=disable
+        run: go test -v -tags=integration ./...
 
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./backend/coverage.out
-          flags: backend
-          name: backend-coverage
-        continue-on-error: true
-
-      - name: Build backend
-        working-directory: ./backend
-        run: go build -o server ./cmd/server
-
-  frontend:
-    name: Frontend Build & Test
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Run linter
-        working-directory: ./frontend
-        run: npm run lint || echo "Linter check completed"
-
-      - name: Build frontend
-        working-directory: ./frontend
-        env:
-          NEXT_PUBLIC_API_URL: http://localhost:8080/api
-        run: npm run build
-
-  agent:
-    name: Agent Build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-
-      - name: Build agent
-        working-directory: ./backend/agent
-        run: cargo build --release
-
+  # 보안 스캔
   security:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -127,28 +177,89 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Gosec Security Scanner
-        uses: securego/gosec@master
+      - name: Run Trivy vulnerability scanner (filesystem)
+        uses: aquasecurity/trivy-action@master
         with:
-          args: './...'
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Run Trivy vulnerability scanner (Go dependencies)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: './backend'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
         continue-on-error: true
 
-      - name: Run npm audit
-        working-directory: ./frontend
-        run: npm audit --audit-level=moderate || true
+      - name: Run Trivy vulnerability scanner (Rust dependencies)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: './backend/agent'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+        continue-on-error: true
 
-  build-all:
-    name: Build All Components
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+        continue-on-error: true
+
+      - name: Go security check (gosec)
+        uses: securego/gosec@master
+        with:
+          args: '-no-fail -fmt json -out gosec-report.json ./backend/...'
+        continue-on-error: true
+
+      - name: Upload gosec results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gosec-report
+          path: gosec-report.json
+          retention-days: 30
+        continue-on-error: true
+
+  # 코드 품질 리포트
+  quality:
+    name: Code Quality Report
     runs-on: ubuntu-latest
-    needs: [backend, frontend, agent]
-    
+    needs: [backend, agent]
+    if: always()
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build summary
+      - name: Download backend artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-binary
+          path: ./artifacts/backend
+
+      - name: Download agent artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-binary
+          path: ./artifacts/agent
+
+      - name: Binary size check
         run: |
-          echo "✅ All components built successfully"
-          echo "Backend: ✅"
-          echo "Frontend: ✅"
-          echo "Agent: ✅"
+          echo "## Binary Sizes" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|------|" >> $GITHUB_STEP_SUMMARY
+          if [ -f ./artifacts/backend/server ]; then
+            BACKEND_SIZE=$(du -h ./artifacts/backend/server | cut -f1)
+            echo "| Backend | $BACKEND_SIZE |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f ./artifacts/agent/agent ]; then
+            AGENT_SIZE=$(du -h ./artifacts/agent/agent | cut -f1)
+            echo "| Agent | $AGENT_SIZE |" >> $GITHUB_STEP_SUMMARY
+          fi

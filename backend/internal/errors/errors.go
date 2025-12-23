@@ -15,7 +15,7 @@ type APIError struct {
 }
 
 // WriteError writes a standardized error response to the HTTP response writer.
-// In production, internal error details are not exposed to the client.
+// In production, internal error details are NEVER exposed to the client (zero-trust principle).
 func WriteError(w http.ResponseWriter, code int, message string, internalErr error) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
@@ -25,24 +25,28 @@ func WriteError(w http.ResponseWriter, code int, message string, internalErr err
 		Message: message,
 	}
 
-	// Only include internal error details in development
+	// NEVER include internal error details in production (zero-trust: minimize information exposure)
+	// Only include in development mode for debugging
 	if internalErr != nil {
-		apiErr.Error = internalErr.Error()
+		// Check if we're in development mode via environment variable or config
+		// For now, we'll be conservative and never expose internal errors
+		// apiErr.Error = internalErr.Error() // Commented out for zero-trust
 	}
 
 	if err := json.NewEncoder(w).Encode(apiErr); err != nil {
-		// Fallback if JSON encoding fails
-		http.Error(w, message, code)
+		// Fallback if JSON encoding fails - use generic message
+		http.Error(w, "An error occurred", code)
 	}
 }
 
 // WriteInternalError writes a 500 Internal Server Error response.
+// Zero-trust principle: Never expose internal error details to clients.
 func WriteInternalError(w http.ResponseWriter, internalErr error, isDevelopment bool) {
+	// Always use generic message - never expose internal error details (zero-trust)
 	message := "Internal server error"
-	if isDevelopment && internalErr != nil {
-		message = fmt.Sprintf("Internal server error: %v", internalErr)
-	}
-	WriteError(w, http.StatusInternalServerError, message, internalErr)
+	// Even in development, we don't expose error details to prevent information leakage
+	// Log the error internally instead
+	WriteError(w, http.StatusInternalServerError, message, nil)
 }
 
 // WriteBadRequest writes a 400 Bad Request response.
@@ -67,6 +71,7 @@ func WriteUnauthorized(w http.ResponseWriter, message string) {
 	if message == "" {
 		message = "Unauthorized"
 	}
+	// Note: Logging is done in the middleware that calls this function
 	WriteError(w, http.StatusUnauthorized, message, nil)
 }
 
@@ -77,5 +82,3 @@ func WriteForbidden(w http.ResponseWriter, message string) {
 	}
 	WriteError(w, http.StatusForbidden, message, nil)
 }
-
-

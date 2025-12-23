@@ -91,5 +91,3 @@ func TestVMAction_String(t *testing.T) {
 		})
 	}
 }
-
-
