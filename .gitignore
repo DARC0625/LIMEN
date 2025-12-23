@@ -147,3 +147,5 @@ ENV/
 *~
 .cache/
 database/vms/*.qcow2
+database/iso/*.iso
+database/iso/*.ISO
