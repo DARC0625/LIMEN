@@ -16,13 +16,13 @@ import (
 func SanitizeString(input string) string {
 	// Remove null bytes
 	input = strings.ReplaceAll(input, "\x00", "")
-	
+
 	// HTML escape to prevent XSS
 	input = html.EscapeString(input)
-	
+
 	// Trim whitespace
 	input = strings.TrimSpace(input)
-	
+
 	return input
 }
 
@@ -36,12 +36,12 @@ func SanitizeForLog(input string) string {
 		`(?i)key\s*[:=]\s*[^\s]+`,
 		`(?i)authorization\s*[:=]\s*[^\s]+`,
 	}
-	
+
 	for _, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
 		input = re.ReplaceAllString(input, "[REDACTED]")
 	}
-	
+
 	return input
 }
 
@@ -50,19 +50,19 @@ func ValidateInput(input string, maxLength int) error {
 	if len(input) > maxLength {
 		return ErrInputTooLong
 	}
-	
+
 	// Check for null bytes
 	if strings.Contains(input, "\x00") {
 		return ErrInvalidInput
 	}
-	
+
 	// Check for control characters (except newline and tab)
 	for _, r := range input {
 		if unicode.IsControl(r) && r != '\n' && r != '\t' {
 			return ErrInvalidInput
 		}
 	}
-	
+
 	return nil
 }
 
@@ -89,12 +89,12 @@ func GetCSRFTokenFromRequest(r *http.Request) string {
 	if token := r.Header.Get("X-CSRF-Token"); token != "" {
 		return token
 	}
-	
+
 	// Check form value
 	if token := r.FormValue("csrf_token"); token != "" {
 		return token
 	}
-	
+
 	return ""
 }
 
@@ -104,17 +104,17 @@ func IsSafePath(path string) bool {
 	if strings.Contains(path, "..") {
 		return false
 	}
-	
+
 	// Reject absolute paths (in most cases)
 	if strings.HasPrefix(path, "/") && !strings.HasPrefix(path, "/safe/") {
 		return false
 	}
-	
+
 	// Reject null bytes
 	if strings.Contains(path, "\x00") {
 		return false
 	}
-	
+
 	return true
 }
 
@@ -129,7 +129,7 @@ func RedactSensitiveFields(data map[string]interface{}) map[string]interface{} {
 		"api_key", "apiKey", "API_KEY",
 		"access_token", "accessToken", "ACCESS_TOKEN",
 	}
-	
+
 	result := make(map[string]interface{})
 	for k, v := range data {
 		isSensitive := false
@@ -139,24 +139,24 @@ func RedactSensitiveFields(data map[string]interface{}) map[string]interface{} {
 				break
 			}
 		}
-		
+
 		if isSensitive {
 			result[k] = "[REDACTED]"
 		} else {
 			result[k] = v
 		}
 	}
-	
+
 	return result
 }
 
 // Errors
 var (
-	ErrInputTooLong   = &SecurityError{Message: "Input exceeds maximum length"}
-	ErrInvalidInput   = &SecurityError{Message: "Invalid input detected"}
+	ErrInputTooLong     = &SecurityError{Message: "Input exceeds maximum length"}
+	ErrInvalidInput     = &SecurityError{Message: "Invalid input detected"}
 	ErrCSRFTokenMissing = &SecurityError{Message: "CSRF token missing"}
 	ErrCSRFTokenInvalid = &SecurityError{Message: "CSRF token invalid"}
-	ErrUnsafePath     = &SecurityError{Message: "Unsafe path detected"}
+	ErrUnsafePath       = &SecurityError{Message: "Unsafe path detected"}
 )
 
 type SecurityError struct {
@@ -166,8 +166,3 @@ type SecurityError struct {
 func (e *SecurityError) Error() string {
 	return e.Message
 }
-
-
-
-
-

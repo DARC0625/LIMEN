@@ -11,9 +11,9 @@ import (
 // User represents a system user.
 type User struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`
-	UUID      string         `gorm:"type:varchar(36);uniqueIndex" json:"uuid"` // Unique identifier (nullable initially for migration)
-	Username  string         `gorm:"unique;not null;index" json:"username"`     // Indexed for faster lookups
-	Password  string         `gorm:"not null" json:"-"`                           // Password hash, never exposed in JSON
+	UUID      string         `gorm:"type:varchar(36);uniqueIndex" json:"uuid"`          // Unique identifier (nullable initially for migration)
+	Username  string         `gorm:"unique;not null;index" json:"username"`             // Indexed for faster lookups
+	Password  string         `gorm:"not null" json:"-"`                                 // Password hash, never exposed in JSON
 	Role      UserRole       `gorm:"type:varchar(20);default:'user';index" json:"role"` // User role: admin or user - indexed for filtering
 	Approved  bool           `gorm:"default:false;index" json:"approved"`               // Admin approval required - indexed for filtering
 	CreatedAt time.Time      `json:"created_at"`
@@ -37,12 +37,12 @@ func (u *User) IsAdmin() bool {
 // VM represents a virtual machine instance.
 type VM struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`
-	UUID      string         `gorm:"type:varchar(36);uniqueIndex" json:"uuid"` // Unique identifier (nullable initially for migration)
-	Name      string         `gorm:"unique;not null;index" json:"name"`         // Indexed for faster lookups
-	CPU       int            `gorm:"not null" json:"cpu"`                              // Number of CPU cores
-	Memory    int            `gorm:"not null" json:"memory"`                           // Memory in MB
+	UUID      string         `gorm:"type:varchar(36);uniqueIndex" json:"uuid"`               // Unique identifier (nullable initially for migration)
+	Name      string         `gorm:"unique;not null;index" json:"name"`                      // Indexed for faster lookups
+	CPU       int            `gorm:"not null" json:"cpu"`                                    // Number of CPU cores
+	Memory    int            `gorm:"not null" json:"memory"`                                 // Memory in MB
 	Status    VMStatus       `gorm:"type:varchar(20);default:'Stopped';index" json:"status"` // VM state - indexed for filtering
-	OSType    string         `gorm:"index" json:"os_type"`                                          // OS type identifier - indexed for filtering
+	OSType    string         `gorm:"index" json:"os_type"`                                   // OS type identifier - indexed for filtering
 	OwnerID   uint           `gorm:"not null;index" json:"owner_id"`                         // Foreign key to User - indexed for joins
 	Owner     User           `gorm:"foreignKey:OwnerID" json:"owner,omitempty"`
 	CreatedAt time.Time      `json:"created_at"`
@@ -62,7 +62,7 @@ func (v *VM) BeforeCreate(tx *gorm.DB) error {
 type VMImage struct {
 	ID          uint           `gorm:"primaryKey" json:"id"`
 	Name        string         `gorm:"not null" json:"name"`       // Display name
-	OSType      string         `gorm:"index" json:"os_type"`                    // OS type for UI grouping - indexed for lookups
+	OSType      string         `gorm:"index" json:"os_type"`       // OS type for UI grouping - indexed for lookups
 	Path        string         `gorm:"not null" json:"-"`          // Local filesystem path (not exposed)
 	IsISO       bool           `gorm:"default:true" json:"is_iso"` // true for ISO, false for disk image
 	Description string         `json:"description"`                // Optional description

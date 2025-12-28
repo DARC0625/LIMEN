@@ -63,7 +63,7 @@ func (h *Handler) HandleSecurityChainReport(w http.ResponseWriter, r *http.Reque
 	}
 
 	report := security.FormatSecurityChainReport(chain)
-	
+
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(report))
@@ -91,4 +91,3 @@ func (h *Handler) HandleWeakestLink(w http.ResponseWriter, r *http.Request, cfg 
 		logger.Log.Error("Failed to encode weakest link", zap.Error(err))
 	}
 }
-

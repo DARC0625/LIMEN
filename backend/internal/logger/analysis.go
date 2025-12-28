@@ -22,22 +22,22 @@ type LogEntry struct {
 
 // LogStats represents aggregated log statistics.
 type LogStats struct {
-	TotalEntries    int                    `json:"total_entries"`
-	ErrorCount      int                    `json:"error_count"`
-	WarningCount    int                    `json:"warning_count"`
-	InfoCount       int                    `json:"info_count"`
-	DebugCount      int                    `json:"debug_count"`
-	LevelDistribution map[string]int       `json:"level_distribution"`
-	TopErrors       []ErrorSummary         `json:"top_errors"`
-	TimeRange       TimeRange              `json:"time_range"`
+	TotalEntries      int            `json:"total_entries"`
+	ErrorCount        int            `json:"error_count"`
+	WarningCount      int            `json:"warning_count"`
+	InfoCount         int            `json:"info_count"`
+	DebugCount        int            `json:"debug_count"`
+	LevelDistribution map[string]int `json:"level_distribution"`
+	TopErrors         []ErrorSummary `json:"top_errors"`
+	TimeRange         TimeRange      `json:"time_range"`
 }
 
 // ErrorSummary represents a summary of error occurrences.
 type ErrorSummary struct {
-	Message    string `json:"message"`
-	Count      int    `json:"count"`
-	FirstSeen  string `json:"first_seen"`
-	LastSeen   string `json:"last_seen"`
+	Message   string `json:"message"`
+	Count     int    `json:"count"`
+	FirstSeen string `json:"first_seen"`
+	LastSeen  string `json:"last_seen"`
 }
 
 // TimeRange represents a time range for log analysis.
@@ -288,4 +288,3 @@ func FormatLogStats(stats *LogStats) string {
 
 	return builder.String()
 }
-

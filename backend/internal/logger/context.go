@@ -14,26 +14,26 @@ import (
 // This ensures all logs have consistent, machine-readable structure.
 type LogContext struct {
 	// Request context
-	RequestID   string `json:"request_id,omitempty"`
-	UserID      uint   `json:"user_id,omitempty"`
-	Username    string `json:"username,omitempty"`
-	IP          string `json:"ip,omitempty"`
-	UserAgent   string `json:"user_agent,omitempty"`
-	Method      string `json:"method,omitempty"`
-	Path        string `json:"path,omitempty"`
-	StatusCode  int    `json:"status_code,omitempty"`
-	Duration    int64  `json:"duration_ms,omitempty"` // Duration in milliseconds
+	RequestID  string `json:"request_id,omitempty"`
+	UserID     uint   `json:"user_id,omitempty"`
+	Username   string `json:"username,omitempty"`
+	IP         string `json:"ip,omitempty"`
+	UserAgent  string `json:"user_agent,omitempty"`
+	Method     string `json:"method,omitempty"`
+	Path       string `json:"path,omitempty"`
+	StatusCode int    `json:"status_code,omitempty"`
+	Duration   int64  `json:"duration_ms,omitempty"` // Duration in milliseconds
 
 	// Business context
-	VMID        uint   `json:"vm_id,omitempty"`
-	VMName      string `json:"vm_name,omitempty"`
-	Action      string `json:"action,omitempty"`      // Business action: create, delete, start, stop, etc.
-	Resource    string `json:"resource,omitempty"`    // Resource type: vm, user, snapshot, etc.
-	ResourceID  uint   `json:"resource_id,omitempty"` // Resource identifier
+	VMID       uint   `json:"vm_id,omitempty"`
+	VMName     string `json:"vm_name,omitempty"`
+	Action     string `json:"action,omitempty"`      // Business action: create, delete, start, stop, etc.
+	Resource   string `json:"resource,omitempty"`    // Resource type: vm, user, snapshot, etc.
+	ResourceID uint   `json:"resource_id,omitempty"` // Resource identifier
 
 	// Security context
 	SecurityEvent string `json:"security_event,omitempty"` // security_event: login_failed, rate_limit, etc.
-	ThreatLevel   string `json:"threat_level,omitempty"` // threat_level: low, medium, high, critical
+	ThreatLevel   string `json:"threat_level,omitempty"`   // threat_level: low, medium, high, critical
 
 	// Performance context
 	DBQueryTime  int64 `json:"db_query_time_ms,omitempty"`
@@ -46,10 +46,10 @@ type LogContext struct {
 	ErrorMessage string `json:"error_message,omitempty"` // Sanitized error message
 
 	// System context
-	Component    string `json:"component,omitempty"`    // component: api, vm, auth, etc.
-	Service      string `json:"service,omitempty"`       // service: limen-backend
-	Version      string `json:"version,omitempty"`       // Application version
-	Environment  string `json:"environment,omitempty"`   // environment: production, development
+	Component   string `json:"component,omitempty"`   // component: api, vm, auth, etc.
+	Service     string `json:"service,omitempty"`     // service: limen-backend
+	Version     string `json:"version,omitempty"`     // Application version
+	Environment string `json:"environment,omitempty"` // environment: production, development
 
 	// Timestamp (always included)
 	Timestamp time.Time `json:"timestamp"`
@@ -203,4 +203,3 @@ func GetClientIP(r *http.Request) string {
 	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 	return ip
 }
-

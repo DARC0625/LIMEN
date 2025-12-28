@@ -36,17 +36,17 @@ func (c *LogChannel) Send(ctx context.Context, alert alerting.Alert) error {
 		zap.String("component", alert.Component),
 		zap.Time("timestamp", alert.Timestamp),
 	}
-	
+
 	if len(alert.Tags) > 0 {
 		fields = append(fields, zap.Strings("tags", alert.Tags))
 	}
-	
+
 	if alert.Metadata != nil && len(alert.Metadata) > 0 {
 		for k, v := range alert.Metadata {
 			fields = append(fields, zap.Any(fmt.Sprintf("meta_%s", k), v))
 		}
 	}
-	
+
 	// Log based on severity
 	switch alert.Severity {
 	case alerting.SeverityCritical:
@@ -58,11 +58,6 @@ func (c *LogChannel) Send(ctx context.Context, alert alerting.Alert) error {
 	default:
 		c.logger.Info("ALERT", fields...)
 	}
-	
+
 	return nil
 }
-
-
-
-
-

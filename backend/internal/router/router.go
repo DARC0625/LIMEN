@@ -175,7 +175,7 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *mux.Router {
 		if r.URL.Path == "" {
 			r.URL.Path = "/"
 		}
-		
+
 		// Forward the request to agent
 		agentProxy.ServeHTTP(w, r)
 	}))

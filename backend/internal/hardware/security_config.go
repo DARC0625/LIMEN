@@ -24,13 +24,13 @@ func getCryptoSecurityConfig() *crypto.SecurityConfigFromHardware {
 type SecurityConfig struct {
 	// Argon2id configuration optimized for this hardware
 	Argon2idConfig crypto.Argon2idConfig
-	
+
 	// Preferred encryption algorithm based on hardware acceleration
 	PreferredEncryption string // "chacha20" or "aes-gcm"
-	
+
 	// Use hardware RNG if available
 	UseHardwareRNG bool
-	
+
 	// Enable hardware acceleration for crypto operations
 	EnableHardwareAccel bool
 }
@@ -42,12 +42,12 @@ func GetOptimalSecurityConfig() *SecurityConfig {
 		// Default configuration if spec not available
 		return getDefaultSecurityConfig()
 	}
-	
+
 	config := &SecurityConfig{}
-	
+
 	// Optimize Argon2id based on available memory
 	config.Argon2idConfig = optimizeArgon2idForHardware(spec)
-	
+
 	// Choose encryption algorithm based on hardware acceleration
 	if spec.CPU.HasAES && spec.Security.HasAESAccel {
 		config.PreferredEncryption = "aes-gcm"
@@ -63,7 +63,7 @@ func GetOptimalSecurityConfig() *SecurityConfig {
 			zap.String("cpu", spec.CPU.Model),
 		)
 	}
-	
+
 	// Use hardware RNG if available
 	config.UseHardwareRNG = spec.CPU.HasRDSEED || spec.CPU.HasRDRAND
 	if config.UseHardwareRNG {
@@ -72,19 +72,19 @@ func GetOptimalSecurityConfig() *SecurityConfig {
 			zap.Bool("rdrand", spec.CPU.HasRDRAND),
 		)
 	}
-	
+
 	return config
 }
 
 // optimizeArgon2idForHardware optimizes Argon2id parameters based on hardware.
 func optimizeArgon2idForHardware(spec *Spec) crypto.Argon2idConfig {
 	config := crypto.DefaultArgon2idConfig()
-	
+
 	// Adjust memory based on available RAM
 	// Use more memory if available (better security)
 	// But don't exceed 25% of available memory
 	maxMemoryKB := uint32(spec.Memory.AvailableGB * 1024 * 1024 * 0.25) // 25% of available
-	
+
 	if maxMemoryKB > 65536 { // More than 64MB available
 		config.Memory = 65536 // Use 64MB (good balance)
 	} else if maxMemoryKB > 32768 { // More than 32MB available
@@ -94,7 +94,7 @@ func optimizeArgon2idForHardware(spec *Spec) crypto.Argon2idConfig {
 	} else {
 		config.Memory = 8192 // Use 8MB (minimum)
 	}
-	
+
 	// Adjust parallelism based on CPU cores
 	// Use up to 4 threads (optimal for Argon2id)
 	if spec.CPU.Cores >= 4 {
@@ -104,7 +104,7 @@ func optimizeArgon2idForHardware(spec *Spec) crypto.Argon2idConfig {
 	} else {
 		config.Parallelism = 1
 	}
-	
+
 	// Adjust iterations based on CPU performance
 	// Faster CPUs can handle more iterations
 	if spec.CPU.FrequencyMHz > 3000 { // High frequency CPU
@@ -114,7 +114,7 @@ func optimizeArgon2idForHardware(spec *Spec) crypto.Argon2idConfig {
 	} else { // Lower frequency CPU
 		config.Iterations = 2 // Reduce iterations for slower CPUs
 	}
-	
+
 	logger.Log.Info("Optimized Argon2id configuration",
 		zap.Uint32("memory_kb", config.Memory),
 		zap.Uint32("iterations", config.Iterations),
@@ -122,7 +122,7 @@ func optimizeArgon2idForHardware(spec *Spec) crypto.Argon2idConfig {
 		zap.Float64("cpu_freq_mhz", spec.CPU.FrequencyMHz),
 		zap.Int("cpu_cores", spec.CPU.Cores),
 	)
-	
+
 	return config
 }
 
@@ -144,27 +144,27 @@ func ValidateHardwareSecurity() []string {
 		warnings = append(warnings, "Hardware specification not available")
 		return warnings
 	}
-	
+
 	// Check for hardware RNG
 	if !spec.CPU.HasRDRAND && !spec.CPU.HasRDSEED {
 		warnings = append(warnings, "No hardware RNG available - using software RNG")
 	}
-	
+
 	// Check for AES acceleration
 	if !spec.CPU.HasAES {
 		warnings = append(warnings, "No AES-NI instruction set - using ChaCha20-Poly1305")
 	}
-	
+
 	// Check for TPM
 	if !spec.Security.TPM {
 		warnings = append(warnings, "TPM not detected - hardware-backed security features unavailable")
 	}
-	
+
 	// Check for Secure Boot
 	if !spec.Security.SecureBoot {
 		warnings = append(warnings, "Secure Boot not enabled - boot security reduced")
 	}
-	
+
 	// Check for SMEP/SMAP
 	if !spec.CPU.HasSMEP {
 		warnings = append(warnings, "SMEP not available - kernel security reduced")
@@ -172,12 +172,11 @@ func ValidateHardwareSecurity() []string {
 	if !spec.CPU.HasSMAP {
 		warnings = append(warnings, "SMAP not available - kernel security reduced")
 	}
-	
+
 	// Check ASLR
 	if spec.Security.ASLR < 2 {
 		warnings = append(warnings, "ASLR not fully enabled - memory security reduced")
 	}
-	
+
 	return warnings
 }
-

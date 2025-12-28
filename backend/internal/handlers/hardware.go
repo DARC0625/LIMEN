@@ -81,4 +81,3 @@ func (h *Handler) HandleHardwareUpdate(w http.ResponseWriter, r *http.Request, c
 		"spec":    spec,
 	})
 }
-

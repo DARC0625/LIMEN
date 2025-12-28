@@ -38,7 +38,7 @@ func CheckPassword(password, hash string) bool {
 	if crypto.CheckPassword(password, hash) {
 		return true
 	}
-	
+
 	// Fallback to bcrypt for backward compatibility
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil

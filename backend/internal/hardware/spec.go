@@ -19,20 +19,20 @@ import (
 
 // Spec represents the complete hardware specification of the server.
 type Spec struct {
-	Timestamp   time.Time `json:"timestamp"`
-	Hostname    string    `json:"hostname"`
-	Architecture string   `json:"architecture"`
-	OS          string    `json:"os"`
-	Kernel      string    `json:"kernel"`
-	
-	CPU         CPUInfo      `json:"cpu"`
-	Memory      MemoryInfo   `json:"memory"`
-	Disks       []DiskInfo   `json:"disks"`
-	Network     []NetworkInfo `json:"network"`
-	Security    SecurityInfo  `json:"security"`
-	
+	Timestamp    time.Time `json:"timestamp"`
+	Hostname     string    `json:"hostname"`
+	Architecture string    `json:"architecture"`
+	OS           string    `json:"os"`
+	Kernel       string    `json:"kernel"`
+
+	CPU      CPUInfo       `json:"cpu"`
+	Memory   MemoryInfo    `json:"memory"`
+	Disks    []DiskInfo    `json:"disks"`
+	Network  []NetworkInfo `json:"network"`
+	Security SecurityInfo  `json:"security"`
+
 	// Hash of the spec for change detection
-	Hash        string    `json:"hash"`
+	Hash string `json:"hash"`
 }
 
 // CPUInfo contains detailed CPU information.
@@ -47,16 +47,16 @@ type CPUInfo struct {
 	CacheL2      string   `json:"cache_l2"`
 	CacheL3      string   `json:"cache_l3"`
 	Flags        []string `json:"flags"`
-	
+
 	// Security features
-	HasAES      bool `json:"has_aes"`      // AES-NI instruction set
-	HasAVX      bool `json:"has_avx"`      // AVX instruction set
-	HasAVX2     bool `json:"has_avx2"`     // AVX2 instruction set
-	HasSHA      bool `json:"has_sha"`      // SHA-NI instruction set
-	HasRDRAND   bool `json:"has_rdrand"`   // Hardware RNG
-	HasRDSEED   bool `json:"has_rdseed"`   // Hardware RNG (better)
-	HasSMEP     bool `json:"has_smep"`     // Supervisor Mode Execution Prevention
-	HasSMAP     bool `json:"has_smap"`     // Supervisor Mode Access Prevention
+	HasAES      bool `json:"has_aes"`       // AES-NI instruction set
+	HasAVX      bool `json:"has_avx"`       // AVX instruction set
+	HasAVX2     bool `json:"has_avx2"`      // AVX2 instruction set
+	HasSHA      bool `json:"has_sha"`       // SHA-NI instruction set
+	HasRDRAND   bool `json:"has_rdrand"`    // Hardware RNG
+	HasRDSEED   bool `json:"has_rdseed"`    // Hardware RNG (better)
+	HasSMEP     bool `json:"has_smep"`      // Supervisor Mode Execution Prevention
+	HasSMAP     bool `json:"has_smap"`      // Supervisor Mode Access Prevention
 	HasIntelTXT bool `json:"has_intel_txt"` // Intel Trusted Execution Technology
 }
 
@@ -81,26 +81,26 @@ type DiskInfo struct {
 
 // NetworkInfo contains network interface information.
 type NetworkInfo struct {
-	Name      string   `json:"name"`
-	Type      string   `json:"type"`
-	MAC       string   `json:"mac"`
-	IPs       []string `json:"ips"`
-	Speed     string   `json:"speed"`
-	Duplex    string   `json:"duplex"`
+	Name   string   `json:"name"`
+	Type   string   `json:"type"`
+	MAC    string   `json:"mac"`
+	IPs    []string `json:"ips"`
+	Speed  string   `json:"speed"`
+	Duplex string   `json:"duplex"`
 }
 
 // SecurityInfo contains security-related hardware features.
 type SecurityInfo struct {
-	TPM          bool   `json:"tpm"`           // Trusted Platform Module
-	SecureBoot   bool   `json:"secure_boot"`  // UEFI Secure Boot
-	SELinux      bool   `json:"selinux"`      // SELinux enabled
-	AppArmor     bool   `json:"apparmor"`     // AppArmor enabled
-	ASLR         int    `json:"aslr"`         // Address Space Layout Randomization level
+	TPM           bool   `json:"tpm"`         // Trusted Platform Module
+	SecureBoot    bool   `json:"secure_boot"` // UEFI Secure Boot
+	SELinux       bool   `json:"selinux"`     // SELinux enabled
+	AppArmor      bool   `json:"apparmor"`    // AppArmor enabled
+	ASLR          int    `json:"aslr"`        // Address Space Layout Randomization level
 	KernelVersion string `json:"kernel_version"`
-	
+
 	// Hardware encryption acceleration
-	HasAESAccel  bool `json:"has_aes_accel"`  // AES hardware acceleration
-	HasSHAAccel  bool `json:"has_sha_accel"`  // SHA hardware acceleration
+	HasAESAccel bool `json:"has_aes_accel"` // AES hardware acceleration
+	HasSHAAccel bool `json:"has_sha_accel"` // SHA hardware acceleration
 }
 
 var (
@@ -114,18 +114,18 @@ func DetectSpec() (*Spec, error) {
 	spec := &Spec{
 		Timestamp: time.Now(),
 	}
-	
+
 	// Basic system info
 	hostname, _ := os.Hostname()
 	spec.Hostname = hostname
 	spec.Architecture = runtime.GOARCH
 	spec.OS = runtime.GOOS
-	
+
 	// Kernel version
 	if kernel, err := exec.Command("uname", "-r").Output(); err == nil {
 		spec.Kernel = strings.TrimSpace(string(kernel))
 	}
-	
+
 	// CPU info
 	cpuInfo, err := detectCPU()
 	if err != nil {
@@ -133,7 +133,7 @@ func DetectSpec() (*Spec, error) {
 	} else {
 		spec.CPU = *cpuInfo
 	}
-	
+
 	// Memory info
 	memInfo, err := detectMemory()
 	if err != nil {
@@ -141,7 +141,7 @@ func DetectSpec() (*Spec, error) {
 	} else {
 		spec.Memory = *memInfo
 	}
-	
+
 	// Disk info
 	disks, err := detectDisks()
 	if err != nil {
@@ -149,7 +149,7 @@ func DetectSpec() (*Spec, error) {
 	} else {
 		spec.Disks = disks
 	}
-	
+
 	// Network info
 	networks, err := detectNetwork()
 	if err != nil {
@@ -157,7 +157,7 @@ func DetectSpec() (*Spec, error) {
 	} else {
 		spec.Network = networks
 	}
-	
+
 	// Security info
 	secInfo, err := detectSecurity()
 	if err != nil {
@@ -165,36 +165,36 @@ func DetectSpec() (*Spec, error) {
 	} else {
 		spec.Security = *secInfo
 	}
-	
+
 	// Calculate hash for change detection
 	spec.Hash = calculateSpecHash(spec)
-	
+
 	return spec, nil
 }
 
 // detectCPU detects CPU information.
 func detectCPU() (*CPUInfo, error) {
 	cpu := &CPUInfo{
-		Cores:  runtime.NumCPU(),
+		Cores:   runtime.NumCPU(),
 		Threads: runtime.NumCPU(),
 	}
-	
+
 	// Read /proc/cpuinfo
 	data, err := os.ReadFile("/proc/cpuinfo")
 	if err != nil {
 		return cpu, err
 	}
-	
+
 	lines := strings.Split(string(data), "\n")
 	for _, line := range lines {
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) != 2 {
 			continue
 		}
-		
+
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
-		
+
 		switch key {
 		case "model name":
 			cpu.Model = value
@@ -233,30 +233,30 @@ func detectCPU() (*CPUInfo, error) {
 			}
 		}
 	}
-	
+
 	return cpu, nil
 }
 
 // detectMemory detects memory information.
 func detectMemory() (*MemoryInfo, error) {
 	mem := &MemoryInfo{}
-	
+
 	// Read /proc/meminfo
 	data, err := os.ReadFile("/proc/meminfo")
 	if err != nil {
 		return mem, err
 	}
-	
+
 	lines := strings.Split(string(data), "\n")
 	for _, line := range lines {
 		parts := strings.Fields(line)
 		if len(parts) < 2 {
 			continue
 		}
-		
+
 		key := parts[0]
 		value, _ := strconv.ParseFloat(parts[1], 64)
-		
+
 		switch key {
 		case "MemTotal:":
 			mem.TotalGB = value / 1024 / 1024 // KB to GB
@@ -268,16 +268,16 @@ func detectMemory() (*MemoryInfo, error) {
 			mem.SwapUsedGB = (mem.SwapTotalGB - value/1024/1024)
 		}
 	}
-	
+
 	mem.UsedGB = mem.TotalGB - mem.AvailableGB
-	
+
 	return mem, nil
 }
 
 // detectDisks detects disk information.
 func detectDisks() ([]DiskInfo, error) {
 	var disks []DiskInfo
-	
+
 	// Try lsblk first
 	cmd := exec.Command("lsblk", "-o", "NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE", "-n")
 	output, err := cmd.Output()
@@ -287,9 +287,9 @@ func detectDisks() ([]DiskInfo, error) {
 			fields := strings.Fields(line)
 			if len(fields) >= 3 && fields[2] == "disk" {
 				disk := DiskInfo{
-					Name:       fields[0],
-					Size:       fields[1],
-					Type:       fields[2],
+					Name: fields[0],
+					Size: fields[1],
+					Type: fields[2],
 				}
 				if len(fields) >= 4 {
 					disk.MountPoint = fields[3]
@@ -302,14 +302,14 @@ func detectDisks() ([]DiskInfo, error) {
 		}
 		return disks, nil
 	}
-	
+
 	// Fallback to df
 	cmd = exec.Command("df", "-h")
 	output, err = cmd.Output()
 	if err != nil {
 		return disks, err
 	}
-	
+
 	lines := strings.Split(string(output), "\n")
 	for i, line := range lines {
 		if i == 0 {
@@ -326,14 +326,14 @@ func detectDisks() ([]DiskInfo, error) {
 			})
 		}
 	}
-	
+
 	return disks, nil
 }
 
 // detectNetwork detects network interface information.
 func detectNetwork() ([]NetworkInfo, error) {
 	var networks []NetworkInfo
-	
+
 	// Try ip command
 	cmd := exec.Command("ip", "-br", "addr", "show")
 	output, err := cmd.Output()
@@ -354,14 +354,14 @@ func detectNetwork() ([]NetworkInfo, error) {
 		}
 		return networks, nil
 	}
-	
+
 	return networks, nil
 }
 
 // detectSecurity detects security-related features.
 func detectSecurity() (*SecurityInfo, error) {
 	sec := &SecurityInfo{}
-	
+
 	// Check TPM
 	if _, err := os.Stat("/dev/tpm0"); err == nil {
 		sec.TPM = true
@@ -369,7 +369,7 @@ func detectSecurity() (*SecurityInfo, error) {
 	if _, err := os.Stat("/dev/tpmrm0"); err == nil {
 		sec.TPM = true
 	}
-	
+
 	// Check Secure Boot
 	if _, err := os.Stat("/sys/firmware/efi"); err == nil {
 		// Try to read SecureBoot variable
@@ -381,24 +381,24 @@ func detectSecurity() (*SecurityInfo, error) {
 			}
 		}
 	}
-	
+
 	// Check SELinux
 	if cmd := exec.Command("sestatus"); cmd.Run() == nil {
 		sec.SELinux = true
 	}
-	
+
 	// Check AppArmor
 	if cmd := exec.Command("aa-status"); cmd.Run() == nil {
 		sec.AppArmor = true
 	}
-	
+
 	// Check ASLR
 	if data, err := os.ReadFile("/proc/sys/kernel/randomize_va_space"); err == nil {
 		if val, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
 			sec.ASLR = val
 		}
 	}
-	
+
 	// Check kernel modules for encryption acceleration
 	if data, err := os.ReadFile("/proc/modules"); err == nil {
 		modules := string(data)
@@ -409,7 +409,7 @@ func detectSecurity() (*SecurityInfo, error) {
 			sec.HasSHAAccel = true
 		}
 	}
-	
+
 	return sec, nil
 }
 
@@ -424,7 +424,7 @@ func calculateSpecHash(spec *Spec) string {
 		int(spec.Memory.TotalGB),
 		len(spec.Disks),
 	)
-	
+
 	// Simple hash (can be improved with crypto/sha256)
 	return fmt.Sprintf("%x", hashData)
 }
@@ -435,12 +435,12 @@ func LoadSpec() (*Spec, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var spec Spec
 	if err := json.Unmarshal(data, &spec); err != nil {
 		return nil, err
 	}
-	
+
 	return &spec, nil
 }
 
@@ -450,7 +450,7 @@ func SaveSpec(spec *Spec) error {
 	if err != nil {
 		return err
 	}
-	
+
 	return os.WriteFile(specFile, data, 0644)
 }
 
@@ -467,14 +467,14 @@ func UpdateSpec() (*Spec, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Check if spec has changed
 	oldSpec := GetCurrentSpec()
 	if oldSpec != nil && oldSpec.Hash == newSpec.Hash {
 		logger.Log.Info("Hardware specification unchanged", zap.String("hash", newSpec.Hash))
 		return oldSpec, nil
 	}
-	
+
 	// Spec has changed
 	if oldSpec != nil {
 		logger.Log.Info("Hardware specification changed",
@@ -482,17 +482,17 @@ func UpdateSpec() (*Spec, error) {
 			zap.String("new_hash", newSpec.Hash),
 		)
 	}
-	
+
 	// Update current spec
 	specMutex.Lock()
 	currentSpec = newSpec
 	specMutex.Unlock()
-	
+
 	// Save to disk
 	if err := SaveSpec(newSpec); err != nil {
 		logger.Log.Warn("Failed to save hardware specification", zap.Error(err))
 	}
-	
+
 	return newSpec, nil
 }
 
@@ -505,13 +505,13 @@ func Initialize() error {
 		specMutex.Unlock()
 		logger.Log.Info("Loaded hardware specification from disk", zap.String("hash", spec.Hash))
 	}
-	
+
 	// Always detect current spec
 	spec, err := UpdateSpec()
 	if err != nil {
 		return err
 	}
-	
+
 	logger.Log.Info("Hardware specification detected",
 		zap.String("hostname", spec.Hostname),
 		zap.String("cpu", spec.CPU.Model),
@@ -520,11 +520,6 @@ func Initialize() error {
 		zap.Bool("has_aes", spec.CPU.HasAES),
 		zap.Bool("has_tpm", spec.Security.TPM),
 	)
-	
+
 	return nil
 }
-
-
-
-
-

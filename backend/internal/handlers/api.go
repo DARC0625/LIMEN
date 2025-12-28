@@ -674,12 +674,12 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			zap.String("status", string(vmRec.Status)),
 			zap.Uint("user_id", claims.UserID),
 			zap.String("username", claims.Username))
-		
+
 		// Try to start the VM
 		ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"status","message":"Starting VM..."}`))
 		ws.SetWriteDeadline(time.Time{})
-		
+
 		if err := h.VMService.StartVM(vmRec.Name); err != nil {
 			logger.Log.Error("Failed to start VM for VNC connection",
 				zap.Error(err),
@@ -690,17 +690,17 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			ws.SetWriteDeadline(time.Time{})
 			return
 		}
-		
+
 		// Wait for VM to start and VNC to initialize
 		// VNC port assignment can take a few seconds
 		time.Sleep(3 * time.Second)
-		
+
 		// Re-check status
 		if updatedStatus, err := h.VMService.GetVMStatusFromLibvirt(vmRec.Name); err == nil {
 			vmRec.Status = updatedStatus
 			h.DB.Save(&vmRec)
 		}
-		
+
 		// If still not running, return error
 		if vmRec.Status != models.VMStatusRunning {
 			logger.Log.Warn("VM failed to start after attempt",
@@ -712,7 +712,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			ws.SetWriteDeadline(time.Time{})
 			return
 		}
-		
+
 		logger.Log.Info("VM started successfully for VNC connection",
 			zap.String("vm_name", vmRec.Name),
 			zap.Uint("user_id", claims.UserID))
@@ -737,7 +737,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		ws.SetWriteDeadline(time.Time{})
 		return
 	}
-	
+
 	logger.Log.Info("VNC port retrieved successfully",
 		zap.String("vm_name", vmRec.Name),
 		zap.String("vnc_port", vncPort),
@@ -749,19 +749,19 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 	ws.SetWriteDeadline(time.Time{})
 
 	targetAddr := fmt.Sprintf("localhost:%s", vncPort)
-	
+
 	// Try to connect to VNC server with timeout and retry
 	var conn net.Conn
 	maxConnectionRetries := 3
 	connectionRetryDelay := 500 * time.Millisecond
-	
+
 	for i := 0; i < maxConnectionRetries; i++ {
 		var err error
 		conn, err = net.DialTimeout("tcp", targetAddr, 3*time.Second)
 		if err == nil {
 			break
 		}
-		
+
 		if i < maxConnectionRetries-1 {
 			logger.Log.Debug("VNC connection attempt failed, retrying",
 				zap.String("address", targetAddr),
@@ -770,7 +770,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(connectionRetryDelay)
 		}
 	}
-	
+
 	if conn == nil {
 		logger.Log.Error("Failed to connect to VNC server after retries",
 			zap.String("address", targetAddr),

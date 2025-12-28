@@ -349,7 +349,7 @@ func (s *VMService) GetVNCPort(name string) (string, error) {
 	// Retry getting VNC port with exponential backoff (max 5 seconds)
 	maxRetries := 10
 	retryDelay := 200 * time.Millisecond
-	
+
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		dom, err := s.conn.LookupDomainByName(name)
 		if err != nil {

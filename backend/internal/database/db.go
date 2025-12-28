@@ -33,8 +33,8 @@ func Connect(cfg *config.Config) error {
 	// - MaxOpenConns: Limit concurrent connections to prevent database overload
 	// - ConnMaxLifetime: Recycle connections to prevent stale connections
 	// - ConnMaxIdleTime: Close idle connections to free resources
-	sqlDB.SetMaxIdleConns(25)                   // Increased from 10 for better connection reuse
-	sqlDB.SetMaxOpenConns(100)                  // Maximum open connections (unchanged)
+	sqlDB.SetMaxIdleConns(25)                  // Increased from 10 for better connection reuse
+	sqlDB.SetMaxOpenConns(100)                 // Maximum open connections (unchanged)
 	sqlDB.SetConnMaxLifetime(30 * time.Minute) // Reduced from 1 hour to prevent stale connections
 	sqlDB.SetConnMaxIdleTime(5 * time.Minute)  // Reduced from 10 minutes for faster cleanup
 

@@ -5,7 +5,7 @@ package validator
 import (
 	"fmt"
 	"strings"
-	
+
 	"github.com/DARC0625/LIMEN/backend/internal/security"
 )
 
@@ -14,7 +14,7 @@ import (
 func ValidateVMName(name string) error {
 	// Sanitize input first
 	name = security.SanitizeString(name)
-	
+
 	if name == "" {
 		return fmt.Errorf("VM name is required")
 	}
@@ -24,19 +24,19 @@ func ValidateVMName(name string) error {
 	if len(name) > 64 {
 		return fmt.Errorf("VM name must be at most 64 characters")
 	}
-	
+
 	// Check for null bytes and control characters
 	if err := security.ValidateInput(name, 64); err != nil {
 		return fmt.Errorf("VM name contains invalid characters")
 	}
-	
+
 	// Allow only alphanumeric, hyphen, underscore (whitelist approach)
 	for _, r := range name {
 		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_') {
 			return fmt.Errorf("VM name can only contain alphanumeric characters, hyphens, and underscores")
 		}
 	}
-	
+
 	// Prevent SQL injection patterns
 	sqlPatterns := []string{"'", "\"", ";", "--", "/*", "*/", "xp_", "sp_", "exec", "union", "select"}
 	nameLower := strings.ToLower(name)
@@ -45,7 +45,7 @@ func ValidateVMName(name string) error {
 			return fmt.Errorf("VM name contains invalid characters")
 		}
 	}
-	
+
 	return nil
 }
 

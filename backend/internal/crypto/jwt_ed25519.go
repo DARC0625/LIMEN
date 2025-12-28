@@ -104,7 +104,7 @@ func GenerateEd25519JWT(userID uint, username string, role string, approved bool
 
 	// Use Ed25519 signing method (EdDSA)
 	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
-	
+
 	// Sign with Ed25519 private key
 	tokenString, err := token.SignedString(privateKey)
 	if err != nil {
@@ -144,4 +144,3 @@ var (
 	ErrTokenExpired = errors.New("token expired")
 	ErrInvalidToken = errors.New("invalid token")
 )
-

@@ -15,69 +15,69 @@ import (
 // SecurityChain represents the complete security chain.
 // All components must be strong - one weak link breaks the entire chain.
 type SecurityChain struct {
-	Hardware   HardwareSecurity   `json:"hardware"`
-	Software   SoftwareSecurity   `json:"software"`
-	Network    NetworkSecurity    `json:"network"`
-	User       UserSecurity       `json:"user"`
-	Timestamp  time.Time          `json:"timestamp"`
-	Overall    ChainStatus        `json:"overall"`
-	WeakLinks  []WeakLink         `json:"weak_links"`
+	Hardware  HardwareSecurity `json:"hardware"`
+	Software  SoftwareSecurity `json:"software"`
+	Network   NetworkSecurity  `json:"network"`
+	User      UserSecurity     `json:"user"`
+	Timestamp time.Time        `json:"timestamp"`
+	Overall   ChainStatus      `json:"overall"`
+	WeakLinks []WeakLink       `json:"weak_links"`
 }
 
 // HardwareSecurity represents hardware-level security status.
 type HardwareSecurity struct {
-	Status        ChainStatus `json:"status"`
-	TPM           bool        `json:"tpm"`
-	SecureBoot    bool        `json:"secure_boot"`
-	AESAccel      bool        `json:"aes_accel"`
-	HardwareRNG   bool        `json:"hardware_rng"`
-	SMEP          bool        `json:"smep"`
-	SMAP          bool        `json:"smap"`
-	Issues        []string    `json:"issues"`
-	LastChecked   time.Time   `json:"last_checked"`
+	Status      ChainStatus `json:"status"`
+	TPM         bool        `json:"tpm"`
+	SecureBoot  bool        `json:"secure_boot"`
+	AESAccel    bool        `json:"aes_accel"`
+	HardwareRNG bool        `json:"hardware_rng"`
+	SMEP        bool        `json:"smep"`
+	SMAP        bool        `json:"smap"`
+	Issues      []string    `json:"issues"`
+	LastChecked time.Time   `json:"last_checked"`
 }
 
 // SoftwareSecurity represents software-level security status.
 type SoftwareSecurity struct {
-	Status              ChainStatus `json:"status"`
-	ZeroTrust           bool        `json:"zero_trust"`
-	Encryption          bool        `json:"encryption"`
-	InputValidation     bool        `json:"input_validation"`
-	ErrorHandling       bool        `json:"error_handling"`
-	SecurityHeaders     bool        `json:"security_headers"`
-	RateLimiting        bool        `json:"rate_limiting"`
-	DependencyScan      bool        `json:"dependency_scan"`
-	CodeQuality         bool        `json:"code_quality"`
-	Issues              []string    `json:"issues"`
-	LastChecked         time.Time   `json:"last_checked"`
+	Status          ChainStatus `json:"status"`
+	ZeroTrust       bool        `json:"zero_trust"`
+	Encryption      bool        `json:"encryption"`
+	InputValidation bool        `json:"input_validation"`
+	ErrorHandling   bool        `json:"error_handling"`
+	SecurityHeaders bool        `json:"security_headers"`
+	RateLimiting    bool        `json:"rate_limiting"`
+	DependencyScan  bool        `json:"dependency_scan"`
+	CodeQuality     bool        `json:"code_quality"`
+	Issues          []string    `json:"issues"`
+	LastChecked     time.Time   `json:"last_checked"`
 }
 
 // NetworkSecurity represents network-level security status.
 type NetworkSecurity struct {
-	Status          ChainStatus `json:"status"`
-	Firewall        bool        `json:"firewall"`        // Network-level firewall (future)
-	IPS             bool        `json:"ips"`             // Intrusion Prevention System (future)
-	RateLimiting    bool        `json:"rate_limiting"`   // Application-level
-	CORS            bool        `json:"cors"`
-	HTTPS           bool        `json:"https"`
-	DNSSEC          bool        `json:"dnssec"`          // Future
-	Issues          []string    `json:"issues"`
-	LastChecked     time.Time   `json:"last_checked"`
+	Status       ChainStatus `json:"status"`
+	Firewall     bool        `json:"firewall"`      // Network-level firewall (future)
+	IPS          bool        `json:"ips"`           // Intrusion Prevention System (future)
+	RateLimiting bool        `json:"rate_limiting"` // Application-level
+	CORS         bool        `json:"cors"`
+	HTTPS        bool        `json:"https"`
+	DNSSEC       bool        `json:"dnssec"` // Future
+	Issues       []string    `json:"issues"`
+	LastChecked  time.Time   `json:"last_checked"`
 }
 
 // UserSecurity represents user-level security status.
 // The human element is often the weakest link in security chains.
 type UserSecurity struct {
-	Status              ChainStatus `json:"status"`
-	StrongPasswords     bool        `json:"strong_passwords"`
-	MFA                 bool        `json:"mfa"`                 // Multi-Factor Authentication (future)
-	SessionManagement   bool        `json:"session_management"`
-	AccessControl       bool        `json:"access_control"`
-	AuditLogging        bool        `json:"audit_logging"`
-	UserEducation       bool        `json:"user_education"`      // Policy-based
-	BehaviorMonitoring  bool        `json:"behavior_monitoring"` // Future
-	Issues              []string    `json:"issues"`
-	LastChecked         time.Time   `json:"last_checked"`
+	Status             ChainStatus `json:"status"`
+	StrongPasswords    bool        `json:"strong_passwords"`
+	MFA                bool        `json:"mfa"` // Multi-Factor Authentication (future)
+	SessionManagement  bool        `json:"session_management"`
+	AccessControl      bool        `json:"access_control"`
+	AuditLogging       bool        `json:"audit_logging"`
+	UserEducation      bool        `json:"user_education"`      // Policy-based
+	BehaviorMonitoring bool        `json:"behavior_monitoring"` // Future
+	Issues             []string    `json:"issues"`
+	LastChecked        time.Time   `json:"last_checked"`
 }
 
 // ChainStatus represents the status of a security component.
@@ -85,23 +85,23 @@ type ChainStatus string
 
 const (
 	StatusStrong   ChainStatus = "strong"   // No issues, secure
-	StatusModerate ChainStatus = "moderate"  // Some issues, acceptable
+	StatusModerate ChainStatus = "moderate" // Some issues, acceptable
 	StatusWeak     ChainStatus = "weak"     // Critical issues, insecure
-	StatusUnknown  ChainStatus = "unknown"   // Not checked yet
+	StatusUnknown  ChainStatus = "unknown"  // Not checked yet
 )
 
 // WeakLink represents a weak point in the security chain.
 type WeakLink struct {
-	Component   string    `json:"component"`   // hardware, software, network, user
-	Severity    string    `json:"severity"`     // critical, high, medium, low
-	Issue       string    `json:"issue"`
-	Impact      string    `json:"impact"`
-	Recommendation string `json:"recommendation"`
-	DetectedAt  time.Time `json:"detected_at"`
+	Component      string    `json:"component"` // hardware, software, network, user
+	Severity       string    `json:"severity"`  // critical, high, medium, low
+	Issue          string    `json:"issue"`
+	Impact         string    `json:"impact"`
+	Recommendation string    `json:"recommendation"`
+	DetectedAt     time.Time `json:"detected_at"`
 }
 
 var (
-	chainMutex sync.RWMutex
+	chainMutex   sync.RWMutex
 	currentChain *SecurityChain
 )
 
@@ -117,12 +117,12 @@ func ValidateSecurityChain(ctx context.Context) (*SecurityChain, error) {
 	chain.Hardware = validateHardwareSecurity(ctx)
 	if chain.Hardware.Status == StatusWeak {
 		chain.WeakLinks = append(chain.WeakLinks, WeakLink{
-			Component: "hardware",
-			Severity:  "critical",
-			Issue:     "Hardware security issues detected",
-			Impact:    "System vulnerable to hardware-level attacks",
+			Component:      "hardware",
+			Severity:       "critical",
+			Issue:          "Hardware security issues detected",
+			Impact:         "System vulnerable to hardware-level attacks",
 			Recommendation: "Enable TPM, Secure Boot, and hardware security features",
-			DetectedAt: time.Now(),
+			DetectedAt:     time.Now(),
 		})
 	}
 
@@ -130,12 +130,12 @@ func ValidateSecurityChain(ctx context.Context) (*SecurityChain, error) {
 	chain.Software = validateSoftwareSecurity(ctx)
 	if chain.Software.Status == StatusWeak {
 		chain.WeakLinks = append(chain.WeakLinks, WeakLink{
-			Component: "software",
-			Severity:  "critical",
-			Issue:     "Software security issues detected",
-			Impact:    "Application vulnerable to attacks",
+			Component:      "software",
+			Severity:       "critical",
+			Issue:          "Software security issues detected",
+			Impact:         "Application vulnerable to attacks",
 			Recommendation: "Review and fix software security issues",
-			DetectedAt: time.Now(),
+			DetectedAt:     time.Now(),
 		})
 	}
 
@@ -143,12 +143,12 @@ func ValidateSecurityChain(ctx context.Context) (*SecurityChain, error) {
 	chain.Network = validateNetworkSecurity(ctx)
 	if chain.Network.Status == StatusWeak {
 		chain.WeakLinks = append(chain.WeakLinks, WeakLink{
-			Component: "network",
-			Severity:  "critical",
-			Issue:     "Network security issues detected",
-			Impact:    "Network traffic vulnerable to interception/attacks",
+			Component:      "network",
+			Severity:       "critical",
+			Issue:          "Network security issues detected",
+			Impact:         "Network traffic vulnerable to interception/attacks",
 			Recommendation: "Implement network-level firewall and IPS",
-			DetectedAt: time.Now(),
+			DetectedAt:     time.Now(),
 		})
 	}
 
@@ -156,12 +156,12 @@ func ValidateSecurityChain(ctx context.Context) (*SecurityChain, error) {
 	chain.User = validateUserSecurity(ctx)
 	if chain.User.Status == StatusWeak {
 		chain.WeakLinks = append(chain.WeakLinks, WeakLink{
-			Component: "user",
-			Severity:  "critical",
-			Issue:     "User security issues detected",
-			Impact:    "Human element is the weakest link",
+			Component:      "user",
+			Severity:       "critical",
+			Issue:          "User security issues detected",
+			Impact:         "Human element is the weakest link",
 			Recommendation: "Implement user education, MFA, and behavior monitoring",
-			DetectedAt: time.Now(),
+			DetectedAt:     time.Now(),
 		})
 	}
 
@@ -185,12 +185,12 @@ func validateHardwareSecurity(ctx context.Context) HardwareSecurity {
 
 	// Check hardware features (would use hardware package)
 	// For now, use placeholder checks
-	hw.TPM = false // Would check actual TPM
+	hw.TPM = false        // Would check actual TPM
 	hw.SecureBoot = false // Would check actual Secure Boot
-	hw.AESAccel = true // Assume AES-NI available
+	hw.AESAccel = true    // Assume AES-NI available
 	hw.HardwareRNG = true // Assume RDRAND/RDSEED available
-	hw.SMEP = true // Assume SMEP available
-	hw.SMAP = true // Assume SMAP available
+	hw.SMEP = true        // Assume SMEP available
+	hw.SMAP = true        // Assume SMAP available
 
 	// Determine status
 	if !hw.TPM {
@@ -219,14 +219,14 @@ func validateSoftwareSecurity(ctx context.Context) SoftwareSecurity {
 	}
 
 	// Check software security features
-	sw.ZeroTrust = true // Implemented
-	sw.Encryption = true // Argon2id, ChaCha20, Ed25519 implemented
+	sw.ZeroTrust = true       // Implemented
+	sw.Encryption = true      // Argon2id, ChaCha20, Ed25519 implemented
 	sw.InputValidation = true // Implemented
-	sw.ErrorHandling = true // Implemented
+	sw.ErrorHandling = true   // Implemented
 	sw.SecurityHeaders = true // Implemented
-	sw.RateLimiting = true // Implemented
-	sw.DependencyScan = true // CI/CD implemented
-	sw.CodeQuality = true // Linting implemented
+	sw.RateLimiting = true    // Implemented
+	sw.DependencyScan = true  // CI/CD implemented
+	sw.CodeQuality = true     // Linting implemented
 
 	// Determine status
 	if sw.ZeroTrust && sw.Encryption && sw.InputValidation && sw.ErrorHandling {
@@ -247,12 +247,12 @@ func validateNetworkSecurity(ctx context.Context) NetworkSecurity {
 	}
 
 	// Check network security features
-	nw.Firewall = false // Future: network-level firewall
-	nw.IPS = false // Future: IPS system
+	nw.Firewall = false    // Future: network-level firewall
+	nw.IPS = false         // Future: IPS system
 	nw.RateLimiting = true // Application-level implemented
-	nw.CORS = true // Implemented
-	nw.HTTPS = false // Would check actual HTTPS configuration
-	nw.DNSSEC = false // Future
+	nw.CORS = true         // Implemented
+	nw.HTTPS = false       // Would check actual HTTPS configuration
+	nw.DNSSEC = false      // Future
 
 	// Determine status
 	if !nw.Firewall {
@@ -283,12 +283,12 @@ func validateUserSecurity(ctx context.Context) UserSecurity {
 	}
 
 	// Check user security features
-	us.StrongPasswords = true // Argon2id + password policy implemented
-	us.MFA = false // Future: Multi-Factor Authentication
-	us.SessionManagement = true // JWT tokens implemented
-	us.AccessControl = true // RBAC implemented
-	us.AuditLogging = true // Logging implemented
-	us.UserEducation = false // Policy-based, needs documentation
+	us.StrongPasswords = true     // Argon2id + password policy implemented
+	us.MFA = false                // Future: Multi-Factor Authentication
+	us.SessionManagement = true   // JWT tokens implemented
+	us.AccessControl = true       // RBAC implemented
+	us.AuditLogging = true        // Logging implemented
+	us.UserEducation = false      // Policy-based, needs documentation
 	us.BehaviorMonitoring = false // Future: anomaly detection
 
 	// Determine status
@@ -318,21 +318,21 @@ func validateUserSecurity(ctx context.Context) UserSecurity {
 func determineOverallStatus(chain *SecurityChain) ChainStatus {
 	// Find the weakest component
 	weakest := StatusStrong
-	
-	if chain.Hardware.Status == StatusWeak || 
-	   chain.Software.Status == StatusWeak ||
-	   chain.Network.Status == StatusWeak ||
-	   chain.User.Status == StatusWeak {
+
+	if chain.Hardware.Status == StatusWeak ||
+		chain.Software.Status == StatusWeak ||
+		chain.Network.Status == StatusWeak ||
+		chain.User.Status == StatusWeak {
 		return StatusWeak
 	}
-	
+
 	if chain.Hardware.Status == StatusModerate ||
-	   chain.Software.Status == StatusModerate ||
-	   chain.Network.Status == StatusModerate ||
-	   chain.User.Status == StatusModerate {
+		chain.Software.Status == StatusModerate ||
+		chain.Network.Status == StatusModerate ||
+		chain.User.Status == StatusModerate {
 		return StatusModerate
 	}
-	
+
 	return weakest
 }
 
@@ -468,8 +468,3 @@ func FormatSecurityChainReport(chain *SecurityChain) string {
 
 	return report
 }
-
-
-
-
-

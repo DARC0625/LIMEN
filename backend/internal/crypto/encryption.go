@@ -25,7 +25,7 @@ var (
 // These parameters are optimized for security and performance.
 type Argon2idConfig struct {
 	Memory      uint32 // Memory cost in KB (64MB = 65536)
-	Iterations uint32 // Number of iterations (3 is recommended)
+	Iterations  uint32 // Number of iterations (3 is recommended)
 	Parallelism uint8  // Number of threads (4 is recommended)
 	SaltLength  int    // Salt length in bytes (16 is recommended)
 	KeyLength   uint32 // Output key length in bytes (32 for 256-bit)
@@ -300,4 +300,3 @@ func checkBcryptPassword(password, hash string) bool {
 	// For now, return false to force migration to Argon2id
 	return false
 }
-

@@ -104,58 +104,58 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 	if !auth.CheckPassword(req.Password, user.Password) {
 		// Record failed login attempt (user security: behavior monitoring)
 		security.RecordFailedLogin(r.Context(), user.ID, r.RemoteAddr)
-		
+
 		// Audit failed login attempt
 		security.AuditUserAction(r.Context(), user.ID, "login_failed", "authentication", false, map[string]interface{}{
-			"ip": r.RemoteAddr,
+			"ip":         r.RemoteAddr,
 			"user_agent": r.UserAgent(),
 		})
-		
+
 		// Log security event with full context
 		logCtx := logger.LogContext{
-			Timestamp: time.Now(),
-			RequestID: r.Header.Get("X-Request-ID"),
-			UserID:    user.ID,
-			Username:  user.Username,
-			IP:        r.RemoteAddr,
-			UserAgent: r.UserAgent(),
-			Method:    r.Method,
-			Path:      r.URL.Path,
-			Service:   "limen-backend",
-			Component: "auth",
-			Action:    "login_failed",
-			Resource:  "user",
+			Timestamp:  time.Now(),
+			RequestID:  r.Header.Get("X-Request-ID"),
+			UserID:     user.ID,
+			Username:   user.Username,
+			IP:         r.RemoteAddr,
+			UserAgent:  r.UserAgent(),
+			Method:     r.Method,
+			Path:       r.URL.Path,
+			Service:    "limen-backend",
+			Component:  "auth",
+			Action:     "login_failed",
+			Resource:   "user",
 			ResourceID: user.ID,
 		}
 		logger.LogSecurityEvent(logger.EventSecurityLoginFailed, logCtx, "medium", "Login failed",
 			zap.String("reason", "invalid_password"),
 		)
-		
+
 		// Use same generic error message (zero-trust: don't reveal which part failed)
 		errors.WriteUnauthorized(w, "Invalid credentials")
 		return
 	}
-	
+
 	// Audit successful login
 	security.AuditUserAction(r.Context(), user.ID, "login_success", "authentication", true, map[string]interface{}{
-		"ip": r.RemoteAddr,
+		"ip":         r.RemoteAddr,
 		"user_agent": r.UserAgent(),
 	})
-	
+
 	// Log business event with full context
 	logCtx := logger.LogContext{
-		Timestamp: time.Now(),
-		RequestID: r.Header.Get("X-Request-ID"),
-		UserID:    user.ID,
-		Username:  user.Username,
-		IP:        r.RemoteAddr,
-		UserAgent: r.UserAgent(),
-		Method:    r.Method,
-		Path:      r.URL.Path,
-		Service:   "limen-backend",
-		Component: "auth",
-		Action:    "login",
-		Resource:  "user",
+		Timestamp:  time.Now(),
+		RequestID:  r.Header.Get("X-Request-ID"),
+		UserID:     user.ID,
+		Username:   user.Username,
+		IP:         r.RemoteAddr,
+		UserAgent:  r.UserAgent(),
+		Method:     r.Method,
+		Path:       r.URL.Path,
+		Service:    "limen-backend",
+		Component:  "auth",
+		Action:     "login",
+		Resource:   "user",
 		ResourceID: user.ID,
 	}
 	logger.LogUserEvent(logger.EventUserLogin, logCtx, user.ID, user.Username, "User logged in successfully",
@@ -227,7 +227,7 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request, cfg *co
 	// Zero-trust: Validate and sanitize all inputs
 	// Sanitize username
 	req.Username = strings.TrimSpace(req.Username)
-	
+
 	// Validate username
 	if req.Username == "" || len(req.Username) < 3 {
 		errors.WriteBadRequest(w, "Username must be at least 3 characters", nil)
@@ -237,7 +237,7 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request, cfg *co
 		errors.WriteBadRequest(w, "Username must be at most 32 characters", nil)
 		return
 	}
-	
+
 	// Validate username format (alphanumeric and underscore only)
 	for _, r := range req.Username {
 		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_') {
@@ -245,7 +245,7 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request, cfg *co
 			return
 		}
 	}
-	
+
 	// Validate password against security policy (zero-trust: enforce strong passwords)
 	policy := security.DefaultUserSecurityPolicy()
 	valid, issues := security.ValidatePasswordPolicy(req.Password, policy)
@@ -253,7 +253,7 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request, cfg *co
 		errors.WriteBadRequest(w, fmt.Sprintf("Password does not meet security requirements: %s", strings.Join(issues, "; ")), nil)
 		return
 	}
-	
+
 	// Additional check for common weak passwords (already checked in ValidatePasswordPolicy, but double-check)
 	// This is redundant but provides extra security layer
 

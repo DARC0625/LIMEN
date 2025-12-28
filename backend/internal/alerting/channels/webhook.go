@@ -60,7 +60,7 @@ func (c *WebhookChannel) Send(ctx context.Context, alert alerting.Alert) error {
 	if c.url == "" {
 		return fmt.Errorf("webhook URL not configured")
 	}
-	
+
 	payload := WebhookPayload{
 		Title:     alert.Title,
 		Message:   alert.Message,
@@ -71,37 +71,32 @@ func (c *WebhookChannel) Send(ctx context.Context, alert alerting.Alert) error {
 		Tags:      alert.Tags,
 		Metadata:  alert.Metadata,
 	}
-	
+
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
-	
+
 	req, err := http.NewRequestWithContext(ctx, "POST", c.url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send webhook: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
 	}
-	
+
 	c.logger.Debug("Alert sent to webhook",
 		zap.String("url", c.url),
 		zap.String("title", alert.Title))
-	
+
 	return nil
 }
-
-
-
-
-

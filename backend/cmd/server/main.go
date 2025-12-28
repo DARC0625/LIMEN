@@ -93,7 +93,7 @@ func main() {
 		for _, warning := range warnings {
 			logger.Log.Warn("Hardware security warning", zap.String("warning", warning))
 		}
-		
+
 		// Get optimal security configuration
 		secConfig := hardware.GetOptimalSecurityConfig()
 		logger.Log.Info("Optimal security configuration determined",
@@ -104,7 +104,7 @@ func main() {
 			zap.Bool("hardware_rng", secConfig.UseHardwareRNG),
 			zap.Bool("hardware_accel", secConfig.EnableHardwareAccel),
 		)
-		
+
 		// Start hardware monitoring (check every 5 minutes)
 		hardware.StartMonitor(5 * time.Minute)
 		defer hardware.StopMonitor()
@@ -140,7 +140,7 @@ func main() {
 	libvirtURI := cfg.LibvirtURI
 	vmService, err := vm.NewVMService(database.DB, libvirtURI, cfg.ISODir, cfg.VMDir)
 	if err != nil {
-		logger.Log.Warn("Failed to initialize VM service (libvirt connection)", 
+		logger.Log.Warn("Failed to initialize VM service (libvirt connection)",
 			zap.Error(err),
 			zap.String("libvirt_uri", libvirtURI),
 			zap.String("iso_dir", cfg.ISODir),
@@ -189,12 +189,12 @@ func main() {
 				DefaultRPS:   cfg.RateLimitRPS,
 				DefaultBurst: cfg.RateLimitBurst,
 				EndpointRPS: map[string]float64{
-					"/api/vms":           5.0,  // VM operations: 5 req/s
-					"/api/admin":         2.0,  // Admin operations: 2 req/s
-					"/api/snapshots":     3.0,  // Snapshot operations: 3 req/s
-					"/api/quota":         5.0,  // Quota queries: 5 req/s
-					"/api/metrics":       10.0, // Metrics: 10 req/s
-					"/agent/metrics":    10.0, // Agent metrics: 10 req/s
+					"/api/vms":       5.0,  // VM operations: 5 req/s
+					"/api/admin":     2.0,  // Admin operations: 2 req/s
+					"/api/snapshots": 3.0,  // Snapshot operations: 3 req/s
+					"/api/quota":     5.0,  // Quota queries: 5 req/s
+					"/api/metrics":   10.0, // Metrics: 10 req/s
+					"/agent/metrics": 10.0, // Agent metrics: 10 req/s
 				},
 			}
 			httpHandler = middleware.RateLimitWithConfig(rateLimitConfig)(httpHandler)

@@ -13,12 +13,12 @@ import (
 
 // RotationConfig holds configuration for log rotation.
 type RotationConfig struct {
-	Filename   string        // Log file path
-	MaxSize    int           // Maximum size in megabytes before rotation
-	MaxBackups int           // Maximum number of old log files to retain
-	MaxAge     int           // Maximum number of days to retain old log files
-	Compress   bool          // Compress rotated log files
-	LocalTime  bool          // Use local time for timestamps
+	Filename   string // Log file path
+	MaxSize    int    // Maximum size in megabytes before rotation
+	MaxBackups int    // Maximum number of old log files to retain
+	MaxAge     int    // Maximum number of days to retain old log files
+	Compress   bool   // Compress rotated log files
+	LocalTime  bool   // Use local time for timestamps
 }
 
 // DefaultRotationConfig returns a default log rotation configuration.
@@ -103,7 +103,7 @@ func SetupRotation(logDir string, level zapcore.Level) (*zap.Logger, error) {
 // CleanupOldLogs removes log files older than the specified age.
 func CleanupOldLogs(logDir string, maxAgeDays int) error {
 	cutoffTime := time.Now().AddDate(0, 0, -maxAgeDays)
-	
+
 	return filepath.Walk(logDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -129,8 +129,3 @@ func CleanupOldLogs(logDir string, maxAgeDays int) error {
 		return nil
 	})
 }
-
-
-
-
-

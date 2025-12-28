@@ -16,8 +16,8 @@ type Rule interface {
 
 // DiskSpaceRule checks disk space usage.
 type DiskSpaceRule struct {
-	manager *Manager
-	path    string
+	manager          *Manager
+	path             string
 	thresholdPercent float64 // Alert if usage exceeds this percentage
 }
 
@@ -47,13 +47,13 @@ func (r *DiskSpaceRule) Check(ctx context.Context) (*Alert, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to stat filesystem: %w", err)
 	}
-	
+
 	// Calculate usage percentage
 	total := stat.Blocks * uint64(stat.Bsize)
 	available := stat.Bavail * uint64(stat.Bsize)
 	used := total - available
 	usagePercent := float64(used) / float64(total) * 100
-	
+
 	if usagePercent >= r.thresholdPercent {
 		alert := &Alert{
 			Title:     "Disk Space Usage High",
@@ -71,22 +71,22 @@ func (r *DiskSpaceRule) Check(ctx context.Context) (*Alert, error) {
 			},
 			Tags: []string{"disk", "resource"},
 		}
-		
+
 		if usagePercent >= 95 {
 			alert.Severity = SeverityCritical
 		} else if usagePercent >= 90 {
 			alert.Severity = SeverityError
 		}
-		
+
 		return alert, nil
 	}
-	
+
 	return nil, nil
 }
 
 // MemoryRule checks memory usage.
 type MemoryRule struct {
-	manager *Manager
+	manager          *Manager
 	thresholdPercent float64
 }
 
@@ -115,12 +115,12 @@ func (r *MemoryRule) Check(ctx context.Context) (*Alert, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get system info: %w", err)
 	}
-	
+
 	totalRAM := info.Totalram * uint64(info.Unit)
 	freeRAM := info.Freeram * uint64(info.Unit)
 	usedRAM := totalRAM - freeRAM
 	usagePercent := float64(usedRAM) / float64(totalRAM) * 100
-	
+
 	if usagePercent >= r.thresholdPercent {
 		alert := &Alert{
 			Title:     "Memory Usage High",
@@ -129,30 +129,30 @@ func (r *MemoryRule) Check(ctx context.Context) (*Alert, error) {
 			Service:   "limen",
 			Component: "system",
 			Metadata: map[string]interface{}{
-				"usage_percent":   usagePercent,
-				"threshold":       r.thresholdPercent,
-				"total_bytes":     totalRAM,
-				"free_bytes":      freeRAM,
-				"used_bytes":      usedRAM,
+				"usage_percent": usagePercent,
+				"threshold":     r.thresholdPercent,
+				"total_bytes":   totalRAM,
+				"free_bytes":    freeRAM,
+				"used_bytes":    usedRAM,
 			},
 			Tags: []string{"memory", "resource"},
 		}
-		
+
 		if usagePercent >= 95 {
 			alert.Severity = SeverityCritical
 		} else if usagePercent >= 90 {
 			alert.Severity = SeverityError
 		}
-		
+
 		return alert, nil
 	}
-	
+
 	return nil, nil
 }
 
 // ProcessAliveRule checks if a critical process is running.
 type ProcessAliveRule struct {
-	manager *Manager
+	manager     *Manager
 	processName string
 	pidFile     string
 }
@@ -181,7 +181,7 @@ func (r *ProcessAliveRule) Check(ctx context.Context) (*Alert, error) {
 	if r.pidFile == "" {
 		return nil, nil
 	}
-	
+
 	// Check if PID file exists
 	_, err := os.Stat(r.pidFile)
 	if err != nil {
@@ -202,11 +202,6 @@ func (r *ProcessAliveRule) Check(ctx context.Context) (*Alert, error) {
 		}
 		return nil, fmt.Errorf("failed to stat PID file: %w", err)
 	}
-	
+
 	return nil, nil
 }
-
-
-
-
-

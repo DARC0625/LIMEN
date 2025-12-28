@@ -20,7 +20,7 @@ func setupAlerting(cfg *config.Config) *alerting.Manager {
 	}
 
 	manager := alerting.NewManager(logger.Log)
-	
+
 	// Set deduplication window
 	if cfg.AlertDedupWindow > 0 {
 		manager.SetDedupWindow(time.Duration(cfg.AlertDedupWindow) * time.Minute)
@@ -56,7 +56,7 @@ func setupAlerting(cfg *config.Config) *alerting.Manager {
 	middleware.SetAlertManager(manager)
 
 	logger.Log.Info("Alerting system initialized")
-	
+
 	return manager
 }
 
@@ -107,4 +107,3 @@ func runMonitoringRule(ctx context.Context, rule alerting.Rule, manager *alertin
 		}
 	}
 }
-

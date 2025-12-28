@@ -76,16 +76,16 @@ func EnhancedLogging(cfg *config.Config) func(http.Handler) http.Handler {
 
 			// Create logging context
 			logCtx := logger.LogContext{
-				Timestamp: start,
-				RequestID: requestID,
-				UserID:    userID,
-				Username:  username,
-				IP:        logger.GetClientIP(r),
-				UserAgent: r.UserAgent(),
-				Method:    r.Method,
-				Path:      r.URL.Path,
-				Service:   "limen-backend",
-				Component: "api",
+				Timestamp:   start,
+				RequestID:   requestID,
+				UserID:      userID,
+				Username:    username,
+				IP:          logger.GetClientIP(r),
+				UserAgent:   r.UserAgent(),
+				Method:      r.Method,
+				Path:        r.URL.Path,
+				Service:     "limen-backend",
+				Component:   "api",
 				Environment: cfg.Env,
 			}
 
@@ -177,4 +177,3 @@ func randomString(length int) string {
 	}
 	return string(b)
 }
-

@@ -13,45 +13,45 @@ import (
 
 // UserSecurityPolicy represents security policies for users.
 type UserSecurityPolicy struct {
-	MinPasswordLength     int           `json:"min_password_length"`
-	RequireUppercase      bool          `json:"require_uppercase"`
-	RequireLowercase      bool          `json:"require_lowercase"`
-	RequireNumbers        bool          `json:"require_numbers"`
-	RequireSpecialChars   bool          `json:"require_special_chars"`
-	PasswordExpiryDays    int           `json:"password_expiry_days"`
-	MaxFailedAttempts     int           `json:"max_failed_attempts"`
-	LockoutDuration       time.Duration `json:"lockout_duration"`
-	RequireMFA            bool          `json:"require_mfa"`            // Future
-	SessionTimeout        time.Duration `json:"session_timeout"`
-	AuditAllActions       bool          `json:"audit_all_actions"`
+	MinPasswordLength   int           `json:"min_password_length"`
+	RequireUppercase    bool          `json:"require_uppercase"`
+	RequireLowercase    bool          `json:"require_lowercase"`
+	RequireNumbers      bool          `json:"require_numbers"`
+	RequireSpecialChars bool          `json:"require_special_chars"`
+	PasswordExpiryDays  int           `json:"password_expiry_days"`
+	MaxFailedAttempts   int           `json:"max_failed_attempts"`
+	LockoutDuration     time.Duration `json:"lockout_duration"`
+	RequireMFA          bool          `json:"require_mfa"` // Future
+	SessionTimeout      time.Duration `json:"session_timeout"`
+	AuditAllActions     bool          `json:"audit_all_actions"`
 }
 
 // DefaultUserSecurityPolicy returns a secure default user security policy.
 func DefaultUserSecurityPolicy() UserSecurityPolicy {
 	return UserSecurityPolicy{
-		MinPasswordLength:   12,                    // Strong minimum
+		MinPasswordLength:   12, // Strong minimum
 		RequireUppercase:    true,
 		RequireLowercase:    true,
-		RequireNumbers:       true,
+		RequireNumbers:      true,
 		RequireSpecialChars: true,
-		PasswordExpiryDays:  90,                    // 3 months
-		MaxFailedAttempts:   5,                     // Lock after 5 failed attempts
-		LockoutDuration:     15 * time.Minute,      // 15 minute lockout
-		RequireMFA:          false,                // Future: enable when implemented
-		SessionTimeout:      24 * time.Hour,       // 24 hour session
-		AuditAllActions:     true,                  // Audit all user actions
+		PasswordExpiryDays:  90,               // 3 months
+		MaxFailedAttempts:   5,                // Lock after 5 failed attempts
+		LockoutDuration:     15 * time.Minute, // 15 minute lockout
+		RequireMFA:          false,            // Future: enable when implemented
+		SessionTimeout:      24 * time.Hour,   // 24 hour session
+		AuditAllActions:     true,             // Audit all user actions
 	}
 }
 
 // UserBehavior represents user behavior patterns for anomaly detection.
 type UserBehavior struct {
-	UserID           uint      `json:"user_id"`
-	LastLoginTime    time.Time `json:"last_login_time"`
-	LastLoginIP      string    `json:"last_login_ip"`
-	FailedAttempts   int       `json:"failed_attempts"`
+	UserID           uint       `json:"user_id"`
+	LastLoginTime    time.Time  `json:"last_login_time"`
+	LastLoginIP      string     `json:"last_login_ip"`
+	FailedAttempts   int        `json:"failed_attempts"`
 	LockedUntil      *time.Time `json:"locked_until"`
-	UnusualActivity  bool      `json:"unusual_activity"`
-	LastActivityTime time.Time `json:"last_activity_time"`
+	UnusualActivity  bool       `json:"unusual_activity"`
+	LastActivityTime time.Time  `json:"last_activity_time"`
 }
 
 // DetectAnomalousBehavior detects unusual user behavior patterns.
@@ -146,4 +146,3 @@ func RecordFailedLogin(ctx context.Context, userID uint, ip string) {
 	// Future: Lock account after max attempts
 	// Future: Alert on brute force attempts
 }
-

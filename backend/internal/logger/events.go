@@ -13,22 +13,22 @@ type EventType string
 
 const (
 	// VM Events
-	EventVMCreate      EventType = "vm.create"
-	EventVMStart       EventType = "vm.start"
-	EventVMStop        EventType = "vm.stop"
-	EventVMDelete      EventType = "vm.delete"
-	EventVMUpdate      EventType = "vm.update"
-	EventVMSnapshot    EventType = "vm.snapshot"
-	EventVMRestore     EventType = "vm.restore"
-	EventVMResize      EventType = "vm.resize"
+	EventVMCreate   EventType = "vm.create"
+	EventVMStart    EventType = "vm.start"
+	EventVMStop     EventType = "vm.stop"
+	EventVMDelete   EventType = "vm.delete"
+	EventVMUpdate   EventType = "vm.update"
+	EventVMSnapshot EventType = "vm.snapshot"
+	EventVMRestore  EventType = "vm.restore"
+	EventVMResize   EventType = "vm.resize"
 
 	// User Events
-	EventUserCreate    EventType = "user.create"
-	EventUserUpdate    EventType = "user.update"
-	EventUserDelete    EventType = "user.delete"
-	EventUserLogin     EventType = "user.login"
-	EventUserLogout    EventType = "user.logout"
-	EventUserApprove   EventType = "user.approve"
+	EventUserCreate     EventType = "user.create"
+	EventUserUpdate     EventType = "user.update"
+	EventUserDelete     EventType = "user.delete"
+	EventUserLogin      EventType = "user.login"
+	EventUserLogout     EventType = "user.logout"
+	EventUserApprove    EventType = "user.approve"
 	EventUserRoleChange EventType = "user.role_change"
 
 	// Security Events
@@ -39,11 +39,11 @@ const (
 	EventSecurityPasswordChange EventType = "security.password_change"
 
 	// System Events
-	EventSystemStartup    EventType = "system.startup"
-	EventSystemShutdown   EventType = "system.shutdown"
+	EventSystemStartup      EventType = "system.startup"
+	EventSystemShutdown     EventType = "system.shutdown"
 	EventSystemConfigChange EventType = "system.config_change"
-	EventSystemBackup     EventType = "system.backup"
-	EventSystemRestore    EventType = "system.restore"
+	EventSystemBackup       EventType = "system.backup"
+	EventSystemRestore      EventType = "system.restore"
 
 	// Performance Events
 	EventPerformanceSlowQuery EventType = "performance.slow_query"
@@ -171,8 +171,3 @@ func LogPerformanceEvent(eventType EventType, logCtx LogContext, component strin
 	logCtx.Resource = "performance"
 	LogEvent(eventType, logCtx, message, fields...)
 }
-
-
-
-
-

@@ -12,11 +12,11 @@ import (
 
 // IPRateLimiter manages rate limiters per IP address.
 type IPRateLimiter struct {
-	ips         map[string]*rate.Limiter
-	lastAccess  map[string]time.Time // Track last access time for cleanup
-	mu          *sync.RWMutex
-	r           rate.Limit
-	b           int
+	ips        map[string]*rate.Limiter
+	lastAccess map[string]time.Time // Track last access time for cleanup
+	mu         *sync.RWMutex
+	r          rate.Limit
+	b          int
 }
 
 // NewIPRateLimiter creates a new IP rate limiter.
@@ -56,7 +56,7 @@ func (i *IPRateLimiter) cleanup() {
 			i.mu.Lock()
 			now := time.Now()
 			cutoff := now.Add(-1 * time.Hour) // Remove entries older than 1 hour
-			
+
 			// Remove stale entries
 			for ip, lastAccess := range i.lastAccess {
 				if lastAccess.Before(cutoff) {
@@ -71,10 +71,10 @@ func (i *IPRateLimiter) cleanup() {
 
 // RateLimitConfig defines rate limit configuration for different endpoint types.
 type RateLimitConfig struct {
-	DefaultRPS   float64            // Default requests per second
-	DefaultBurst int                // Default burst size
-	EndpointRPS  map[string]float64 // Endpoint-specific RPS overrides
-	EndpointBurst map[string]int    // Endpoint-specific burst overrides
+	DefaultRPS    float64            // Default requests per second
+	DefaultBurst  int                // Default burst size
+	EndpointRPS   map[string]float64 // Endpoint-specific RPS overrides
+	EndpointBurst map[string]int     // Endpoint-specific burst overrides
 }
 
 // RateLimit creates a rate limiting middleware.
@@ -82,9 +82,9 @@ type RateLimitConfig struct {
 // burstSize: maximum burst size
 func RateLimit(requestsPerSecond float64, burstSize int) func(http.Handler) http.Handler {
 	return RateLimitWithConfig(RateLimitConfig{
-		DefaultRPS:   requestsPerSecond,
-		DefaultBurst: burstSize,
-		EndpointRPS:  make(map[string]float64),
+		DefaultRPS:    requestsPerSecond,
+		DefaultBurst:  burstSize,
+		EndpointRPS:   make(map[string]float64),
 		EndpointBurst: make(map[string]int),
 	})
 }
