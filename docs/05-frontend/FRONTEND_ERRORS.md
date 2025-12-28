@@ -179,3 +179,4 @@ npm run build
 - [프론트엔드 UUID 마이그레이션 가이드](./FRONTEND_UUID_MIGRATION.md)
 - [백엔드 API 문서](../../docs/API_DOCUMENTATION.md)
 
+

@@ -129,3 +129,4 @@ func CleanupOldLogs(logDir string, maxAgeDays int) error {
 		return nil
 	})
 }
+

@@ -303,3 +303,4 @@ npm run build
 - [Next.js Webpack 설정](https://nextjs.org/docs/api-reference/next.config.js/custom-webpack-config)
 - [프론트엔드 오류 해결 가이드](./FRONTEND_ERRORS.md)
 
+

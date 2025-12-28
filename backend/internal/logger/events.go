@@ -171,3 +171,4 @@ func LogPerformanceEvent(eventType EventType, logCtx LogContext, component strin
 	logCtx.Resource = "performance"
 	LogEvent(eventType, logCtx, message, fields...)
 }
+
