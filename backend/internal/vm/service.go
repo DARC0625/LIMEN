@@ -245,6 +245,12 @@ func (s *VMService) ListVMs() ([]string, error) {
 }
 
 func (s *VMService) DeleteVM(name string) error {
+	// First, get VM from DB to retrieve UUID for disk file cleanup
+	var vmRec models.VM
+	if err := s.db.Where("name = ?", name).First(&vmRec).Error; err != nil {
+		logger.Log.Warn("VM not found in DB, proceeding with libvirt cleanup only", zap.String("vm_name", name), zap.Error(err))
+	}
+
 	// 1. Try to cleanup Libvirt Domain
 	dom, err := s.conn.LookupDomainByName(name)
 	if err == nil {
@@ -265,26 +271,44 @@ func (s *VMService) DeleteVM(name string) error {
 	}
 
 	// 2. Remove VM disk and all related files from vmDir
+	// Try UUID-based filename first (current format)
+	if vmRec.UUID != "" {
+		vmDiskPath := filepath.Join(s.vmDir, vmRec.UUID+".qcow2")
+		if err := os.Remove(vmDiskPath); err != nil && !os.IsNotExist(err) {
+			logger.Log.Warn("Failed to remove disk file (UUID)", zap.String("path", vmDiskPath), zap.Error(err))
+		} else if err == nil {
+			logger.Log.Info("VM disk file removed (UUID)", zap.String("path", vmDiskPath))
+		}
+	}
+
+	// Also try name-based filename (legacy format)
 	vmDiskPath := filepath.Join(s.vmDir, name+".qcow2")
 	if err := os.Remove(vmDiskPath); err != nil && !os.IsNotExist(err) {
-		logger.Log.Warn("Failed to remove disk file", zap.String("path", vmDiskPath), zap.Error(err))
-	} else {
-		logger.Log.Info("VM disk file removed", zap.String("path", vmDiskPath))
+		logger.Log.Warn("Failed to remove disk file (name)", zap.String("path", vmDiskPath), zap.Error(err))
+	} else if err == nil {
+		logger.Log.Info("VM disk file removed (name)", zap.String("path", vmDiskPath))
 	}
 
 	// Also remove any snapshot files or other related files
-	// Pattern: name.* (e.g., name.qcow2, name-snapshot1.qcow2, etc.)
+	// Pattern: UUID.* or name.* (e.g., uuid.qcow2, name-snapshot1.qcow2, etc.)
 	vmDirEntries, err := os.ReadDir(s.vmDir)
 	if err == nil {
 		for _, entry := range vmDirEntries {
 			if !entry.IsDir() {
 				fileName := entry.Name()
-				// Check if file starts with VM name (to catch all related files)
-				if len(fileName) >= len(name) && fileName[:len(name)] == name {
+				// Check if file starts with VM UUID or name (to catch all related files)
+				shouldRemove := false
+				if vmRec.UUID != "" && len(fileName) >= len(vmRec.UUID) && fileName[:len(vmRec.UUID)] == vmRec.UUID {
+					shouldRemove = true
+				} else if len(fileName) >= len(name) && fileName[:len(name)] == name {
+					shouldRemove = true
+				}
+				
+				if shouldRemove {
 					filePath := filepath.Join(s.vmDir, fileName)
 					if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
 						logger.Log.Warn("Failed to remove VM related file", zap.String("path", filePath), zap.Error(err))
-					} else {
+					} else if err == nil {
 						logger.Log.Info("VM related file removed", zap.String("path", filePath))
 					}
 				}

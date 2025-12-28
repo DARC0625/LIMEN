@@ -172,3 +172,4 @@ func LogPerformanceEvent(eventType EventType, logCtx LogContext, component strin
 	LogEvent(eventType, logCtx, message, fields...)
 }
 
+
