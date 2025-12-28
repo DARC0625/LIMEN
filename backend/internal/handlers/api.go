@@ -489,6 +489,7 @@ func (h *Handler) newWebSocketUpgrader() websocket.Upgrader {
 
 // isOriginAllowed checks if the given origin is in the allowed origins list.
 // Supports "*" as a wildcard to allow all origins.
+// Also handles trailing slash variations (https://limen.kr vs https://limen.kr/)
 func (h *Handler) isOriginAllowed(origin string) bool {
 	if origin == "" {
 		return false
@@ -496,10 +497,20 @@ func (h *Handler) isOriginAllowed(origin string) bool {
 	if len(h.Config.AllowedOrigins) == 0 {
 		return false
 	}
+	
+	// Normalize origin (remove trailing slash)
+	normalizedOrigin := strings.TrimSuffix(origin, "/")
+	
 	for _, allowed := range h.Config.AllowedOrigins {
 		if allowed == "*" {
 			return true
 		}
+		// Normalize allowed origin (remove trailing slash)
+		normalizedAllowed := strings.TrimSuffix(allowed, "/")
+		if normalizedAllowed == normalizedOrigin {
+			return true
+		}
+		// Also check exact match for backward compatibility
 		if allowed == origin {
 			return true
 		}
