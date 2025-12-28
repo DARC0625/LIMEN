@@ -475,10 +475,18 @@ func (h *Handler) newWebSocketUpgrader() websocket.Upgrader {
 			origin := r.Header.Get("Origin")
 			allowed := h.isOriginAllowed(origin)
 			if !allowed {
-				logger.Log.Warn("WebSocket origin not allowed",
+				logger.Log.Warn("WebSocket origin not allowed - returning 403",
 					zap.String("origin", origin),
 					zap.String("path", r.URL.Path),
+					zap.String("remote_addr", r.RemoteAddr),
+					zap.String("host", r.Host),
 					zap.Strings("allowed_origins", h.Config.AllowedOrigins))
+				// Return 403 explicitly
+				http.Error(r.Context().Value("response_writer").(http.ResponseWriter), "Origin not allowed", http.StatusForbidden)
+			} else {
+				logger.Log.Info("WebSocket origin allowed",
+					zap.String("origin", origin),
+					zap.String("path", r.URL.Path))
 			}
 			return allowed
 		},
