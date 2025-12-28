@@ -37,6 +37,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"os"
 	"path/filepath"
 	"strings"
@@ -162,8 +163,19 @@ func main() {
 	// Create a wrapper that skips middleware for WebSocket connections
 	// WebSocket requires http.Hijacker interface which is broken by middleware wrapping
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Check if this is a WebSocket upgrade request
-		if r.Header.Get("Upgrade") == "websocket" {
+		// Check if this is a WebSocket upgrade request or WebSocket path
+		// Some proxies may not send Upgrade header initially, so also check path
+		isWebSocketPath := strings.HasPrefix(r.URL.Path, "/ws/")
+		isWebSocketUpgrade := r.Header.Get("Upgrade") == "websocket" || 
+			strings.ToLower(r.Header.Get("Connection")) == "upgrade"
+		
+		if isWebSocketPath || isWebSocketUpgrade {
+			logger.Log.Info("WebSocket request detected - skipping middleware",
+				zap.String("path", r.URL.Path),
+				zap.String("upgrade", r.Header.Get("Upgrade")),
+				zap.String("connection", r.Header.Get("Connection")),
+				zap.String("origin", r.Header.Get("Origin")),
+				zap.String("remote_addr", r.RemoteAddr))
 			// Skip middleware for WebSocket connections - they need direct access to http.Hijacker
 			router.ServeHTTP(w, r)
 			return
