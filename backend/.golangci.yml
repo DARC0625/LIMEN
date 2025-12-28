@@ -1,11 +1,6 @@
 run:
   timeout: 5m
   tests: true
-  skip-dirs:
-    - vendor
-  skip-files:
-    - ".*\\.pb\\.go$"
-    - ".*\\.gen\\.go$"
 
 linters-settings:
   errcheck:
@@ -28,18 +23,13 @@ linters-settings:
     min-complexity: 15
   goimports:
     local-prefixes: github.com/DARC0625/LIMEN
-  golint:
-    min-confidence: 0
   govet:
-    check-shadowing: true
+    enable-all: true
   lll:
     line-length: 140
-  maligned:
-    suggest-new: true
   misspell:
     locale: US
   nolintlint:
-    allow-leading-space: true
     allow-unused: false
     require-explanation: false
     require-specific: false
@@ -53,26 +43,20 @@ linters:
     - gocyclo
     - gofmt
     - goimports
-    - golint
     - gosec
     - govet
     - ineffassign
-    - interfacer
     - lll
     - misspell
     - nakedret
     - noctx
     - nolintlint
-    - rowserrcheck
-    - scopelint
     - staticcheck
-    - structcheck
     - stylecheck
     - typecheck
     - unconvert
     - unparam
     - unused
-    - varcheck
     - whitespace
 
 issues:
