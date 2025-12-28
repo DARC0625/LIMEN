@@ -1,14 +1,8 @@
-use axum::{
-    routing::get,
-    Router,
-    Json,
-};
+use axum::{routing::get, Json, Router};
 use serde::Serialize;
-use sysinfo::System;
-use std::sync::{Arc, Mutex};
 use std::net::SocketAddr;
-use std::time::Duration;
-use tokio::time;
+use std::sync::{Arc, Mutex};
+use sysinfo::System;
 
 // Shared state structure
 struct AppState {
@@ -44,11 +38,11 @@ async fn health_check() -> Json<HealthResponse> {
 // Metrics endpoint with optimized system refresh
 async fn get_metrics(state: axum::extract::State<Arc<AppState>>) -> Json<MetricsResponse> {
     let mut sys = state.sys.lock().unwrap();
-    
+
     // Refresh only necessary components for better performance
     sys.refresh_cpu();
     sys.refresh_memory();
-    
+
     let cpu_usage = sys.global_cpu_info().cpu_usage();
     let total_memory = sys.total_memory();
     let used_memory = sys.used_memory();
@@ -69,7 +63,7 @@ async fn main() {
     // Initialize system information collector
     let mut sys = System::new_all();
     sys.refresh_all();
-    
+
     let app_state = Arc::new(AppState {
         sys: Mutex::new(sys),
     });
@@ -81,7 +75,7 @@ async fn main() {
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 9000));
     println!("Agent listening on {}", addr);
-    
+
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
