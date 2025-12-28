@@ -23,3 +23,7 @@ services:
     ports:
       - "5432:5432"  # Expose for local development tools
 
+
+
+
+

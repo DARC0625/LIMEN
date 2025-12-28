@@ -7,8 +7,10 @@ use serde::Serialize;
 use sysinfo::System;
 use std::sync::{Arc, Mutex};
 use std::net::SocketAddr;
+use std::time::Duration;
+use tokio::time;
 
-// 공유 상태를 위한 구조체
+// Shared state structure
 struct AppState {
     sys: Mutex<System>,
 }
@@ -28,9 +30,43 @@ struct MetricsResponse {
     cpu_cores: usize,
 }
 
+// Health check endpoint
+async fn health_check() -> Json<HealthResponse> {
+    Json(HealthResponse {
+        status: "ok".to_string(),
+        uptime: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+    })
+}
+
+// Metrics endpoint with optimized system refresh
+async fn get_metrics(state: axum::extract::State<Arc<AppState>>) -> Json<MetricsResponse> {
+    let mut sys = state.sys.lock().unwrap();
+    
+    // Refresh only necessary components for better performance
+    sys.refresh_cpu();
+    sys.refresh_memory();
+    
+    let cpu_usage = sys.global_cpu_info().cpu_usage();
+    let total_memory = sys.total_memory();
+    let used_memory = sys.used_memory();
+    let free_memory = sys.free_memory();
+    let cpu_cores = sys.cpus().len();
+
+    Json(MetricsResponse {
+        cpu_usage,
+        total_memory,
+        used_memory,
+        free_memory,
+        cpu_cores,
+    })
+}
+
 #[tokio::main]
 async fn main() {
-    // 시스템 정보 수집기 초기화
+    // Initialize system information collector
     let mut sys = System::new_all();
     sys.refresh_all();
     
@@ -48,39 +84,4 @@ async fn main() {
     
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
-}
-
-async fn health_check() -> Json<HealthResponse> {
-    Json(HealthResponse {
-        status: "ok".to_string(),
-        uptime: System::uptime(),
-    })
-}
-
-async fn get_metrics(
-    axum::extract::State(state): axum::extract::State<Arc<AppState>>,
-) -> Json<MetricsResponse> {
-    let mut sys = state.sys.lock().unwrap();
-    
-    sys.refresh_cpu();
-    sys.refresh_memory();
-
-    // 전체 CPU 사용량 평균 계산
-    let cpus = sys.cpus();
-    let cpu_usage = if cpus.is_empty() {
-        0.0
-    } else {
-        cpus.iter().map(|cpu| cpu.cpu_usage()).sum::<f32>() / cpus.len() as f32
-    };
-
-    let total_memory = sys.total_memory();
-    let used_memory = sys.used_memory();
-
-    Json(MetricsResponse {
-        cpu_usage,
-        total_memory,
-        used_memory,
-        free_memory: total_memory - used_memory,
-        cpu_cores: cpus.len(),
-    })
 }

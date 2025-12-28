@@ -28,7 +28,19 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 
 			// Check if origin is allowed (empty list => no CORS)
 			if originAllowed {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
+				// If "*" is in allowedOrigins, set "*" instead of specific origin
+				allowAll := false
+				for _, allowed := range allowedOrigins {
+					if allowed == "*" {
+						allowAll = true
+						break
+					}
+				}
+				if allowAll {
+					w.Header().Set("Access-Control-Allow-Origin", "*")
+				} else {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+				}
 			}
 
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
@@ -55,6 +67,7 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 }
 
 // isOriginAllowed checks if the given origin is in the allowed origins list.
+// Supports "*" as a wildcard to allow all origins.
 func isOriginAllowed(origin string, allowedOrigins []string) bool {
 	if origin == "" {
 		return false
@@ -63,6 +76,9 @@ func isOriginAllowed(origin string, allowedOrigins []string) bool {
 		return false
 	}
 	for _, allowed := range allowedOrigins {
+		if allowed == "*" {
+			return true
+		}
 		if allowed == origin {
 			return true
 		}

@@ -338,83 +338,116 @@ func (s *VMService) StartVM(name string) error {
 		return fmt.Errorf("failed to start VM: %v", err)
 	}
 
-	// Wait a moment for VNC to initialize
-	time.Sleep(1 * time.Second)
+	// Wait for VM to fully start and VNC to initialize
+	// VNC port assignment can take a few seconds
+	time.Sleep(3 * time.Second)
 
 	return nil
 }
 
 func (s *VMService) GetVNCPort(name string) (string, error) {
-	dom, err := s.conn.LookupDomainByName(name)
-	if err != nil {
-		return "", fmt.Errorf("VM not found: %v", err)
-	}
-	defer dom.Free()
+	// Retry getting VNC port with exponential backoff (max 5 seconds)
+	maxRetries := 10
+	retryDelay := 200 * time.Millisecond
+	
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		dom, err := s.conn.LookupDomainByName(name)
+		if err != nil {
+			return "", fmt.Errorf("VM not found: %v", err)
+		}
 
-	// Check if VM is running
-	active, err := dom.IsActive()
-	if err != nil {
-		return "", fmt.Errorf("failed to check VM status: %v", err)
-	}
-	if !active {
-		return "", fmt.Errorf("VM is not running")
-	}
+		// Check if VM is running
+		active, err := dom.IsActive()
+		if err != nil {
+			dom.Free()
+			return "", fmt.Errorf("failed to check VM status: %v", err)
+		}
+		if !active {
+			dom.Free()
+			return "", fmt.Errorf("VM is not running")
+		}
 
-	xmlDesc, err := dom.GetXMLDesc(0)
-	if err != nil {
-		return "", fmt.Errorf("failed to get VM XML: %v", err)
-	}
+		xmlDesc, err := dom.GetXMLDesc(0)
+		if err != nil {
+			dom.Free()
+			return "", fmt.Errorf("failed to get VM XML: %v", err)
+		}
+		dom.Free()
 
-	var domainXML struct {
-		Devices struct {
-			Graphics []struct {
-				Type     string `xml:"type,attr"`
-				Port     string `xml:"port,attr"`
-				AutoPort string `xml:"autoport,attr"`
-			} `xml:"graphics"`
-		} `xml:"devices"`
-	}
+		var domainXML struct {
+			Devices struct {
+				Graphics []struct {
+					Type     string `xml:"type,attr"`
+					Port     string `xml:"port,attr"`
+					AutoPort string `xml:"autoport,attr"`
+				} `xml:"graphics"`
+			} `xml:"devices"`
+		}
 
-	if err := xml.Unmarshal([]byte(xmlDesc), &domainXML); err != nil {
-		return "", fmt.Errorf("failed to parse VM XML: %v", err)
-	}
+		if err := xml.Unmarshal([]byte(xmlDesc), &domainXML); err != nil {
+			return "", fmt.Errorf("failed to parse VM XML: %v", err)
+		}
 
-	for _, g := range domainXML.Devices.Graphics {
-		if g.Type == "vnc" {
-			// If autoport is enabled, get the actual port from libvirt
-			if g.AutoPort == "yes" || g.Port == "-1" {
-				// Use virsh vncdisplay command to get the actual port
-				cmd := exec.Command("virsh", "vncdisplay", name)
-				output, err := cmd.CombinedOutput()
-				if err == nil {
-					// Output format: :0 or :1 etc, port is 5900 + display number
-					outputStr := strings.TrimSpace(string(output))
-					if strings.HasPrefix(outputStr, ":") {
-						var displayNum int
-						if _, err := fmt.Sscanf(outputStr, ":%d", &displayNum); err == nil {
-							port := 5900 + displayNum
-							return fmt.Sprintf("%d", port), nil
+		for _, g := range domainXML.Devices.Graphics {
+			if g.Type == "vnc" {
+				// If autoport is enabled, get the actual port from libvirt
+				if g.AutoPort == "yes" || g.Port == "-1" {
+					// Use virsh vncdisplay command to get the actual port
+					cmd := exec.Command("virsh", "vncdisplay", name)
+					output, err := cmd.CombinedOutput()
+					if err == nil {
+						// Output format: :0 or :1 etc, port is 5900 + display number
+						outputStr := strings.TrimSpace(string(output))
+						if strings.HasPrefix(outputStr, ":") {
+							var displayNum int
+							if _, err := fmt.Sscanf(outputStr, ":%d", &displayNum); err == nil {
+								port := 5900 + displayNum
+								// Verify the port is actually listening
+								if s.verifyVNCPort(port) {
+									return fmt.Sprintf("%d", port), nil
+								}
+								// Port not ready yet, continue retry
+							}
 						}
 					}
-				}
-				// Fallback: try common VNC ports
-				for port := 5900; port < 6000; port++ {
-					conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", port), 100*time.Millisecond)
-					if err == nil {
-						conn.Close()
-						// This is a heuristic - check if port is actually listening
-						return fmt.Sprintf("%d", port), nil
+					// If virsh command failed or port not ready, try to find port by scanning
+					// Only scan on last attempt to avoid unnecessary overhead
+					if attempt == maxRetries-1 {
+						for port := 5900; port < 6000; port++ {
+							if s.verifyVNCPort(port) {
+								return fmt.Sprintf("%d", port), nil
+							}
+						}
 					}
+					// Port not ready yet, wait and retry
+					if attempt < maxRetries-1 {
+						time.Sleep(retryDelay)
+						retryDelay = time.Duration(float64(retryDelay) * 1.5) // Exponential backoff
+						continue
+					}
+					return "", fmt.Errorf("VNC port not found after %d attempts (autoport enabled but port not determined)", maxRetries)
 				}
-				return "", fmt.Errorf("VNC port not found (autoport enabled but port not determined)")
-			}
-			if g.Port != "" && g.Port != "-1" {
-				return g.Port, nil
+				if g.Port != "" && g.Port != "-1" {
+					return g.Port, nil
+				}
 			}
 		}
+
+		// If we get here, VNC graphics not found - no need to retry
+		return "", fmt.Errorf("VNC graphics not found in VM configuration")
 	}
 
-	return "", fmt.Errorf("VNC graphics not found in VM configuration")
+	return "", fmt.Errorf("VNC port not found after %d attempts", maxRetries)
+}
+
+// verifyVNCPort checks if a VNC port is actually listening
+func (s *VMService) verifyVNCPort(port int) bool {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", port), 200*time.Millisecond)
+	if err == nil {
+		conn.Close()
+		return true
+	}
+	return false
 }
 
 func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {

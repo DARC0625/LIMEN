@@ -330,3 +330,7 @@ rsync -avz /var/log/limen/ backup-server:/backups/limen/logs/
 
 **마지막 업데이트**: 2024-12-23
 
+
+
+
+

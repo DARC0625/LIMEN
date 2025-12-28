@@ -19,11 +19,7 @@ ExecStart=/usr/bin/bash -c '\
   wait $BACK_PID $AGENT_PID 2>/dev/null'
 ExecStop=/usr/bin/bash -c 'pkill -f "/home/darc0/projects/LIMEN/backend/server"; pkill -f "/home/darc0/projects/LIMEN/backend/agent/target/release/agent"'
 Restart=always
-RestartSec=2
-TimeoutStopSec=15
-KillMode=mixed
-LimitNOFILE=65535
-Environment=ALLOWED_ORIGINS=https://www.darc.kr,https://darc.kr
+RestartSec=3
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=limen
@@ -32,38 +28,3 @@ PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
-[Unit]
-Description=LIMEN Stack (Backend + Agent)
-After=network.target
-Wants=network.target
-
-[Service]
-Type=simple
-User=darc0
-Group=darc0
-WorkingDirectory=/home/darc0/projects/LIMEN
-Environment=ALLOWED_ORIGINS=https://www.darc.kr,https://10.0.0.100,http://10.0.0.100
-ExecStart=/usr/bin/bash -c '\
-  cd /home/darc0/projects/LIMEN/backend && ./server & \
-  BACK_PID=$!; \
-  cd /home/darc0/projects/LIMEN/backend/agent && ./target/release/agent & \
-  AGENT_PID=$!; \
-  trap "kill -TERM $BACK_PID $AGENT_PID 2>/dev/null" TERM INT; \
-  wait -n $BACK_PID $AGENT_PID; \
-  kill -TERM $BACK_PID $AGENT_PID 2>/dev/null; \
-  wait $BACK_PID $AGENT_PID 2>/dev/null'
-ExecStop=/usr/bin/bash -c 'pkill -f "/home/darc0/projects/LIMEN/backend/server"; pkill -f "/home/darc0/projects/LIMEN/backend/agent/target/release/agent"'
-Restart=always
-RestartSec=2
-TimeoutStopSec=15
-KillMode=mixed
-LimitNOFILE=65535
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=limen
-NoNewPrivileges=true
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
-

@@ -109,6 +109,21 @@ func (b *VMStatusBroadcaster) BroadcastVMList(vms []models.VM) {
 
 // HandleVMStatusWebSocket handles WebSocket connections for VM status updates
 func (h *Handler) HandleVMStatusWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
+	// Set CORS headers for WebSocket (before authentication)
+	origin := r.Header.Get("Origin")
+	if h.isOriginAllowed(origin) {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+	}
+
+	// Handle OPTIONS preflight request
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	// Verify authentication via token in query parameter or header
 	token := r.URL.Query().Get("token")
 	if token == "" {

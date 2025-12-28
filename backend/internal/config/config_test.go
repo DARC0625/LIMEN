@@ -31,8 +31,8 @@ func TestLoad(t *testing.T) {
 	cfg := Load()
 
 	// Test defaults
-	if cfg.Port != "8080" {
-		t.Errorf("Expected default port 8080, got %s", cfg.Port)
+	if cfg.Port != "18443" {
+		t.Errorf("Expected default port 18443, got %s", cfg.Port)
 	}
 	if cfg.LibvirtURI != "qemu:///system" {
 		t.Errorf("Expected default libvirt URI, got %s", cfg.LibvirtURI)
@@ -40,8 +40,8 @@ func TestLoad(t *testing.T) {
 	if cfg.Env != "development" {
 		t.Errorf("Expected default env development, got %s", cfg.Env)
 	}
-	if len(cfg.AllowedOrigins) != 1 || cfg.AllowedOrigins[0] != "*" {
-		t.Errorf("Expected default allowed origins [*], got %v", cfg.AllowedOrigins)
+	if len(cfg.AllowedOrigins) != 0 {
+		t.Errorf("Expected default allowed origins [] (empty), got %v", cfg.AllowedOrigins)
 	}
 }
 

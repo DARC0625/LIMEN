@@ -1,44 +1,59 @@
-.PHONY: test test-cover test-unit test-integration build run
+.PHONY: build clean test run optimize
 
-# Run all tests
-test:
-	go test ./... -v
-
-# Run tests with coverage
-test-cover:
-	go test ./... -coverprofile=coverage.out
-	go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report generated: coverage.html"
-
-# Run unit tests only
-test-unit:
-	go test ./internal/validator -v
-	go test ./internal/models -v
-	go test ./internal/config -v
-
-# Run integration tests
-test-integration:
-	go test ./cmd/server -v
-
-# Build the server
+# Build optimized backend server
 build:
-	go build -o server ./cmd/server
+	@echo "Building optimized backend server..."
+	@go build -ldflags="-s -w" -trimpath -o server ./cmd/server
+	@echo "Build complete: server"
 
-# Build optimized release version
-build-release:
-	go build -ldflags="-s -w" -trimpath -o server ./cmd/server
-	@echo "Optimized release build complete"
+# Build optimized agent
+build-agent:
+	@echo "Building optimized agent..."
+	@cd agent && cargo build --release
+	@echo "Build complete: agent/target/release/agent"
 
-# Build with race detector (for testing)
-build-race:
-	go build -race -o server ./cmd/server
-
-# Run the server
-run: build
-	./server
+# Build both
+build-all: build build-agent
+	@echo "All builds complete"
 
 # Clean build artifacts
 clean:
-	rm -f server coverage.out coverage.html
+	@echo "Cleaning build artifacts..."
+	@rm -f server
+	@rm -rf agent/target/debug
+	@cd agent && cargo clean
+	@echo "Clean complete"
 
+# Run tests
+test:
+	@echo "Running tests..."
+	@go test -v ./...
 
+# Run server
+run: build
+	@./server
+
+# Optimize dependencies
+optimize:
+	@echo "Optimizing dependencies..."
+	@go mod tidy
+	@go mod verify
+	@cd agent && cargo update
+	@echo "Dependencies optimized"
+
+# Format code
+fmt:
+	@echo "Formatting code..."
+	@go fmt ./...
+	@cd agent && cargo fmt
+	@echo "Format complete"
+
+# Lint code
+lint:
+	@echo "Linting code..."
+	@golangci-lint run ./... || echo "Install golangci-lint: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"
+	@cd agent && cargo clippy || echo "Clippy not available"
+
+# Full optimization
+full-optimize: clean optimize build-all
+	@echo "Full optimization complete"

@@ -56,12 +56,8 @@ func setupTestServer(t *testing.T) *httptest.Server {
 
 	// Create handler (will handle nil VMService in health check)
 	cfg := config.Load()
+	cfg.JWTSecret = "test-secret-key" // Override for testing
 	h := handlers.NewHandler(db, vmService, cfg)
-
-	// Create a minimal config for testing
-	cfg := &config.Config{
-		JWTSecret: "test-secret-key",
-	}
 
 	// Setup routes
 	r := router.SetupRoutes(h, cfg)

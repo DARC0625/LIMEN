@@ -283,3 +283,7 @@ curl http://localhost:18443/api/hardware/spec
 
 **마지막 업데이트**: 2024-12-23
 
+
+
+
+

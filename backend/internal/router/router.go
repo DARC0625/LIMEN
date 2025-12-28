@@ -119,15 +119,17 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *mux.Router {
 	}).Methods("PUT")
 
 	// Protected endpoints (authentication required)
+	// Use UUID pattern: 8-4-4-4-12 hexadecimal characters
 	api.HandleFunc("/vms", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleVMs(w, r, cfg)
 	}).Methods("GET", "POST")
-	api.HandleFunc("/vms/{id:[0-9]+}/action", h.HandleVMAction).Methods("POST")
-	api.HandleFunc("/vms/{id:[0-9]+}/stats", h.HandleVMStats).Methods("GET")
+	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}", h.HandleVMDelete).Methods("DELETE")
+	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}/action", h.HandleVMAction).Methods("POST")
+	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}/stats", h.HandleVMStats).Methods("GET")
 
 	// Snapshot endpoints
-	api.HandleFunc("/vms/{id:[0-9]+}/snapshots", h.HandleListSnapshots).Methods("GET")
-	api.HandleFunc("/vms/{id:[0-9]+}/snapshots", h.HandleCreateSnapshot).Methods("POST")
+	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}/snapshots", h.HandleListSnapshots).Methods("GET")
+	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}/snapshots", h.HandleCreateSnapshot).Methods("POST")
 	api.HandleFunc("/snapshots/{snapshot_id:[0-9]+}/restore", h.HandleRestoreSnapshot).Methods("POST")
 	api.HandleFunc("/snapshots/{snapshot_id:[0-9]+}", h.HandleDeleteSnapshot).Methods("DELETE")
 
@@ -152,12 +154,20 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *mux.Router {
 	r.PathPrefix("/downloads/").Handler(http.StripPrefix("/downloads/", fs))
 
 	// Agent reverse proxy (/agent/* -> http://127.0.0.1:9000)
-	agentTarget, _ := url.Parse("http://127.0.0.1:9000")
+	agentTarget, err := url.Parse("http://127.0.0.1:9000")
+	if err != nil {
+		// If URL parsing fails, log error but continue (agent proxy will return errors)
+		panic("Failed to parse agent target URL: " + err.Error())
+	}
 	agentProxy := httputil.NewSingleHostReverseProxy(agentTarget)
 	agentProxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		http.Error(w, "agent unavailable", http.StatusBadGateway)
+		// Return 503 Service Unavailable when agent is not reachable
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"error":"agent unavailable","message":"Agent service is not reachable"}`))
 	}
 	r.PathPrefix("/agent/").Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Update request for proxy
 		r.Host = agentTarget.Host
 		r.URL.Scheme = agentTarget.Scheme
 		r.URL.Host = agentTarget.Host
@@ -165,6 +175,8 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *mux.Router {
 		if r.URL.Path == "" {
 			r.URL.Path = "/"
 		}
+		
+		// Forward the request to agent
 		agentProxy.ServeHTTP(w, r)
 	}))
 

@@ -102,3 +102,7 @@ log "Old backups cleaned up"
 
 log "VM images backup completed successfully"
 
+
+
+
+

@@ -47,11 +47,14 @@ func DefaultArgon2idConfig() Argon2idConfig {
 
 // GetOptimalArgon2idConfig returns hardware-optimized Argon2id configuration.
 // This function should be called after hardware detection is initialized.
+// Falls back to DefaultArgon2idConfig() if hardware detection is not available.
 func GetOptimalArgon2idConfig() Argon2idConfig {
 	// Try to get hardware-optimized config
 	// If hardware detection is not available, use default
-	if secConfig := getHardwareSecurityConfig(); secConfig != nil {
-		return secConfig.Argon2idConfig
+	if getHardwareSecurityConfig != nil {
+		if secConfig := getHardwareSecurityConfig(); secConfig != nil {
+			return secConfig.Argon2idConfig
+		}
 	}
 	return DefaultArgon2idConfig()
 }

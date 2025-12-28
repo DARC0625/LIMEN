@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/DARC0625/LIMEN/backend/internal/errors"
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
@@ -21,17 +20,11 @@ func (h *Handler) HandleVMStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get VM ID from URL path variable
+	// Get VM UUID from URL path variable
 	vars := mux.Vars(r)
-	idStr, ok := vars["id"]
+	uuidStr, ok := vars["uuid"]
 	if !ok {
-		errors.WriteBadRequest(w, "VM ID is required", nil)
-		return
-	}
-
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		errors.WriteBadRequest(w, "Invalid VM ID", err)
+		errors.WriteBadRequest(w, "VM UUID is required", nil)
 		return
 	}
 
@@ -42,13 +35,13 @@ func (h *Handler) HandleVMStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find VM
+	// Find VM by UUID
 	var vmRec models.VM
-	if err := h.DB.First(&vmRec, id).Error; err != nil {
+	if err := h.DB.Where("uuid = ?", uuidStr).First(&vmRec).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			errors.WriteNotFound(w, "VM")
 		} else {
-			logger.Log.Error("Failed to find VM", zap.Error(err), zap.Int("vm_id", id))
+			logger.Log.Error("Failed to find VM", zap.Error(err), zap.String("vm_uuid", uuidStr))
 			errors.WriteInternalError(w, err, false)
 		}
 		return

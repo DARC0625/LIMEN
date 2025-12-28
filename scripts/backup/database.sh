@@ -92,3 +92,7 @@ log "Old backups cleaned up"
 
 log "Database backup completed successfully"
 
+
+
+
+

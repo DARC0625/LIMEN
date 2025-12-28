@@ -1,0 +1,84 @@
+# Binaries
+server
+agent
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Rust build artifacts
+agent/target/
+**/*.rs.bk
+Cargo.lock
+
+# Debug builds
+agent/target/debug/
+
+# Uploads (large files)
+uploads/*
+!uploads/.gitkeep
+
+# VM disk images
+database/vms/*.qcow2
+database/iso/*.iso
+database/iso/*.ISO
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+*.old
+
+# Build artifacts
+dist/
+build/
+*.tar.gz
+*.zip
+
+# Coverage reports
+coverage/
+*.coverprofile
+
+# Profiling data
+*.prof
+*.pprof
+

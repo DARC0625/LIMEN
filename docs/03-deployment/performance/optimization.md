@@ -201,3 +201,7 @@ ALTER DATABASE limen SET log_duration = 'on';
 
 **마지막 업데이트**: 2024-12-23
 
+
+
+
+

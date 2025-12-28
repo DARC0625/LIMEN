@@ -26,12 +26,11 @@ func (h *Handler) HandleCreateSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get VM ID from URL
+	// Get VM UUID from URL
 	vars := mux.Vars(r)
-	vmIDStr := vars["id"]
-	vmID, err := strconv.ParseUint(vmIDStr, 10, 32)
-	if err != nil {
-		errors.WriteBadRequest(w, "Invalid VM ID", err)
+	vmUUIDStr := vars["uuid"]
+	if vmUUIDStr == "" {
+		errors.WriteBadRequest(w, "VM UUID is required", nil)
 		return
 	}
 
@@ -44,7 +43,7 @@ func (h *Handler) HandleCreateSnapshot(w http.ResponseWriter, r *http.Request) {
 
 	// Verify VM ownership
 	var vm models.VM
-	if err := h.DB.First(&vm, uint(vmID)).Error; err != nil {
+	if err := h.DB.Where("uuid = ?", vmUUIDStr).First(&vm).Error; err != nil {
 		errors.WriteNotFound(w, "VM not found")
 		return
 	}
@@ -67,15 +66,15 @@ func (h *Handler) HandleCreateSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create snapshot
-	snapshot, err := h.VMService.CreateSnapshot(uint(vmID), req.Name, req.Description)
+	// Create snapshot (VMService uses internal ID)
+	snapshot, err := h.VMService.CreateSnapshot(vm.ID, req.Name, req.Description)
 	if err != nil {
-		logger.Log.Error("Failed to create snapshot", zap.Error(err), zap.Uint("vm_id", uint(vmID)))
+		logger.Log.Error("Failed to create snapshot", zap.Error(err), zap.String("vm_uuid", vmUUIDStr))
 		errors.WriteInternalError(w, err, false)
 		return
 	}
 
-	logger.Log.Info("Snapshot created", zap.Uint("snapshot_id", snapshot.ID), zap.Uint("vm_id", uint(vmID)))
+	logger.Log.Info("Snapshot created", zap.Uint("snapshot_id", snapshot.ID), zap.String("vm_uuid", vmUUIDStr))
 
 	// Update metrics
 	metrics.VMSnapshotTotal.Inc()
@@ -92,12 +91,11 @@ func (h *Handler) HandleListSnapshots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get VM ID from URL
+	// Get VM UUID from URL
 	vars := mux.Vars(r)
-	vmIDStr := vars["id"]
-	vmID, err := strconv.ParseUint(vmIDStr, 10, 32)
-	if err != nil {
-		errors.WriteBadRequest(w, "Invalid VM ID", err)
+	vmUUIDStr := vars["uuid"]
+	if vmUUIDStr == "" {
+		errors.WriteBadRequest(w, "VM UUID is required", nil)
 		return
 	}
 
@@ -110,7 +108,7 @@ func (h *Handler) HandleListSnapshots(w http.ResponseWriter, r *http.Request) {
 
 	// Verify VM ownership
 	var vm models.VM
-	if err := h.DB.First(&vm, uint(vmID)).Error; err != nil {
+	if err := h.DB.Where("uuid = ?", vmUUIDStr).First(&vm).Error; err != nil {
 		errors.WriteNotFound(w, "VM not found")
 		return
 	}
@@ -120,10 +118,10 @@ func (h *Handler) HandleListSnapshots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// List snapshots
-	snapshots, err := h.VMService.ListSnapshots(uint(vmID))
+	// List snapshots (VMService uses internal ID)
+	snapshots, err := h.VMService.ListSnapshots(vm.ID)
 	if err != nil {
-		logger.Log.Error("Failed to list snapshots", zap.Error(err), zap.Uint("vm_id", uint(vmID)))
+		logger.Log.Error("Failed to list snapshots", zap.Error(err), zap.String("vm_uuid", vmUUIDStr))
 		errors.WriteInternalError(w, err, false)
 		return
 	}

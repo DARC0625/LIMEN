@@ -52,6 +52,7 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/models"
 	"github.com/DARC0625/LIMEN/backend/internal/router"
 	"github.com/DARC0625/LIMEN/backend/internal/security"
+	"github.com/DARC0625/LIMEN/backend/internal/vm"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
@@ -135,49 +136,77 @@ func main() {
 		logger.Log.Fatal("Failed to initialize images", zap.Error(err))
 	}
 
-	// Create handlers
-	h := &handlers.Handler{
-		DB: database.DB,
+	// Initialize VM Service (libvirt connection)
+	libvirtURI := cfg.LibvirtURI
+	vmService, err := vm.NewVMService(database.DB, libvirtURI, cfg.ISODir, cfg.VMDir)
+	if err != nil {
+		logger.Log.Warn("Failed to initialize VM service (libvirt connection)", 
+			zap.Error(err),
+			zap.String("libvirt_uri", libvirtURI),
+			zap.String("iso_dir", cfg.ISODir),
+			zap.String("vm_dir", cfg.VMDir))
+		logger.Log.Info("VM operations will be unavailable until libvirt connection is established")
+		vmService = nil // Continue without VM service
+	} else {
+		logger.Log.Info("VM service initialized successfully",
+			zap.String("libvirt_uri", libvirtURI))
+		defer vmService.Close() // Close libvirt connection on shutdown
 	}
+
+	// Create handlers
+	h := handlers.NewHandler(database.DB, vmService, cfg)
 
 	// Setup routes
 	router := router.SetupRoutes(h, cfg)
 
-	// Apply middleware to regular HTTP routes (excluding WebSocket)
-	handler := middleware.Recovery(router)
-	handler = middleware.Logging(handler)
-	handler = middleware.RequestID(handler)
-
-	// Security headers
-	isHTTPS := cfg.Port == "443" || cfg.Port == "8443"
-	handler = middleware.SecurityHeaders(isHTTPS)(handler)
-
-	// CORS must be before Auth to handle OPTIONS preflight requests
-	handler = middleware.CORS(cfg.AllowedOrigins)(handler)
-
-	// IP Whitelist for Admin routes is handled in router.go
-
-	// Rate limiting (if enabled)
-	if cfg.RateLimitEnabled {
-		rateLimitConfig := middleware.RateLimitConfig{
-			DefaultRPS:   cfg.RateLimitRPS,
-			DefaultBurst: cfg.RateLimitBurst,
-			EndpointRPS: map[string]float64{
-				"/api/vms":           5.0,  // VM operations: 5 req/s
-				"/api/admin":         2.0,  // Admin operations: 2 req/s
-				"/api/snapshots":     3.0,  // Snapshot operations: 3 req/s
-				"/api/quota":         5.0,  // Quota queries: 5 req/s
-				"/api/metrics":       10.0, // Metrics: 10 req/s
-				"/agent/metrics":    10.0, // Agent metrics: 10 req/s
-			},
+	// Create a wrapper that skips middleware for WebSocket connections
+	// WebSocket requires http.Hijacker interface which is broken by middleware wrapping
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check if this is a WebSocket upgrade request
+		if r.Header.Get("Upgrade") == "websocket" {
+			// Skip middleware for WebSocket connections - they need direct access to http.Hijacker
+			router.ServeHTTP(w, r)
+			return
 		}
-		handler = middleware.RateLimitWithConfig(rateLimitConfig)(handler)
-	}
 
-	handler = middleware.Auth(cfg)(handler) // Authentication middleware
+		// Apply middleware to regular HTTP routes (excluding WebSocket)
+		httpHandler := middleware.Recovery(router)
+		httpHandler = middleware.Logging(httpHandler)
+		httpHandler = middleware.RequestID(httpHandler)
 
-	// HTTP Response Compression (gzip)
-	handler = middleware.Compression(handler)
+		// Security headers
+		isHTTPS := cfg.Port == "443" || cfg.Port == "8443"
+		httpHandler = middleware.SecurityHeaders(isHTTPS)(httpHandler)
+
+		// CORS must be before Auth to handle OPTIONS preflight requests
+		httpHandler = middleware.CORS(cfg.AllowedOrigins)(httpHandler)
+
+		// IP Whitelist for Admin routes is handled in router.go
+
+		// Rate limiting (if enabled)
+		if cfg.RateLimitEnabled {
+			rateLimitConfig := middleware.RateLimitConfig{
+				DefaultRPS:   cfg.RateLimitRPS,
+				DefaultBurst: cfg.RateLimitBurst,
+				EndpointRPS: map[string]float64{
+					"/api/vms":           5.0,  // VM operations: 5 req/s
+					"/api/admin":         2.0,  // Admin operations: 2 req/s
+					"/api/snapshots":     3.0,  // Snapshot operations: 3 req/s
+					"/api/quota":         5.0,  // Quota queries: 5 req/s
+					"/api/metrics":       10.0, // Metrics: 10 req/s
+					"/agent/metrics":    10.0, // Agent metrics: 10 req/s
+				},
+			}
+			httpHandler = middleware.RateLimitWithConfig(rateLimitConfig)(httpHandler)
+		}
+
+		httpHandler = middleware.Auth(cfg)(httpHandler) // Authentication middleware
+
+		// HTTP Response Compression (gzip)
+		httpHandler = middleware.Compression(httpHandler)
+
+		httpHandler.ServeHTTP(w, r)
+	})
 
 	// Start HTTP server
 	addr := ":" + cfg.Port
