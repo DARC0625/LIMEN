@@ -193,3 +193,4 @@ tail -f backend/logs/server.log | grep -i "api\|health"
 - WebSocket 라우팅: `/ws/*`, `/vnc` (router.go)
 
 
+

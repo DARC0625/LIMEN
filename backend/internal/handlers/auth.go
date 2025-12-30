@@ -215,23 +215,32 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 		Name:     "refresh_token",
 		Value:    refreshToken,
 		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode, // Strict for maximum CSRF protection
+		SameSite: http.SameSiteLaxMode, // Lax for cross-domain compatibility while maintaining CSRF protection
 		Path:     "/",
 		MaxAge:   604800, // 7 days in seconds
+		Domain:   "",     // Empty domain allows cookie to be sent to any subdomain (e.g., limen.kr)
 	}
 	if isHTTPS {
 		refreshCookie.Secure = true
 	}
 	http.SetCookie(w, refreshCookie)
+	
+	logger.Log.Info("Refresh token cookie set",
+		zap.String("username", user.Username),
+		zap.Bool("secure", isHTTPS),
+		zap.String("same_site", "Lax"),
+		zap.String("domain", refreshCookie.Domain),
+		zap.String("path", refreshCookie.Path))
 
 	// Set CSRF Token cookie (for client-side access)
 	csrfCookie := &http.Cookie{
 		Name:     "csrf_token",
 		Value:    csrfToken,
 		HttpOnly: false, // JavaScript needs access for X-CSRF-Token header
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode, // Changed to Lax for consistency
 		Path:     "/",
 		MaxAge:   604800, // 7 days
+		Domain:   "",     // Empty domain allows cookie to be sent to any subdomain
 	}
 	if isHTTPS {
 		csrfCookie.Secure = true
@@ -609,9 +618,10 @@ func (h *Handler) HandleCreateSession(w http.ResponseWriter, r *http.Request, cf
 		Name:     "refresh_token",
 		Value:    req.RefreshToken,
 		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode, // Lax for cross-domain compatibility
 		Path:     "/",
 		MaxAge:   604800, // 7 days
+		Domain:   "",     // Empty domain allows cookie to be sent to any subdomain
 	}
 	if isHTTPS {
 		refreshCookie.Secure = true
@@ -623,9 +633,10 @@ func (h *Handler) HandleCreateSession(w http.ResponseWriter, r *http.Request, cf
 		Name:     "csrf_token",
 		Value:    csrfToken,
 		HttpOnly: false,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode, // Lax for cross-domain compatibility
 		Path:     "/",
 		MaxAge:   604800, // 7 days
+		Domain:   "",     // Empty domain allows cookie to be sent to any subdomain
 	}
 	if isHTTPS {
 		csrfCookie.Secure = true
@@ -696,9 +707,10 @@ func (h *Handler) HandleDeleteSession(w http.ResponseWriter, r *http.Request, cf
 		Name:     "refresh_token",
 		Value:    "",
 		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode, // Lax for cross-domain compatibility
 		Path:     "/",
 		MaxAge:   -1, // Delete immediately
+		Domain:   "", // Empty domain allows cookie to be sent to any subdomain
 	}
 	if isHTTPS {
 		refreshCookie.Secure = true
@@ -710,9 +722,10 @@ func (h *Handler) HandleDeleteSession(w http.ResponseWriter, r *http.Request, cf
 		Name:     "csrf_token",
 		Value:    "",
 		HttpOnly: false,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode, // Lax for cross-domain compatibility
 		Path:     "/",
 		MaxAge:   -1,
+		Domain:   "", // Empty domain allows cookie to be sent to any subdomain
 	}
 	if isHTTPS {
 		csrfCookie.Secure = true
@@ -808,9 +821,10 @@ func (h *Handler) HandleRefreshToken(w http.ResponseWriter, r *http.Request, cfg
 		Name:     "refresh_token",
 		Value:    newRefreshToken,
 		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode, // Lax for cross-domain compatibility
 		Path:     "/",
 		MaxAge:   604800, // 7 days
+		Domain:   "",     // Empty domain allows cookie to be sent to any subdomain
 	}
 	if isHTTPS {
 		refreshCookie.Secure = true
