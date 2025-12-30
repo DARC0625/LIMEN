@@ -154,8 +154,9 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 	}
 }
 
-// isPublicEndpoint checks if the endpoint is public (doesn't require authentication).
-func isPublicEndpoint(path string) bool {
+// IsPublicEndpoint checks if the endpoint is public (doesn't require authentication).
+// This function is exported so it can be used in main.go to skip authentication middleware.
+func IsPublicEndpoint(path string) bool {
 	// Normalize path - handle missing slashes
 	normalizedPath := path
 	if !strings.HasPrefix(normalizedPath, "/") {

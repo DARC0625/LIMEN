@@ -159,7 +159,7 @@ func main() {
 	// Setup routes
 	router := router.SetupRoutes(h, cfg)
 
-	// Create a wrapper that skips middleware for WebSocket connections
+	// Create a wrapper that skips middleware for WebSocket connections and public endpoints
 	// WebSocket requires http.Hijacker interface which is broken by middleware wrapping
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check if this is a WebSocket upgrade request or WebSocket path
@@ -178,6 +178,9 @@ func main() {
 			r.URL.Path == "/swagger" ||
 			r.URL.Path == "/docs"
 		
+		// Check if this is a public endpoint (should skip authentication middleware)
+		isPublicEndpoint := middleware.IsPublicEndpoint(r.URL.Path)
+		
 		if isWebSocketPath || isWebSocketUpgrade {
 			logger.Log.Info("WebSocket request detected - skipping middleware",
 				zap.String("path", r.URL.Path),
@@ -193,6 +196,26 @@ func main() {
 		if isStaticPath {
 			// Skip middleware for static file paths
 			router.ServeHTTP(w, r)
+			return
+		}
+		
+		if isPublicEndpoint {
+			// Skip authentication middleware for public endpoints (but apply other middleware)
+			httpHandler := middleware.Recovery(router)
+			httpHandler = middleware.Logging(httpHandler)
+			httpHandler = middleware.RequestID(httpHandler)
+			
+			// Security headers
+			isHTTPS := cfg.Port == "443" || cfg.Port == "8443"
+			httpHandler = middleware.SecurityHeaders(isHTTPS)(httpHandler)
+			
+			// CORS must be before Auth to handle OPTIONS preflight requests
+			httpHandler = middleware.CORS(cfg.AllowedOrigins)(httpHandler)
+			
+			// HTTP Response Compression (gzip)
+			httpHandler = middleware.Compression(httpHandler)
+			
+			httpHandler.ServeHTTP(w, r)
 			return
 		}
 
