@@ -123,3 +123,146 @@ func TestExtractTokenFromHeader(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateAccessToken(t *testing.T) {
+	secret := "test-secret-key"
+	userID := uint(1)
+	username := "testuser"
+	role := "user"
+	approved := true
+
+	token, err := GenerateAccessToken(userID, username, role, approved, secret)
+	if err != nil {
+		t.Fatalf("GenerateAccessToken() error = %v", err)
+	}
+
+	if token == "" {
+		t.Error("GenerateAccessToken() returned empty token")
+	}
+
+	// Validate the token
+	claims, err := ValidateToken(token, secret)
+	if err != nil {
+		t.Fatalf("ValidateToken() error = %v", err)
+	}
+
+	if claims.UserID != userID {
+		t.Errorf("ValidateToken() UserID = %v, want %v", claims.UserID, userID)
+	}
+
+	if claims.Username != username {
+		t.Errorf("ValidateToken() Username = %v, want %v", claims.Username, username)
+	}
+
+	if claims.Role != role {
+		t.Errorf("ValidateToken() Role = %v, want %v", claims.Role, role)
+	}
+
+	if claims.Approved != approved {
+		t.Errorf("ValidateToken() Approved = %v, want %v", claims.Approved, approved)
+	}
+}
+
+func TestGenerateRefreshToken(t *testing.T) {
+	secret := "test-secret-key"
+	userID := uint(1)
+	username := "testuser"
+	role := "user"
+	approved := true
+
+	token, tokenID, err := GenerateRefreshToken(userID, username, role, approved, secret)
+	if err != nil {
+		t.Fatalf("GenerateRefreshToken() error = %v", err)
+	}
+
+	if token == "" {
+		t.Error("GenerateRefreshToken() returned empty token")
+	}
+
+	if tokenID == "" {
+		t.Error("GenerateRefreshToken() returned empty tokenID")
+	}
+
+	// Validate the refresh token
+	claims, err := ValidateRefreshToken(token, secret)
+	if err != nil {
+		t.Fatalf("ValidateRefreshToken() error = %v", err)
+	}
+
+	if claims.UserID != userID {
+		t.Errorf("ValidateRefreshToken() UserID = %v, want %v", claims.UserID, userID)
+	}
+
+	if claims.Username != username {
+		t.Errorf("ValidateRefreshToken() Username = %v, want %v", claims.Username, username)
+	}
+
+	if claims.Role != role {
+		t.Errorf("ValidateRefreshToken() Role = %v, want %v", claims.Role, role)
+	}
+
+	if claims.TokenID != tokenID {
+		t.Errorf("ValidateRefreshToken() TokenID = %v, want %v", claims.TokenID, tokenID)
+	}
+}
+
+func TestValidateRefreshToken(t *testing.T) {
+	secret := "test-secret-key"
+	userID := uint(1)
+	username := "testuser"
+	role := "user"
+	approved := true
+
+	// Generate valid refresh token
+	token, _, err := GenerateRefreshToken(userID, username, role, approved, secret)
+	if err != nil {
+		t.Fatalf("GenerateRefreshToken() error = %v", err)
+	}
+
+	// Validate valid token
+	claims, err := ValidateRefreshToken(token, secret)
+	if err != nil {
+		t.Fatalf("ValidateRefreshToken() error = %v", err)
+	}
+
+	if claims.UserID != userID {
+		t.Errorf("ValidateRefreshToken() UserID = %v, want %v", claims.UserID, userID)
+	}
+
+	// Test invalid secret
+	_, err = ValidateRefreshToken(token, "wrong-secret")
+	if err == nil {
+		t.Error("ValidateRefreshToken() should fail with wrong secret")
+	}
+
+	// Test invalid token
+	_, err = ValidateRefreshToken("invalid-token", secret)
+	if err == nil {
+		t.Error("ValidateRefreshToken() should fail with invalid token")
+	}
+}
+
+func TestGenerateTokenWithApproval(t *testing.T) {
+	secret := "test-secret-key"
+	userID := uint(1)
+	username := "testuser"
+
+	token, err := GenerateTokenWithApproval(userID, username, "user", true, secret, 24)
+	if err != nil {
+		t.Fatalf("GenerateTokenWithApproval() error = %v", err)
+	}
+
+	if token == "" {
+		t.Error("GenerateTokenWithApproval() returned empty token")
+	}
+
+	// Validate the token
+	claims, err := ValidateToken(token, secret)
+	if err != nil {
+		t.Fatalf("ValidateToken() error = %v", err)
+	}
+
+	if claims.Approved != true {
+		t.Errorf("ValidateToken() Approved = %v, want true", claims.Approved)
+	}
+}
