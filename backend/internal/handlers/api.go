@@ -396,6 +396,12 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if VMService is available for actions that require it
+	if h.VMService == nil && (action == models.VMActionStart || action == models.VMActionStop || action == models.VMActionRestart) {
+		errors.WriteInternalError(w, fmt.Errorf("VM service is not available"), h.Config.Env == "development")
+		return
+	}
+
 	switch action {
 	case models.VMActionStart:
 		if err := h.VMService.StartVM(vmRec.Name); err != nil {
@@ -564,6 +570,12 @@ func (h *Handler) HandleVMDelete(w http.ResponseWriter, r *http.Request) {
 	// Check ownership (user must own the VM or be admin)
 	if vmRec.OwnerID != userID && role != string(models.RoleAdmin) {
 		errors.WriteForbidden(w, "You don't have permission to delete this VM")
+		return
+	}
+
+	// Check if VMService is available
+	if h.VMService == nil {
+		errors.WriteInternalError(w, fmt.Errorf("VM service is not available"), h.Config.Env == "development")
 		return
 	}
 
@@ -837,8 +849,8 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			zap.Uint("user_id", claims.UserID),
 			zap.String("username", claims.Username))
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel() // Ensure context is cancelled to prevent resource leak
 		ws.Write(ctx, websocket.MessageText, []byte(`{"type":"error","error":"VM UUID is required","code":"MISSING_VM_UUID"}`))
-		cancel()
 		return
 	}
 
@@ -851,8 +863,8 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 				zap.Uint("user_id", claims.UserID),
 				zap.String("username", claims.Username))
 			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer cancel() // Ensure context is cancelled to prevent resource leak
 			ws.Write(ctx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"error","error":"VM not found","code":"VM_NOT_FOUND","vm_uuid":"%s"}`, uuidStr)))
-			cancel()
 		} else {
 			logger.Log.Error("Failed to find VM for VNC",
 				zap.Error(err),
@@ -860,8 +872,8 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 				zap.Uint("user_id", claims.UserID),
 				zap.String("username", claims.Username))
 			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer cancel() // Ensure context is cancelled to prevent resource leak
 			ws.Write(ctx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"error","error":"Database error","code":"DB_ERROR","details":"%s"}`, err.Error())))
-			cancel()
 		}
 		return
 	}
@@ -902,8 +914,8 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 				zap.String("vm_name", vmRec.Name),
 				zap.Uint("user_id", claims.UserID))
 			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer cancel() // Ensure context is cancelled to prevent resource leak
 			ws.Write(ctx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"error","error":"Failed to start VM","code":"VM_START_FAILED","status":"%s","details":"%v"}`, vmRec.Status, err)))
-			cancel()
 			return
 		}
 
@@ -943,8 +955,8 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 				zap.String("status", string(vmRec.Status)),
 				zap.Uint("user_id", claims.UserID))
 			errorCtx, errorCancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer errorCancel() // Ensure context is cancelled to prevent resource leak
 			ws.Write(errorCtx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"error","error":"VM is not running","code":"VM_NOT_RUNNING","status":"%s","message":"VM failed to start"}`, vmRec.Status)))
-			errorCancel()
 			return
 		}
 
@@ -955,8 +967,8 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 
 	// Send status update
 	portCtx, portCancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer portCancel() // Ensure context is cancelled to prevent resource leak
 	ws.Write(portCtx, websocket.MessageText, []byte(`{"type":"status","message":"Getting VNC port..."}`))
-	portCancel()
 
 	// Get VNC port with retry (GetVNCPort already has retry logic)
 	vncPort, err := h.VMService.GetVNCPort(vmRec.Name)
@@ -968,8 +980,8 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			zap.Uint("user_id", claims.UserID),
 			zap.String("username", claims.Username))
 		portErrorCtx, portErrorCancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer portErrorCancel() // Ensure context is cancelled to prevent resource leak
 		ws.Write(portErrorCtx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"error","error":"Failed to get VNC port","code":"VNC_PORT_ERROR","details":"%v","message":"VNC port not available yet. Please wait a moment and try again."}`, err)))
-		portErrorCancel()
 		return
 	}
 
@@ -980,8 +992,8 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 
 	// Send status update
 	connectCtx, connectCancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer connectCancel() // Ensure context is cancelled to prevent resource leak
 	ws.Write(connectCtx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"status","message":"Connecting to VNC server on port %s..."}`, vncPort)))
-	connectCancel()
 
 	targetAddr := fmt.Sprintf("localhost:%s", vncPort)
 
@@ -1015,8 +1027,8 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			zap.Uint("user_id", claims.UserID),
 			zap.String("username", claims.Username))
 		connectErrorCtx, connectErrorCancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer connectErrorCancel() // Ensure context is cancelled to prevent resource leak
 		ws.Write(connectErrorCtx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"error","error":"Failed to connect to VNC server","code":"VNC_CONNECTION_FAILED","address":"%s","message":"VNC server not ready. Please wait a moment and try again."}`, targetAddr)))
-		connectErrorCancel()
 		return
 	}
 	defer conn.Close()
@@ -1031,8 +1043,8 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 
 	// Send success status
 	successCtx, successCancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer successCancel() // Ensure context is cancelled to prevent resource leak
 	ws.Write(successCtx, websocket.MessageText, []byte(`{"type":"status","message":"VNC connection established, starting proxy..."}`))
-	successCancel()
 
 	errc := make(chan error, 2)
 
@@ -1124,16 +1136,20 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 				errc <- err
 				return
 			}
-			writeCancel()
+			writeCancel() // Always cancel context after use to prevent resource leak
 		}
 	}()
 
 	// Wait for error from either goroutine
 	err = <-errc
 	
-	// Close connections gracefully
+	// Close connections gracefully (ensure cleanup even on error)
 	if conn != nil {
-		conn.Close()
+		if closeErr := conn.Close(); closeErr != nil {
+			logger.Log.Debug("Error closing VNC TCP connection",
+				zap.Error(closeErr),
+				zap.String("vm_uuid", vmRec.UUID))
+		}
 	}
 	
 	// Send close message to WebSocket if not already closed
@@ -1201,6 +1217,11 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 
 	// Handle GET request - return current media information
 	if r.Method == "GET" {
+		if h.VMService == nil {
+			errors.WriteInternalError(w, fmt.Errorf("VM service is not available"), h.Config.Env == "development")
+			return
+		}
+
 		mediaPath, err := h.VMService.GetCurrentMedia(vmRec.Name)
 		if err != nil {
 			// Check if error is "no CDROM device" - return empty media instead of error
@@ -1229,6 +1250,11 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Handle POST request - attach or detach media
+	if h.VMService == nil {
+		errors.WriteInternalError(w, fmt.Errorf("VM service is not available"), h.Config.Env == "development")
+		return
+	}
+
 	var req struct {
 		Action  string `json:"action" example:"detach"` // "attach" or "detach"
 		ISOPath string `json:"iso_path,omitempty" example:"/path/to/ubuntu.iso"` // Required for attach action
@@ -1288,6 +1314,11 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 // @Security BearerAuth
 // @Router /vms/isos [get]
 func (h *Handler) HandleListISOs(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
+	if h.VMService == nil {
+		errors.WriteInternalError(w, fmt.Errorf("VM service is not available"), cfg.Env == "development")
+		return
+	}
+
 	isos, err := h.VMService.ListISOs()
 	if err != nil {
 		logger.Log.Error("Failed to list ISOs", zap.Error(err))

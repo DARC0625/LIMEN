@@ -5,29 +5,15 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=darc0
-Group=darc0
 WorkingDirectory=/home/darc0/projects/LIMEN
-ExecStart=/usr/bin/bash -c '\
-  cd /home/darc0/projects/LIMEN/backend/agent && ./target/release/agent & \
-  AGENT_PID=$!; \
-  sleep 1; \
-  cd /home/darc0/projects/LIMEN/backend && ./server & \
-  BACK_PID=$!; \
-  trap "kill -TERM $BACK_PID $AGENT_PID 2>/dev/null" TERM INT; \
-  wait -n $BACK_PID $AGENT_PID; \
-  EXIT_CODE=$?; \
-  kill -TERM $BACK_PID $AGENT_PID 2>/dev/null; \
-  wait $BACK_PID $AGENT_PID 2>/dev/null; \
-  exit $EXIT_CODE'
-ExecStop=/usr/bin/bash -c 'pkill -f "/home/darc0/projects/LIMEN/backend/server"; pkill -f "/home/darc0/projects/LIMEN/backend/agent/target/release/agent"'
+ExecStart=/home/darc0/projects/LIMEN/scripts/start-limen.sh start
+ExecStop=/home/darc0/projects/LIMEN/scripts/start-limen.sh stop
 Restart=always
-RestartSec=3
+RestartSec=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=limen
-NoNewPrivileges=true
-PrivateTmp=true
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 [Install]
 WantedBy=multi-user.target

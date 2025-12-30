@@ -413,7 +413,7 @@ func (s *VMService) RestartVM(name string) error {
 			break // VM might not exist, try to start anyway
 		}
 		active, _ := dom.IsActive()
-		dom.Free()
+		dom.Free() // Free libvirt domain resource immediately after use
 		if !active {
 			break // VM is stopped
 		}

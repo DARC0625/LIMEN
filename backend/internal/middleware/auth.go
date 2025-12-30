@@ -177,11 +177,16 @@ func IsPublicEndpoint(path string) bool {
 	}
 
 	for _, publicPath := range publicPaths {
-		if normalizedPath == publicPath || strings.HasPrefix(normalizedPath, publicPath+"/") {
+		// Exact match
+		if normalizedPath == publicPath {
 			return true
 		}
-		// Also check without leading slash
-		if strings.HasPrefix(normalizedPath, publicPath[1:]) {
+		// Prefix match (e.g., /api/auth/session matches /api/auth/session)
+		if strings.HasPrefix(normalizedPath, publicPath+"/") {
+			return true
+		}
+		// Also check without leading slash (for paths like "api/auth/session")
+		if len(publicPath) > 1 && strings.HasPrefix(normalizedPath, publicPath[1:]) {
 			return true
 		}
 	}

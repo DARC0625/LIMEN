@@ -399,7 +399,8 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 		return
 	}
 
-	// CSRF Token validation (required for all state-changing requests)
+	// CSRF Token validation (optional for GET requests, but recommended)
+	// GET /api/auth/session is a read operation, so CSRF is optional but recommended
 	csrfToken := r.Header.Get("X-CSRF-Token")
 	if csrfToken == "" {
 		// Try to get from cookie as fallback
@@ -407,6 +408,18 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 			csrfToken = cookie.Value
 		}
 	}
+	
+	// Log request for debugging (passive monitoring - no blocking)
+	hasRefreshToken := false
+	if _, err := r.Cookie("refresh_token"); err == nil {
+		hasRefreshToken = true
+	}
+	logger.Log.Info("GET /api/auth/session request",
+		zap.String("remote_addr", r.RemoteAddr),
+		zap.String("origin", r.Header.Get("Origin")),
+		zap.Bool("has_refresh_token_cookie", hasRefreshToken),
+		zap.Bool("has_csrf_token", csrfToken != ""),
+		zap.String("user_agent", r.Header.Get("User-Agent")))
 
 	// Get refresh token from cookie
 	refreshToken := ""
@@ -441,7 +454,12 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 	// Validate refresh token
 	refreshClaims, err := auth.ValidateRefreshToken(refreshToken, cfg.JWTSecret)
 	if err != nil {
-		logger.Log.Warn("Invalid refresh token", zap.Error(err))
+		// Passive monitoring: Log invalid refresh token attempts (for security awareness)
+		logger.Log.Warn("Invalid refresh token in session check",
+			zap.Error(err),
+			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("origin", r.Header.Get("Origin")),
+			zap.String("user_agent", r.Header.Get("User-Agent")))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(SessionResponse{
@@ -455,6 +473,12 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 	sessionStore := auth.GetSessionStore()
 	session, exists := sessionStore.GetSessionByRefreshToken(refreshToken)
 	if !exists {
+		// Passive monitoring: Log session not found (for security awareness)
+		logger.Log.Warn("Session not found in store",
+			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("origin", r.Header.Get("Origin")),
+			zap.Uint("user_id", refreshClaims.UserID),
+			zap.String("username", refreshClaims.Username))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(SessionResponse{
@@ -464,9 +488,16 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 		return
 	}
 
-	// Validate CSRF token if provided
+	// Validate CSRF token if provided (optional for GET, but recommended)
+	// Passive monitoring: Log CSRF validation failures (for security awareness)
 	if csrfToken != "" && !sessionStore.ValidateCSRFToken(session.ID, csrfToken) {
-		logger.Log.Warn("Invalid CSRF token", zap.String("session_id", session.ID))
+		logger.Log.Warn("Invalid CSRF token in session check",
+			zap.String("session_id", session.ID),
+			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("origin", r.Header.Get("Origin")),
+			zap.Uint("user_id", session.UserID))
+		// For GET requests, we don't block - just log (passive monitoring)
+		// But still return error to encourage proper CSRF token usage
 		errors.WriteForbidden(w, "Invalid CSRF token")
 		return
 	}
