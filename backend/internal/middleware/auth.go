@@ -64,10 +64,10 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 				zap.String("remote_addr", r.RemoteAddr),
 				zap.String("host", r.Host),
 				zap.String("user_agent", r.Header.Get("User-Agent")),
-				zap.Bool("is_public", isPublicEndpoint(r.URL.Path)))
+				zap.Bool("is_public", IsPublicEndpoint(r.URL.Path)))
 
 			// Skip authentication for public endpoints
-			if isPublicEndpoint(r.URL.Path) {
+			if IsPublicEndpoint(r.URL.Path) {
 				logger.Log.Info("Public endpoint accessed - allowing",
 					zap.String("path", r.URL.Path),
 					zap.String("method", r.Method))
