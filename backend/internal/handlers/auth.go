@@ -218,7 +218,7 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 		SameSite: http.SameSiteLaxMode, // Lax for cross-domain compatibility while maintaining CSRF protection
 		Path:     "/",
 		MaxAge:   604800, // 7 days in seconds
-		Domain:   "",     // Empty domain allows cookie to be sent to any subdomain (e.g., limen.kr)
+		// Domain을 명시적으로 설정하지 않음 (빈 문자열) - 브라우저가 자동으로 현재 도메인 사용
 	}
 	if isHTTPS {
 		refreshCookie.Secure = true
@@ -229,8 +229,9 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 		zap.String("username", user.Username),
 		zap.Bool("secure", isHTTPS),
 		zap.String("same_site", "Lax"),
-		zap.String("domain", refreshCookie.Domain),
-		zap.String("path", refreshCookie.Path))
+		zap.String("domain", "auto"), // 브라우저가 자동 설정
+		zap.String("path", refreshCookie.Path),
+		zap.String("set_cookie_header", w.Header().Get("Set-Cookie")))
 
 	// Set CSRF Token cookie (for client-side access)
 	csrfCookie := &http.Cookie{
@@ -240,12 +241,18 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 		SameSite: http.SameSiteLaxMode, // Changed to Lax for consistency
 		Path:     "/",
 		MaxAge:   604800, // 7 days
-		Domain:   "",     // Empty domain allows cookie to be sent to any subdomain
+		// Domain을 명시적으로 설정하지 않음 (빈 문자열) - 브라우저가 자동으로 현재 도메인 사용
 	}
 	if isHTTPS {
 		csrfCookie.Secure = true
 	}
 	http.SetCookie(w, csrfCookie)
+	
+	logger.Log.Info("CSRF token cookie set",
+		zap.String("username", user.Username),
+		zap.Bool("secure", isHTTPS),
+		zap.String("same_site", "Lax"),
+		zap.String("path", csrfCookie.Path))
 
 	// Prepare response (Refresh Token is sent via cookie, not in body)
 	response := LoginResponse{
