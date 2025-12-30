@@ -8,7 +8,7 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
 	"github.com/DARC0625/LIMEN/backend/internal/middleware"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
-	"github.com/gorilla/mux"
+	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -21,9 +21,8 @@ func (h *Handler) HandleVMStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get VM UUID from URL path variable
-	vars := mux.Vars(r)
-	uuidStr, ok := vars["uuid"]
-	if !ok {
+	uuidStr := chi.URLParam(r, "uuid")
+	if uuidStr == "" {
 		errors.WriteBadRequest(w, "VM UUID is required", nil)
 		return
 	}

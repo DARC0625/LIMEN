@@ -20,7 +20,7 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/models"
 	"github.com/DARC0625/LIMEN/backend/internal/validator"
 	"github.com/DARC0625/LIMEN/backend/internal/vm"
-	"github.com/gorilla/mux"
+	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -366,10 +366,9 @@ type VMActionRequest struct {
 // @Security BearerAuth
 // @Router /vms/{uuid}/action [post]
 func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
-	// Get VM UUID from URL path variable (set by mux router)
-	vars := mux.Vars(r)
-	uuidStr, ok := vars["uuid"]
-	if !ok {
+	// Get VM UUID from URL path variable (set by chi router)
+	uuidStr := chi.URLParam(r, "uuid")
+	if uuidStr == "" {
 		errors.WriteBadRequest(w, "VM UUID is required", nil)
 		return
 	}
@@ -534,9 +533,8 @@ func (h *Handler) HandleVMDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get VM UUID from URL path variable
-	vars := mux.Vars(r)
-	uuidStr, ok := vars["uuid"]
-	if !ok {
+	uuidStr := chi.URLParam(r, "uuid")
+	if uuidStr == "" {
 		errors.WriteBadRequest(w, "VM UUID is required", nil)
 		return
 	}
@@ -1176,9 +1174,8 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 // @Security BearerAuth
 // @Router /vms/{uuid}/media [get,post]
 func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	uuidStr, ok := vars["uuid"]
-	if !ok {
+	uuidStr := chi.URLParam(r, "uuid")
+	if uuidStr == "" {
 		errors.WriteBadRequest(w, "VM UUID is required", nil)
 		return
 	}

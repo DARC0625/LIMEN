@@ -9,176 +9,163 @@ import (
 
 	"github.com/DARC0625/LIMEN/backend/internal/config"
 	"github.com/DARC0625/LIMEN/backend/internal/handlers"
-	"github.com/DARC0625/LIMEN/backend/internal/middleware"
-	"github.com/gorilla/mux"
+	limenMiddleware "github.com/DARC0625/LIMEN/backend/internal/middleware"
+	"github.com/go-chi/chi/v5"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 // SetupRoutes configures all HTTP routes and returns a router.
-func SetupRoutes(h *handlers.Handler, cfg *config.Config) *mux.Router {
-	r := mux.NewRouter()
+func SetupRoutes(h *handlers.Handler, cfg *config.Config) *chi.Mux {
+	r := chi.NewRouter()
 
 	// API routes
-	api := r.PathPrefix("/api").Subrouter()
+	api := chi.NewRouter()
+	r.Mount("/api", api)
 
 	// Public endpoints (no authentication required)
-	api.HandleFunc("/health", h.HandleHealth).Methods("GET")
-	api.HandleFunc("/health_proxy", h.HandleHealth).Methods("GET") // Health check proxy endpoint (for Next.js rewrites)
-	api.HandleFunc("/metrics", h.HandleMetrics).Methods("GET")     // Prometheus metrics endpoint
+	api.Get("/health", h.HandleHealth)
+	api.Get("/health_proxy", h.HandleHealth) // Health check proxy endpoint (for Next.js rewrites)
+	api.Get("/metrics", h.HandleMetrics)     // Prometheus metrics endpoint
 
 	// Swagger documentation endpoints
 	// http-swagger handles /swagger/doc.json automatically
-	r.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
-	r.HandleFunc("/swagger", h.HandleSwaggerUI).Methods("GET") // Swagger UI (outside /api prefix)
-	r.HandleFunc("/docs", h.HandleSwaggerUI).Methods("GET")    // Alternative path for Swagger UI
+	r.Mount("/swagger/", httpSwagger.WrapHandler)
+	r.Get("/swagger", h.HandleSwaggerUI) // Swagger UI (outside /api prefix)
+	r.Get("/docs", h.HandleSwaggerUI)   // Alternative path for Swagger UI
 
 	// Hardware specification endpoints (public for monitoring)
-	api.HandleFunc("/hardware/spec", func(w http.ResponseWriter, r *http.Request) {
+	api.Get("/hardware/spec", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleHardwareSpec(w, r, cfg)
-	}).Methods("GET")
-	api.HandleFunc("/hardware/security-config", func(w http.ResponseWriter, r *http.Request) {
+	})
+	api.Get("/hardware/security-config", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleHardwareSecurityConfig(w, r, cfg)
-	}).Methods("GET")
+	})
 
 	// Security chain endpoints (public for monitoring)
-	api.HandleFunc("/security/chain", func(w http.ResponseWriter, r *http.Request) {
+	api.Get("/security/chain", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleSecurityChain(w, r, cfg)
-	}).Methods("GET")
-	api.HandleFunc("/security/chain/report", func(w http.ResponseWriter, r *http.Request) {
+	})
+	api.Get("/security/chain/report", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleSecurityChainReport(w, r, cfg)
-	}).Methods("GET")
-	api.HandleFunc("/security/weakest-link", func(w http.ResponseWriter, r *http.Request) {
+	})
+	api.Get("/security/weakest-link", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleWeakestLink(w, r, cfg)
-	}).Methods("GET")
+	})
 
 	// Log analysis endpoints (public for monitoring)
-	api.HandleFunc("/logs/stats", func(w http.ResponseWriter, r *http.Request) {
+	api.Get("/logs/stats", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleLogStats(w, r, cfg)
-	}).Methods("GET")
-	api.HandleFunc("/logs/search", func(w http.ResponseWriter, r *http.Request) {
+	})
+	api.Get("/logs/search", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleLogSearch(w, r, cfg)
-	}).Methods("GET")
-	api.HandleFunc("/auth/login", func(w http.ResponseWriter, r *http.Request) {
+	})
+	api.Post("/auth/login", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleLogin(w, r, cfg)
-	}).Methods("POST")
-	api.HandleFunc("/auth/register", func(w http.ResponseWriter, r *http.Request) {
+	})
+	api.Post("/auth/register", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleRegister(w, r, cfg)
-	}).Methods("POST")
-	
+	})
+
 	// Session management endpoints (public - no authentication required)
-	api.HandleFunc("/auth/session", func(w http.ResponseWriter, r *http.Request) {
+	api.Get("/auth/session", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleGetSession(w, r, cfg)
-	}).Methods("GET")
-	api.HandleFunc("/auth/session", func(w http.ResponseWriter, r *http.Request) {
+	})
+	api.Post("/auth/session", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleCreateSession(w, r, cfg)
-	}).Methods("POST")
-	api.HandleFunc("/auth/session", func(w http.ResponseWriter, r *http.Request) {
+	})
+	api.Delete("/auth/session", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleDeleteSession(w, r, cfg)
-	}).Methods("DELETE")
-	
+	})
+
 	// Token refresh endpoint (public - no authentication required)
-	api.HandleFunc("/auth/refresh", func(w http.ResponseWriter, r *http.Request) {
+	api.Post("/auth/refresh", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleRefreshToken(w, r, cfg)
-	}).Methods("POST")
+	})
 
 	// Admin-only endpoints for user management
 	// IMPORTANT: Register these BEFORE other protected endpoints to ensure proper matching
 	// These routes require authentication (via main.go Auth middleware) and admin role
-	adminMiddleware := middleware.Admin(cfg)
+	adminMiddleware := limenMiddleware.Admin(cfg)
 
 	// IP whitelist for admin endpoints (if configured)
-	adminIPWhitelist := middleware.IPWhitelist(cfg.AdminIPWhitelist)
+	adminIPWhitelist := limenMiddleware.IPWhitelist(cfg.AdminIPWhitelist)
 
 	// User management endpoints - register directly on main router (not subrouter)
 	// This ensures the route is matched correctly
 	// Apply IP whitelist first, then admin middleware
-	r.HandleFunc("/api/admin/users", func(w http.ResponseWriter, r *http.Request) {
-		adminIPWhitelist(adminMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			h.HandleListUsers(w, r, cfg)
-		}))).ServeHTTP(w, r)
-	}).Methods("GET")
+	r.With(adminIPWhitelist, adminMiddleware).Get("/api/admin/users", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleListUsers(w, r, cfg)
+	})
 
-	r.HandleFunc("/api/admin/users", func(w http.ResponseWriter, r *http.Request) {
-		adminIPWhitelist(adminMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			h.HandleCreateUser(w, r, cfg)
-		}))).ServeHTTP(w, r)
-	}).Methods("POST")
+	r.With(adminIPWhitelist, adminMiddleware).Post("/api/admin/users", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleCreateUser(w, r, cfg)
+	})
 
-	r.HandleFunc("/api/admin/users/{id:[0-9]+}", func(w http.ResponseWriter, r *http.Request) {
-		adminIPWhitelist(adminMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			h.HandleGetUser(w, r, cfg)
-		}))).ServeHTTP(w, r)
-	}).Methods("GET")
+	r.With(adminIPWhitelist, adminMiddleware).Get("/api/admin/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleGetUser(w, r, cfg)
+	})
 
-	r.HandleFunc("/api/admin/users/{id:[0-9]+}", func(w http.ResponseWriter, r *http.Request) {
-		adminIPWhitelist(adminMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			h.HandleUpdateUser(w, r, cfg)
-		}))).ServeHTTP(w, r)
-	}).Methods("PUT")
+	r.With(adminIPWhitelist, adminMiddleware).Put("/api/admin/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleUpdateUser(w, r, cfg)
+	})
 
-	r.HandleFunc("/api/admin/users/{id:[0-9]+}", func(w http.ResponseWriter, r *http.Request) {
-		adminIPWhitelist(adminMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			h.HandleDeleteUser(w, r, cfg)
-		}))).ServeHTTP(w, r)
-	}).Methods("DELETE")
+	r.With(adminIPWhitelist, adminMiddleware).Delete("/api/admin/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleDeleteUser(w, r, cfg)
+	})
 
-	r.HandleFunc("/api/admin/users/{id:[0-9]+}/role", func(w http.ResponseWriter, r *http.Request) {
-		adminIPWhitelist(adminMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			h.HandleUpdateUserRole(w, r, cfg)
-		}))).ServeHTTP(w, r)
-	}).Methods("PUT")
+	r.With(adminIPWhitelist, adminMiddleware).Put("/api/admin/users/{id}/role", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleUpdateUserRole(w, r, cfg)
+	})
 
-	r.HandleFunc("/api/admin/users/{id:[0-9]+}/approve", func(w http.ResponseWriter, r *http.Request) {
-		adminIPWhitelist(adminMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			h.HandleApproveUser(w, r, cfg)
-		}))).ServeHTTP(w, r)
-	}).Methods("PUT")
+	r.With(adminIPWhitelist, adminMiddleware).Put("/api/admin/users/{id}/approve", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleApproveUser(w, r, cfg)
+	})
 
 	// Protected endpoints (authentication required)
 	// Use UUID pattern: 8-4-4-4-12 hexadecimal characters
-	api.HandleFunc("/vms", func(w http.ResponseWriter, r *http.Request) {
+	api.Get("/vms", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleVMs(w, r, cfg)
-	}).Methods("GET", "POST")
-	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}", h.HandleVMDelete).Methods("DELETE")
-	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}/action", h.HandleVMAction).Methods("POST")
-	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}/stats", h.HandleVMStats).Methods("GET")
-	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}/media", h.HandleVMMedia).Methods("GET", "POST")
-	api.HandleFunc("/vms/isos", func(w http.ResponseWriter, r *http.Request) {
+	})
+	api.Post("/vms", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleVMs(w, r, cfg)
+	})
+	api.Delete("/vms/{uuid}", h.HandleVMDelete)
+	api.Post("/vms/{uuid}/action", h.HandleVMAction)
+	api.Get("/vms/{uuid}/stats", h.HandleVMStats)
+	api.Get("/vms/{uuid}/media", h.HandleVMMedia)
+	api.Post("/vms/{uuid}/media", h.HandleVMMedia)
+	api.Get("/vms/isos", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleListISOs(w, r, cfg)
-	}).Methods("GET")
+	})
 
 	// Snapshot endpoints
-	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}/snapshots", h.HandleListSnapshots).Methods("GET")
-	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}/snapshots", h.HandleCreateSnapshot).Methods("POST")
-	api.HandleFunc("/snapshots/{snapshot_id:[0-9]+}/restore", h.HandleRestoreSnapshot).Methods("POST")
-	api.HandleFunc("/snapshots/{snapshot_id:[0-9]+}", h.HandleDeleteSnapshot).Methods("DELETE")
+	api.Get("/vms/{uuid}/snapshots", h.HandleListSnapshots)
+	api.Post("/vms/{uuid}/snapshots", h.HandleCreateSnapshot)
+	api.Post("/snapshots/{snapshot_id}/restore", h.HandleRestoreSnapshot)
+	api.Delete("/snapshots/{snapshot_id}", h.HandleDeleteSnapshot)
 
 	// Quota endpoints (system-wide, shared by all users)
-	api.HandleFunc("/quota", h.HandleGetQuota).Methods("GET")
+	api.Get("/quota", h.HandleGetQuota)
 	// Admin-only endpoint for updating quota
-	api.HandleFunc("/quota", func(w http.ResponseWriter, r *http.Request) {
-		// Apply admin middleware
-		adminMiddleware := middleware.Admin(cfg)
-		adminMiddleware(http.HandlerFunc(h.HandleUpdateQuota)).ServeHTTP(w, r)
-	}).Methods("PUT")
+	api.With(adminMiddleware).Put("/quota", h.HandleUpdateQuota)
 
 	// WebSocket routes (must be before middleware to avoid ResponseWriter wrapping)
 	// These routes need direct access to http.Hijacker for WebSocket upgrade
-	r.HandleFunc("/ws/vnc", h.HandleVNC).Methods("GET")
-	r.HandleFunc("/vnc", h.HandleVNC).Methods("GET") // Alternative path for VNC WebSocket (for Envoy compatibility)
-	r.HandleFunc("/ws/vm-status", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/ws/vnc", h.HandleVNC)
+	r.Get("/vnc", h.HandleVNC) // Alternative path for VNC WebSocket (for Envoy compatibility)
+	r.Get("/ws/vm-status", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleVMStatusWebSocket(w, r, cfg)
-	}).Methods("GET")
+	})
 
 	// Static file serving (must be before middleware to avoid authentication)
 	fs := http.FileServer(http.Dir("./uploads"))
-	r.PathPrefix("/downloads/").Handler(http.StripPrefix("/downloads/", fs))
-	
+	r.Mount("/downloads/", http.StripPrefix("/downloads/", fs))
+
 	// Handle /media requests
 	// If it's a static file request (e.g., images, icons), serve from uploads/media directory
 	// If the file doesn't exist, return 404 (frontend should handle this gracefully)
 	mediaFS := http.FileServer(http.Dir("./uploads/media"))
-	r.PathPrefix("/media/").Handler(http.StripPrefix("/media/", mediaFS))
+	r.Mount("/media/", http.StripPrefix("/media/", mediaFS))
 
 	// Agent reverse proxy (/agent/* -> http://127.0.0.1:9000)
 	agentTarget, err := url.Parse("http://127.0.0.1:9000")
@@ -193,7 +180,7 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *mux.Router {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		w.Write([]byte(`{"error":"agent unavailable","message":"Agent service is not reachable"}`))
 	}
-	r.PathPrefix("/agent/").Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	r.Mount("/agent/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Update request for proxy
 		r.Host = agentTarget.Host
 		r.URL.Scheme = agentTarget.Scheme

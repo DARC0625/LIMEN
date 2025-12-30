@@ -12,7 +12,7 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
 	"github.com/DARC0625/LIMEN/backend/internal/middleware"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
-	"github.com/gorilla/mux"
+	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -111,8 +111,9 @@ func (h *Handler) HandleListUsers(w http.ResponseWriter, r *http.Request, cfg *c
 
 // HandleGetUser handles GET /api/admin/users/{id} - Get user details
 func (h *Handler) HandleGetUser(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
-	vars := mux.Vars(r)
-	userID, err := strconv.ParseUint(vars["id"], 10, 32)
+	// Get ID from URL using chi
+	idStr := chi.URLParam(r, "id")
+	userID, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		errors.WriteBadRequest(w, "Invalid user ID", err)
 		return
@@ -228,8 +229,9 @@ func (h *Handler) HandleCreateUser(w http.ResponseWriter, r *http.Request, cfg *
 
 // HandleUpdateUser handles PUT /api/admin/users/{id} - Update user
 func (h *Handler) HandleUpdateUser(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
-	vars := mux.Vars(r)
-	userID, err := strconv.ParseUint(vars["id"], 10, 32)
+	// Get ID from URL using chi
+	idStr := chi.URLParam(r, "id")
+	userID, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		errors.WriteBadRequest(w, "Invalid user ID", err)
 		return
@@ -315,8 +317,9 @@ func (h *Handler) HandleUpdateUser(w http.ResponseWriter, r *http.Request, cfg *
 
 // HandleDeleteUser handles DELETE /api/admin/users/{id} - Delete user (soft delete)
 func (h *Handler) HandleDeleteUser(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
-	vars := mux.Vars(r)
-	userID, err := strconv.ParseUint(vars["id"], 10, 32)
+	// Get ID from URL using chi
+	idStr := chi.URLParam(r, "id")
+	userID, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		errors.WriteBadRequest(w, "Invalid user ID", err)
 		return
@@ -362,8 +365,9 @@ func (h *Handler) HandleDeleteUser(w http.ResponseWriter, r *http.Request, cfg *
 
 // HandleUpdateUserRole handles PUT /api/admin/users/{id}/role - Update user role
 func (h *Handler) HandleUpdateUserRole(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
-	vars := mux.Vars(r)
-	userID, err := strconv.ParseUint(vars["id"], 10, 32)
+	// Get ID from URL using chi
+	idStr := chi.URLParam(r, "id")
+	userID, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		errors.WriteBadRequest(w, "Invalid user ID", err)
 		return
@@ -416,8 +420,9 @@ func (h *Handler) HandleUpdateUserRole(w http.ResponseWriter, r *http.Request, c
 
 // HandleApproveUser handles PUT /api/admin/users/{id}/approve - Approve user
 func (h *Handler) HandleApproveUser(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
-	vars := mux.Vars(r)
-	userID, err := strconv.ParseUint(vars["id"], 10, 32)
+	// Get ID from URL using chi
+	idStr := chi.URLParam(r, "id")
+	userID, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		errors.WriteBadRequest(w, "Invalid user ID", err)
 		return
