@@ -164,9 +164,19 @@ func main() {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check if this is a WebSocket upgrade request or WebSocket path
 		// Some proxies may not send Upgrade header initially, so also check path
-		isWebSocketPath := strings.HasPrefix(r.URL.Path, "/ws/")
+		isWebSocketPath := strings.HasPrefix(r.URL.Path, "/ws/") || 
+			r.URL.Path == "/vnc" ||
+			r.URL.Path == "/ws/vnc" ||
+			r.URL.Path == "/ws/vm-status"
 		isWebSocketUpgrade := r.Header.Get("Upgrade") == "websocket" || 
 			strings.ToLower(r.Header.Get("Connection")) == "upgrade"
+		
+		// Check if this is a static file path (should skip authentication)
+		isStaticPath := strings.HasPrefix(r.URL.Path, "/downloads/") || 
+			strings.HasPrefix(r.URL.Path, "/media/") ||
+			strings.HasPrefix(r.URL.Path, "/swagger/") ||
+			r.URL.Path == "/swagger" ||
+			r.URL.Path == "/docs"
 		
 		if isWebSocketPath || isWebSocketUpgrade {
 			logger.Log.Info("WebSocket request detected - skipping middleware",
@@ -176,6 +186,12 @@ func main() {
 				zap.String("origin", r.Header.Get("Origin")),
 				zap.String("remote_addr", r.RemoteAddr))
 			// Skip middleware for WebSocket connections - they need direct access to http.Hijacker
+			router.ServeHTTP(w, r)
+			return
+		}
+		
+		if isStaticPath {
+			// Skip middleware for static file paths
 			router.ServeHTTP(w, r)
 			return
 		}
@@ -219,10 +235,18 @@ func main() {
 		httpHandler.ServeHTTP(w, r)
 	})
 
-	// Start HTTP server
+	// Start HTTP server with optimized timeouts
 	addr := ":" + cfg.Port
+	server := &http.Server{
+		Addr:         addr,
+		Handler:      handler,
+		ReadTimeout:  15 * time.Second,  // Timeout for reading request body
+		WriteTimeout: 15 * time.Second,  // Timeout for writing response
+		IdleTimeout:  120 * time.Second, // Timeout for idle connections (keep-alive)
+		MaxHeaderBytes: 1 << 20,         // 1MB max header size
+	}
 	logger.Log.Info("Server starting", zap.String("address", addr))
-	if err := http.ListenAndServe(addr, handler); err != nil {
+	if err := server.ListenAndServe(); err != nil {
 		logger.Log.Fatal("Server failed", zap.Error(err))
 	}
 }

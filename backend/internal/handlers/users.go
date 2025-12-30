@@ -85,7 +85,7 @@ func (h *Handler) HandleListUsers(w http.ResponseWriter, r *http.Request, cfg *c
 		vmStats[vm.OwnerID] = stats
 	}
 
-	// Build response with pre-calculated stats
+	// Build response with pre-calculated stats (optimized: pre-allocate capacity)
 	usersWithStats := make([]UserWithStats, 0, len(users))
 	for _, user := range users {
 		stats := vmStats[user.ID]
@@ -129,9 +129,9 @@ func (h *Handler) HandleGetUser(w http.ResponseWriter, r *http.Request, cfg *con
 		return
 	}
 
-	// Get user's VMs
+	// Get user's VMs (optimized: only fetch necessary fields)
 	var vms []models.VM
-	h.DB.Where("owner_id = ?", user.ID).Find(&vms)
+	h.DB.Select("id", "uuid", "name", "status", "cpu", "memory", "owner_id", "created_at", "updated_at").Where("owner_id = ?", user.ID).Find(&vms)
 
 	response := struct {
 		UserResponse

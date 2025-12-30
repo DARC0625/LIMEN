@@ -24,12 +24,10 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
-	User      struct {
-		ID       uint   `json:"id"`
-		Username string `json:"username"`
-	} `json:"user"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token,omitempty"` // Omitted from JSON, sent via cookie
+	ExpiresIn    int    `json:"expires_in"`              // Access token expiry in seconds (900 = 15 minutes)
+	TokenType    string `json:"token_type"`              // "Bearer"
 }
 
 type RegisterRequest struct {
@@ -84,9 +82,9 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 		return
 	}
 
-	// Find user
+	// Find user (optimized: only fetch necessary fields for authentication)
 	var user models.User
-	if err := h.DB.Where("username = ?", req.Username).First(&user).Error; err != nil {
+	if err := h.DB.Select("id", "username", "password", "role", "approved").Where("username = ?", req.Username).First(&user).Error; err != nil {
 		// Always return generic error message (zero-trust: don't reveal if user exists)
 		if err == gorm.ErrRecordNotFound {
 			// Use same error message as invalid password to prevent user enumeration
@@ -169,29 +167,87 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 		return
 	}
 
-	// Generate token with role and approval status
+	// Generate tokens with role and approval status
 	role := string(user.Role)
 	if role == "" {
 		role = string(models.RoleUser) // Default to user if role is empty
 	}
 	// Only generate token if user is approved (admin users are always approved)
 	approved := user.Approved || user.Role == models.RoleAdmin
-	token, err := auth.GenerateTokenWithApproval(user.ID, user.Username, role, approved, cfg.JWTSecret, 24)
+
+	// Generate Access Token (15 minutes)
+	accessToken, err := auth.GenerateAccessToken(user.ID, user.Username, role, approved, cfg.JWTSecret)
 	if err != nil {
-		logger.Log.Error("Failed to generate token", zap.Error(err))
+		logger.Log.Error("Failed to generate access token", zap.Error(err))
 		errors.WriteInternalError(w, err, false)
 		return
 	}
 
-	// Prepare response
-	response := LoginResponse{
-		Token:     token,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
+	// Generate Refresh Token (7 days)
+	refreshToken, tokenID, err := auth.GenerateRefreshToken(user.ID, user.Username, role, approved, cfg.JWTSecret)
+	if err != nil {
+		logger.Log.Error("Failed to generate refresh token", zap.Error(err))
+		errors.WriteInternalError(w, err, false)
+		return
 	}
-	response.User.ID = user.ID
-	response.User.Username = user.Username
 
-	logger.Log.Info("User logged in", zap.String("username", user.Username))
+	// Generate CSRF Token
+	csrfToken, err := security.GenerateCSRFToken()
+	if err != nil {
+		logger.Log.Error("Failed to generate CSRF token", zap.Error(err))
+		errors.WriteInternalError(w, err, false)
+		return
+	}
+
+	// Create session with tokens
+	sessionStore := auth.GetSessionStore()
+	refreshExpiresAt := time.Now().Add(7 * 24 * time.Hour) // 7 days
+	session, err := sessionStore.CreateSession(accessToken, refreshToken, tokenID, csrfToken, user.ID, user.Username, role, refreshExpiresAt)
+	if err != nil {
+		logger.Log.Error("Failed to create session", zap.Error(err))
+		errors.WriteInternalError(w, err, false)
+		return
+	}
+
+	// Set Refresh Token cookie
+	isHTTPS := r.Header.Get("X-Forwarded-Proto") == "https" || r.TLS != nil
+	refreshCookie := &http.Cookie{
+		Name:     "refresh_token",
+		Value:    refreshToken,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode, // Strict for maximum CSRF protection
+		Path:     "/",
+		MaxAge:   604800, // 7 days in seconds
+	}
+	if isHTTPS {
+		refreshCookie.Secure = true
+	}
+	http.SetCookie(w, refreshCookie)
+
+	// Set CSRF Token cookie (for client-side access)
+	csrfCookie := &http.Cookie{
+		Name:     "csrf_token",
+		Value:    csrfToken,
+		HttpOnly: false, // JavaScript needs access for X-CSRF-Token header
+		SameSite: http.SameSiteStrictMode,
+		Path:     "/",
+		MaxAge:   604800, // 7 days
+	}
+	if isHTTPS {
+		csrfCookie.Secure = true
+	}
+	http.SetCookie(w, csrfCookie)
+
+	// Prepare response (Refresh Token is sent via cookie, not in body)
+	response := LoginResponse{
+		AccessToken: accessToken,
+		ExpiresIn:   900,      // 15 minutes in seconds
+		TokenType:   "Bearer",
+	}
+
+	logger.Log.Info("User logged in",
+		zap.String("username", user.Username),
+		zap.String("session_id", session.ID))
 
 	// Update metrics
 	metrics.UserLoginTotal.Inc()
@@ -294,4 +350,461 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request, cfg *co
 		"username": user.Username,
 		"message":  "User created successfully",
 	})
+}
+
+// SessionResponse represents a session status response.
+type SessionResponse struct {
+	Valid       bool   `json:"valid"`
+	AccessToken string `json:"access_token,omitempty"`
+	Reason      string `json:"reason,omitempty"`
+	User        *struct {
+		ID       uint   `json:"id"`
+		Username string `json:"username"`
+		Role     string `json:"role"`
+	} `json:"user,omitempty"`
+}
+
+// CreateSessionRequest represents a request to create a session.
+type CreateSessionRequest struct {
+	AccessToken  string `json:"access_token,omitempty"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+}
+
+// RefreshTokenRequest represents a request to refresh access token.
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token,omitempty"` // Optional if sent via cookie
+}
+
+// RefreshTokenResponse represents a refresh token response.
+type RefreshTokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token,omitempty"` // Only if rotation is enabled
+	ExpiresIn    int    `json:"expires_in"`              // Access token expiry in seconds
+}
+
+// HandleGetSession handles GET /api/auth/session - Get current session status.
+// @Summary     Get session status
+// @Description Returns the current session status from refresh token cookie
+// @Tags        Authentication
+// @Accept      json
+// @Produce     json
+// @Param       X-CSRF-Token header string true "CSRF Token"
+// @Success     200  {object}  SessionResponse  "Session valid"
+// @Failure     401  {object}  SessionResponse  "Session invalid or expired"
+// @Failure     403  {object}  map[string]interface{}  "CSRF token missing or invalid"
+// @Router      /auth/session [get]
+func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
+	if r.Method != "GET" {
+		errors.WriteError(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+
+	// CSRF Token validation (required for all state-changing requests)
+	csrfToken := r.Header.Get("X-CSRF-Token")
+	if csrfToken == "" {
+		// Try to get from cookie as fallback
+		if cookie, err := r.Cookie("csrf_token"); err == nil {
+			csrfToken = cookie.Value
+		}
+	}
+
+	// Get refresh token from cookie
+	refreshToken := ""
+	if cookie, err := r.Cookie("refresh_token"); err == nil {
+		refreshToken = cookie.Value
+	}
+
+	// If no refresh token, try Authorization header (backward compatibility)
+	if refreshToken == "" {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader != "" {
+			// Return 401 - no refresh token but has access token
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(SessionResponse{
+				Valid:  false,
+				Reason: "세션이 만료되었습니다.",
+			})
+			return
+		}
+
+		// No refresh token and no access token
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(SessionResponse{
+			Valid:  false,
+			Reason: "세션이 만료되었습니다.",
+		})
+		return
+	}
+
+	// Validate refresh token
+	refreshClaims, err := auth.ValidateRefreshToken(refreshToken, cfg.JWTSecret)
+	if err != nil {
+		logger.Log.Warn("Invalid refresh token", zap.Error(err))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(SessionResponse{
+			Valid:  false,
+			Reason: "세션이 만료되었습니다.",
+		})
+		return
+	}
+
+	// Get session from store by refresh token
+	sessionStore := auth.GetSessionStore()
+	session, exists := sessionStore.GetSessionByRefreshToken(refreshToken)
+	if !exists {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(SessionResponse{
+			Valid:  false,
+			Reason: "세션이 만료되었습니다.",
+		})
+		return
+	}
+
+	// Validate CSRF token if provided
+	if csrfToken != "" && !sessionStore.ValidateCSRFToken(session.ID, csrfToken) {
+		logger.Log.Warn("Invalid CSRF token", zap.String("session_id", session.ID))
+		errors.WriteForbidden(w, "Invalid CSRF token")
+		return
+	}
+
+	// Generate new access token (refresh it)
+	newAccessToken, err := auth.GenerateAccessToken(session.UserID, session.Username, session.Role, refreshClaims.Approved, cfg.JWTSecret)
+	if err != nil {
+		logger.Log.Error("Failed to generate access token", zap.Error(err))
+		errors.WriteInternalError(w, err, false)
+		return
+	}
+
+	// Update session with new access token
+	sessionStore.UpdateSessionTokens(session.ID, newAccessToken, "", "")
+
+	// Session is valid
+	response := SessionResponse{
+		Valid:       true,
+		AccessToken: newAccessToken,
+		User: &struct {
+			ID       uint   `json:"id"`
+			Username string `json:"username"`
+			Role     string `json:"role"`
+		}{
+			ID:       session.UserID,
+			Username: session.Username,
+			Role:     session.Role,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleCreateSession handles POST /api/auth/session - Create a new session.
+// @Summary     Create session
+// @Description Creates a new session from access token and refresh token, sets refresh token cookie
+// @Tags        Authentication
+// @Accept      json
+// @Produce     json
+// @Param       tokens body CreateSessionRequest true "Access token and refresh token"
+// @Param       X-CSRF-Token header string true "CSRF Token"
+// @Success     200  {object}  map[string]interface{}  "Session created"
+// @Failure     400  {object}  map[string]interface{}  "Invalid request"
+// @Failure     401  {object}  map[string]interface{}  "Invalid token"
+// @Failure     403  {object}  map[string]interface{}  "CSRF token missing or invalid"
+// @Router      /auth/session [post]
+func (h *Handler) HandleCreateSession(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
+	if r.Method != "POST" {
+		errors.WriteError(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+
+	// CSRF Token validation
+	csrfToken := r.Header.Get("X-CSRF-Token")
+	if csrfToken == "" {
+		errors.WriteForbidden(w, "CSRF token required")
+		return
+	}
+
+	var req CreateSessionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		errors.WriteBadRequest(w, "Invalid request body", err)
+		return
+	}
+
+	// Validate access token
+	accessClaims, err := auth.ValidateToken(req.AccessToken, cfg.JWTSecret)
+	if err != nil {
+		logger.Log.Warn("Invalid access token for session creation", zap.Error(err))
+		errors.WriteUnauthorized(w, "Invalid access token")
+		return
+	}
+
+	// Validate refresh token
+	refreshClaims, err := auth.ValidateRefreshToken(req.RefreshToken, cfg.JWTSecret)
+	if err != nil {
+		logger.Log.Warn("Invalid refresh token for session creation", zap.Error(err))
+		errors.WriteUnauthorized(w, "Invalid refresh token")
+		return
+	}
+
+	// Verify tokens belong to same user
+	if accessClaims.UserID != refreshClaims.UserID {
+		errors.WriteUnauthorized(w, "Token mismatch")
+		return
+	}
+
+	// Check if user is approved
+	if !refreshClaims.Approved && refreshClaims.Role != "admin" {
+		errors.WriteForbidden(w, "Account pending approval")
+		return
+	}
+
+	// Create session with tokens
+	sessionStore := auth.GetSessionStore()
+	refreshExpiresAt := time.Now().Add(7 * 24 * time.Hour) // 7 days
+	session, err := sessionStore.CreateSession(req.AccessToken, req.RefreshToken, refreshClaims.TokenID, csrfToken, refreshClaims.UserID, refreshClaims.Username, refreshClaims.Role, refreshExpiresAt)
+	if err != nil {
+		logger.Log.Error("Failed to create session", zap.Error(err))
+		errors.WriteInternalError(w, err, false)
+		return
+	}
+
+	// Set Refresh Token cookie
+	isHTTPS := r.Header.Get("X-Forwarded-Proto") == "https" || r.TLS != nil
+	refreshCookie := &http.Cookie{
+		Name:     "refresh_token",
+		Value:    req.RefreshToken,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Path:     "/",
+		MaxAge:   604800, // 7 days
+	}
+	if isHTTPS {
+		refreshCookie.Secure = true
+	}
+	http.SetCookie(w, refreshCookie)
+
+	// Set CSRF Token cookie
+	csrfCookie := &http.Cookie{
+		Name:     "csrf_token",
+		Value:    csrfToken,
+		HttpOnly: false,
+		SameSite: http.SameSiteStrictMode,
+		Path:     "/",
+		MaxAge:   604800, // 7 days
+	}
+	if isHTTPS {
+		csrfCookie.Secure = true
+	}
+	http.SetCookie(w, csrfCookie)
+
+	logger.Log.Info("Session created",
+		zap.String("session_id", session.ID),
+		zap.Uint("user_id", refreshClaims.UserID),
+		zap.String("username", refreshClaims.Username))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Session created successfully",
+	})
+}
+
+// HandleDeleteSession handles DELETE /api/auth/session - Delete current session.
+// @Summary     Delete session
+// @Description Deletes the current session and clears refresh token cookie
+// @Tags        Authentication
+// @Accept      json
+// @Produce     json
+// @Param       X-CSRF-Token header string true "CSRF Token"
+// @Success     200  {object}  map[string]interface{}  "Session deleted"
+// @Failure     403  {object}  map[string]interface{}  "CSRF token missing or invalid"
+// @Router      /auth/session [delete]
+func (h *Handler) HandleDeleteSession(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
+	if r.Method != "DELETE" {
+		errors.WriteError(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+
+	// CSRF Token validation
+	csrfToken := r.Header.Get("X-CSRF-Token")
+	if csrfToken == "" {
+		// Try to get from cookie as fallback
+		if cookie, err := r.Cookie("csrf_token"); err == nil {
+			csrfToken = cookie.Value
+		}
+	}
+
+	// Get refresh token from cookie
+	refreshToken := ""
+	if cookie, err := r.Cookie("refresh_token"); err == nil {
+		refreshToken = cookie.Value
+	}
+
+	// Delete session from store
+	if refreshToken != "" {
+		sessionStore := auth.GetSessionStore()
+		session, exists := sessionStore.GetSessionByRefreshToken(refreshToken)
+		if exists {
+			// Validate CSRF token if provided
+			if csrfToken != "" && !sessionStore.ValidateCSRFToken(session.ID, csrfToken) {
+				logger.Log.Warn("Invalid CSRF token for session deletion", zap.String("session_id", session.ID))
+				errors.WriteForbidden(w, "Invalid CSRF token")
+				return
+			}
+			sessionStore.DeleteSession(session.ID)
+		}
+	}
+
+	// Delete refresh token cookie
+	isHTTPS := r.Header.Get("X-Forwarded-Proto") == "https" || r.TLS != nil
+	refreshCookie := &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Path:     "/",
+		MaxAge:   -1, // Delete immediately
+	}
+	if isHTTPS {
+		refreshCookie.Secure = true
+	}
+	http.SetCookie(w, refreshCookie)
+
+	// Delete CSRF token cookie
+	csrfCookie := &http.Cookie{
+		Name:     "csrf_token",
+		Value:    "",
+		HttpOnly: false,
+		SameSite: http.SameSiteStrictMode,
+		Path:     "/",
+		MaxAge:   -1,
+	}
+	if isHTTPS {
+		csrfCookie.Secure = true
+	}
+	http.SetCookie(w, csrfCookie)
+
+	logger.Log.Info("Session deleted", zap.String("refresh_token", refreshToken[:min(10, len(refreshToken))]+"..."))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Session deleted successfully",
+	})
+}
+
+// HandleRefreshToken handles POST /api/auth/refresh - Refresh access token.
+// @Summary     Refresh access token
+// @Description Refreshes the access token using refresh token from cookie or body
+// @Tags        Authentication
+// @Accept      json
+// @Produce     json
+// @Param       refresh_token body RefreshTokenRequest false "Refresh token (optional if sent via cookie)"
+// @Success     200  {object}  RefreshTokenResponse  "Token refreshed"
+// @Failure     401  {object}  map[string]interface{}  "Invalid or expired refresh token"
+// @Router      /auth/refresh [post]
+func (h *Handler) HandleRefreshToken(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
+	if r.Method != "POST" {
+		errors.WriteError(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+
+	// Get refresh token from cookie first, then from body
+	refreshToken := ""
+	if cookie, err := r.Cookie("refresh_token"); err == nil {
+		refreshToken = cookie.Value
+	}
+
+	// If not in cookie, try body
+	if refreshToken == "" {
+		var req RefreshTokenRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.RefreshToken != "" {
+			refreshToken = req.RefreshToken
+		}
+	}
+
+	if refreshToken == "" {
+		errors.WriteUnauthorized(w, "Refresh token required")
+		return
+	}
+
+	// Validate refresh token
+	refreshClaims, err := auth.ValidateRefreshToken(refreshToken, cfg.JWTSecret)
+	if err != nil {
+		logger.Log.Warn("Invalid refresh token", zap.Error(err))
+		errors.WriteUnauthorized(w, "Invalid or expired refresh token")
+		return
+	}
+
+	// Get session from store
+	sessionStore := auth.GetSessionStore()
+	session, exists := sessionStore.GetSessionByRefreshToken(refreshToken)
+	if !exists {
+		errors.WriteUnauthorized(w, "Invalid or expired refresh token")
+		return
+	}
+
+	// Generate new access token
+	newAccessToken, err := auth.GenerateAccessToken(refreshClaims.UserID, refreshClaims.Username, refreshClaims.Role, refreshClaims.Approved, cfg.JWTSecret)
+	if err != nil {
+		logger.Log.Error("Failed to generate access token", zap.Error(err))
+		errors.WriteInternalError(w, err, false)
+		return
+	}
+
+	// Token Rotation: Generate new refresh token and invalidate old one
+	newRefreshToken, newTokenID, err := auth.GenerateRefreshToken(refreshClaims.UserID, refreshClaims.Username, refreshClaims.Role, refreshClaims.Approved, cfg.JWTSecret)
+	if err != nil {
+		logger.Log.Error("Failed to generate refresh token", zap.Error(err))
+		errors.WriteInternalError(w, err, false)
+		return
+	}
+
+	// Update session with new tokens (rotation)
+	refreshExpiresAt := time.Now().Add(7 * 24 * time.Hour) // 7 days
+	sessionStore.UpdateSessionTokens(session.ID, newAccessToken, newRefreshToken, newTokenID)
+	session.RefreshToken = newRefreshToken
+	session.TokenID = newTokenID
+	session.ExpiresAt = refreshExpiresAt
+
+	// Set new refresh token cookie
+	isHTTPS := r.Header.Get("X-Forwarded-Proto") == "https" || r.TLS != nil
+	refreshCookie := &http.Cookie{
+		Name:     "refresh_token",
+		Value:    newRefreshToken,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Path:     "/",
+		MaxAge:   604800, // 7 days
+	}
+	if isHTTPS {
+		refreshCookie.Secure = true
+	}
+	http.SetCookie(w, refreshCookie)
+
+	// Prepare response
+	response := RefreshTokenResponse{
+		AccessToken: newAccessToken,
+		ExpiresIn:   900, // 15 minutes
+	}
+
+	logger.Log.Info("Access token refreshed",
+		zap.Uint("user_id", refreshClaims.UserID),
+		zap.String("username", refreshClaims.Username))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+// Helper function for min
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

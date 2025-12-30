@@ -75,27 +75,61 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Extract token from Authorization header
+			// Try to get access token from Authorization header first, then refresh token from cookie
+			var tokenString string
+			var claims *auth.Claims
+			var err error
+
+			// 1. Try Authorization header (Access Token)
 			authHeader := r.Header.Get("Authorization")
-			tokenString, err := auth.ExtractTokenFromHeader(authHeader)
-			if err != nil {
-				logger.Log.Warn("Auth middleware - no token found, returning 401",
-					zap.String("path", r.URL.Path),
-					zap.String("method", r.Method),
-					zap.String("error", err.Error()))
-				errors.WriteUnauthorized(w, "Authentication required")
-				return
+			tokenString, err = auth.ExtractTokenFromHeader(authHeader)
+			if err == nil {
+				claims, err = auth.ValidateToken(tokenString, cfg.JWTSecret)
+				if err == nil {
+					logger.Log.Debug("Authenticated via Authorization header",
+						zap.String("path", r.URL.Path),
+						zap.Uint("user_id", claims.UserID))
+				}
 			}
 
-			// Validate token
-			claims, err := auth.ValidateToken(tokenString, cfg.JWTSecret)
-			if err != nil {
-				if err == auth.ErrTokenExpired {
-					errors.WriteUnauthorized(w, "Token expired")
-				} else {
-					errors.WriteUnauthorized(w, "Invalid token")
+			// 2. Fallback to refresh token cookie (validate and generate new access token)
+			if tokenString == "" || err != nil {
+				if cookie, err := r.Cookie("refresh_token"); err == nil {
+					refreshToken := cookie.Value
+					refreshClaims, refreshErr := auth.ValidateRefreshToken(refreshToken, cfg.JWTSecret)
+					if refreshErr == nil {
+						// Get session to verify refresh token is valid
+						sessionStore := auth.GetSessionStore()
+						session, exists := sessionStore.GetSessionByRefreshToken(refreshToken)
+						if exists {
+							// Generate new access token from refresh token
+							tokenString, err = auth.GenerateAccessToken(refreshClaims.UserID, refreshClaims.Username, refreshClaims.Role, refreshClaims.Approved, cfg.JWTSecret)
+							if err == nil {
+								// Create claims from refresh token
+								claims = &auth.Claims{
+									UserID:   refreshClaims.UserID,
+									Username: refreshClaims.Username,
+									Role:     refreshClaims.Role,
+									Approved: refreshClaims.Approved,
+								}
+								// Update session with new access token
+								sessionStore.UpdateSessionTokens(session.ID, tokenString, "", "")
+								logger.Log.Debug("Authenticated via refresh token cookie",
+									zap.String("path", r.URL.Path),
+									zap.Uint("user_id", claims.UserID))
+							}
+						}
+					}
 				}
-				logger.Log.Warn("Authentication failed", zap.Error(err), zap.String("path", r.URL.Path))
+			}
+
+			// If both methods failed, return 401
+			if tokenString == "" || err != nil {
+				logger.Log.Warn("Auth middleware - no valid token found, returning 401",
+					zap.String("path", r.URL.Path),
+					zap.String("method", r.Method),
+					zap.Error(err))
+				errors.WriteUnauthorized(w, "Authentication required")
 				return
 			}
 
@@ -133,6 +167,8 @@ func isPublicEndpoint(path string) bool {
 		"/api/health_proxy", // Health check proxy endpoint
 		"/api/auth/login",
 		"/api/auth/register",
+		"/api/auth/session", // Session management endpoints (GET, POST, DELETE)
+		"/api/auth/refresh", // Token refresh endpoint
 		"/agent",            // Agent reverse-proxy path (public metrics)
 		"/apiauth/login",    // Handle Envoy rewrite issue
 		"/apiauth/register", // Handle Envoy rewrite issue

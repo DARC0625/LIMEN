@@ -37,14 +37,23 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 					}
 				}
 				if allowAll {
-					w.Header().Set("Access-Control-Allow-Origin", "*")
+					// Note: Cannot use "*" with Access-Control-Allow-Credentials: true
+					// If credentials are required, must specify exact origin
+					// For now, use the request origin if "*" is configured
+					if origin != "" {
+						w.Header().Set("Access-Control-Allow-Origin", origin)
+					} else {
+						w.Header().Set("Access-Control-Allow-Origin", "*")
+					}
 				} else {
 					w.Header().Set("Access-Control-Allow-Origin", origin)
 				}
 			}
 
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token")
+			// IMPORTANT: Access-Control-Allow-Credentials must be "true" for cookies to work
+			// When this is set, Access-Control-Allow-Origin cannot be "*" - must be specific origin
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 			if r.Method == "OPTIONS" {

@@ -55,6 +55,7 @@ func TestVMAction_IsValid(t *testing.T) {
 	}{
 		{"valid start", VMActionStart, true},
 		{"valid stop", VMActionStop, true},
+		{"valid restart", VMActionRestart, true},
 		{"valid delete", VMActionDelete, true},
 		{"valid update", VMActionUpdate, true},
 		{"invalid action", VMAction("invalid"), false},
@@ -79,6 +80,7 @@ func TestVMAction_String(t *testing.T) {
 	}{
 		{"start", VMActionStart, "start"},
 		{"stop", VMActionStop, "stop"},
+		{"restart", VMActionRestart, "restart"},
 		{"delete", VMActionDelete, "delete"},
 		{"update", VMActionUpdate, "update"},
 	}

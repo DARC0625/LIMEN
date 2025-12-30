@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -130,12 +131,24 @@ func (s *VMService) RestoreSnapshot(snapshotID uint) error {
 			}
 		}
 
+		// Optimized: Use context with timeout instead of fixed sleep
 		// Wait for VM to shut down (max 30 seconds)
-		for i := 0; i < 30; i++ {
-			time.Sleep(1 * time.Second)
-			active, _ := dom.IsActive()
-			if !active {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Log.Warn("Timeout waiting for VM to shut down", zap.String("vm_name", vm.Name))
 				break
+			case <-ticker.C:
+				active, _ := dom.IsActive()
+				if !active {
+					return nil
+				}
 			}
 		}
 	}

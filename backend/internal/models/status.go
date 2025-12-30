@@ -32,6 +32,7 @@ type VMAction string
 const (
 	VMActionStart  VMAction = "start"
 	VMActionStop   VMAction = "stop"
+	VMActionRestart VMAction = "restart"
 	VMActionDelete VMAction = "delete"
 	VMActionUpdate VMAction = "update"
 )
@@ -44,7 +45,7 @@ func (a VMAction) String() string {
 // IsValid checks if the action is valid.
 func (a VMAction) IsValid() bool {
 	switch a {
-	case VMActionStart, VMActionStop, VMActionDelete, VMActionUpdate:
+	case VMActionStart, VMActionStop, VMActionRestart, VMActionDelete, VMActionUpdate:
 		return true
 	}
 	return false

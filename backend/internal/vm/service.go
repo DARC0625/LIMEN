@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"net"
@@ -32,10 +33,10 @@ func NewVMService(db *gorm.DB, libvirtURI, isoDir, vmDir string) (*VMService, er
 
 	// Ensure directories exist with proper permissions
 	if err := os.MkdirAll(isoDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create ISO directory: %v", err)
+		return nil, fmt.Errorf("failed to create ISO directory: %w", err)
 	}
 	if err := os.MkdirAll(vmDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create VM directory: %v", err)
+		return nil, fmt.Errorf("failed to create VM directory: %w", err)
 	}
 
 	return &VMService{
@@ -111,13 +112,13 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
 
 	cmd := exec.Command("qemu-img", "create", "-f", "qcow2", vmDiskPath, diskSize)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to create vm disk: %v, output: %s", err, string(out))
+		return fmt.Errorf("failed to create vm disk: %w, output: %s", err, string(out))
 	}
 
 	// 2. Ensure ISO exists (Using DB lookup)
 	isoPath, err := s.EnsureISO(osType)
 	if err != nil {
-		return fmt.Errorf("failed to ensure iso: %v", err)
+		return fmt.Errorf("failed to ensure iso: %w", err)
 	}
 
 	// 3. Define VM with CDROM boot enabled
@@ -230,11 +231,12 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
 
 	dom, err := s.conn.DomainDefineXML(vmXML)
 	if err != nil {
-		return fmt.Errorf("failed to define domain: %v", err)
+		return fmt.Errorf("failed to define domain: %w", err)
 	}
+	defer dom.Free()
 
 	if err := dom.Create(); err != nil {
-		return fmt.Errorf("failed to start domain: %v", err)
+		return fmt.Errorf("failed to start domain: %w", err)
 	}
 
 	return nil
@@ -337,14 +339,14 @@ func (s *VMService) StopVM(name string) error {
 func (s *VMService) StartVM(name string) error {
 	dom, err := s.conn.LookupDomainByName(name)
 	if err != nil {
-		return fmt.Errorf("VM not found: %v", err)
+		return fmt.Errorf("VM not found: %w", err)
 	}
 	defer dom.Free()
 
 	// Check if VM is already running
 	active, err := dom.IsActive()
 	if err != nil {
-		return fmt.Errorf("failed to check VM status: %v", err)
+		return fmt.Errorf("failed to check VM status: %w", err)
 	}
 	if active {
 		logger.Log.Info("VM is already running", zap.String("vm_name", name))
@@ -357,16 +359,400 @@ func (s *VMService) StartVM(name string) error {
 		errStr := err.Error()
 		if strings.Contains(errStr, "Cannot access storage file") {
 			// Extract ISO path from error
-			return fmt.Errorf("ISO file not found. Please check VM configuration. Original error: %v", err)
+			return fmt.Errorf("ISO file not found. Please check VM configuration. Original error: %w", err)
 		}
-		return fmt.Errorf("failed to start VM: %v", err)
+		return fmt.Errorf("failed to start VM: %w", err)
 	}
 
-	// Wait for VM to fully start and VNC to initialize
-	// VNC port assignment can take a few seconds
-	time.Sleep(3 * time.Second)
+	// Optimized: Use context with timeout instead of fixed sleep
+	// Wait for VM to fully start and VNC to initialize (max 5 seconds)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	
+	vmStarted := false
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Log.Warn("Timeout waiting for VM to start", zap.String("vm_name", name))
+			break
+		case <-ticker.C:
+			active, err := dom.IsActive()
+			if err == nil && active {
+				vmStarted = true
+				break
+			}
+		}
+		if vmStarted {
+			break
+		}
+	}
 
 	return nil
+}
+
+// RestartVM restarts a VM (stops and starts)
+// Media is not automatically detached - user must manually detach if needed
+func (s *VMService) RestartVM(name string) error {
+	// Stop VM first
+	if err := s.StopVM(name); err != nil {
+		return fmt.Errorf("failed to stop VM: %w", err)
+	}
+	
+	// Wait a moment for VM to fully stop (optimized: use shorter wait with status check)
+	time.Sleep(1 * time.Second)
+	
+	// Verify VM is stopped before starting
+	maxWait := 5 * time.Second
+	waitInterval := 500 * time.Millisecond
+	for elapsed := time.Duration(0); elapsed < maxWait; elapsed += waitInterval {
+		dom, err := s.conn.LookupDomainByName(name)
+		if err != nil {
+			break // VM might not exist, try to start anyway
+		}
+		active, _ := dom.IsActive()
+		dom.Free()
+		if !active {
+			break // VM is stopped
+		}
+		time.Sleep(waitInterval)
+	}
+	
+	// Start VM
+	if err := s.StartVM(name); err != nil {
+		return fmt.Errorf("failed to start VM: %w", err)
+	}
+	
+	return nil
+}
+
+// parseDomainXML parses VM XML and extracts disk information
+func (s *VMService) parseDomainXML(xmlDesc string) (struct {
+	Devices struct {
+		Disks []struct {
+			Type   string `xml:"type,attr"`
+			Device string `xml:"device,attr"`
+			Source struct {
+				File string `xml:"file,attr"`
+			} `xml:"source"`
+			Target struct {
+				Dev string `xml:"dev,attr"`
+			} `xml:"target"`
+		} `xml:"disk"`
+	} `xml:"devices"`
+}, error) {
+	var domainXML struct {
+		Devices struct {
+			Disks []struct {
+				Type   string `xml:"type,attr"`
+				Device string `xml:"device,attr"`
+				Source struct {
+					File string `xml:"file,attr"`
+				} `xml:"source"`
+				Target struct {
+					Dev string `xml:"dev,attr"`
+				} `xml:"target"`
+			} `xml:"disk"`
+		} `xml:"devices"`
+	}
+
+	if err := xml.Unmarshal([]byte(xmlDesc), &domainXML); err != nil {
+		return domainXML, fmt.Errorf("failed to parse VM XML: %w", err)
+	}
+	return domainXML, nil
+}
+
+// updateCDROMSource updates CDROM source in XML
+// Uses string replacement but with proper escaping to handle special characters
+func (s *VMService) updateCDROMSource(xmlDesc string, newSource string) (string, error) {
+	domainXML, err := s.parseDomainXML(xmlDesc)
+	if err != nil {
+		return "", err
+	}
+
+	// Find CDROM disk and get current source
+	var currentSource string
+	var cdromFound bool
+	for _, disk := range domainXML.Devices.Disks {
+		if disk.Device == "cdrom" {
+			cdromFound = true
+			currentSource = disk.Source.File
+			break
+		}
+	}
+
+	if !cdromFound {
+		return "", fmt.Errorf("CDROM device not found in VM configuration")
+	}
+
+	// Escape XML special characters in paths
+	escapeXML := func(s string) string {
+		s = strings.ReplaceAll(s, "&", "&amp;")
+		s = strings.ReplaceAll(s, "<", "&lt;")
+		s = strings.ReplaceAll(s, ">", "&gt;")
+		s = strings.ReplaceAll(s, "'", "&apos;")
+		s = strings.ReplaceAll(s, `"`, "&quot;")
+		return s
+	}
+
+	// Build replacement patterns
+	var oldPattern, newPattern string
+	
+	// Handle detach (newSource is empty)
+	if newSource == "" {
+		if currentSource == "" {
+			// Already detached, nothing to do
+			return xmlDesc, nil
+		}
+		// Remove existing source - try multiple patterns
+		escapedCurrent := escapeXML(currentSource)
+		
+		// Try single quote pattern first
+		oldPattern = fmt.Sprintf(`<source file='%s'/>`, escapedCurrent)
+		if strings.Contains(xmlDesc, oldPattern) {
+			newPattern = `<source/>`
+		} else {
+			// Try double quote pattern
+			oldPattern = fmt.Sprintf(`<source file="%s"/>`, escapedCurrent)
+			if strings.Contains(xmlDesc, oldPattern) {
+				newPattern = `<source/>`
+			} else {
+				// Try with closing tag (single quote)
+				oldPattern = fmt.Sprintf(`<source file='%s'></source>`, escapedCurrent)
+				if strings.Contains(xmlDesc, oldPattern) {
+					newPattern = `<source></source>`
+				} else {
+					// Try with closing tag (double quote)
+					oldPattern = fmt.Sprintf(`<source file="%s"></source>`, escapedCurrent)
+					if strings.Contains(xmlDesc, oldPattern) {
+						newPattern = `<source></source>`
+					} else {
+						return "", fmt.Errorf("could not find CDROM source pattern in XML for detach")
+					}
+				}
+			}
+		}
+	} else {
+		// Handle attach (newSource is not empty)
+		escapedNew := escapeXML(newSource)
+		if currentSource == "" {
+			// Empty source - look for <source/> or <source></source>
+			oldPattern = `<source/>`
+			newPattern = fmt.Sprintf(`<source file='%s'/>`, escapedNew)
+			// Also try with closing tag
+			if !strings.Contains(xmlDesc, oldPattern) {
+				oldPattern = `<source></source>`
+				newPattern = fmt.Sprintf(`<source file='%s'></source>`, escapedNew)
+			}
+		} else {
+			// Replace existing source
+			escapedCurrent := escapeXML(currentSource)
+			// Try both single and double quotes
+			oldPattern = fmt.Sprintf(`<source file='%s'/>`, escapedCurrent)
+			newPattern = fmt.Sprintf(`<source file='%s'/>`, escapedNew)
+			if !strings.Contains(xmlDesc, oldPattern) {
+				oldPattern = fmt.Sprintf(`<source file="%s"/>`, escapedCurrent)
+				newPattern = fmt.Sprintf(`<source file="%s"/>`, escapedNew)
+			}
+		}
+	}
+
+	if !strings.Contains(xmlDesc, oldPattern) {
+		return "", fmt.Errorf("could not find CDROM source pattern in XML")
+	}
+
+	updatedXML := strings.Replace(xmlDesc, oldPattern, newPattern, 1)
+	return updatedXML, nil
+}
+
+// DetachMedia removes ISO/CDROM media from a VM
+func (s *VMService) DetachMedia(name string) error {
+	dom, err := s.conn.LookupDomainByName(name)
+	if err != nil {
+		return fmt.Errorf("VM not found: %w", err)
+	}
+	defer dom.Free()
+
+	// Get current XML
+	xmlDesc, err := dom.GetXMLDesc(0)
+	if err != nil {
+		return fmt.Errorf("failed to get VM XML: %w", err)
+	}
+
+	// Parse XML to find CDROM disk
+	domainXML, err := s.parseDomainXML(xmlDesc)
+	if err != nil {
+		return err
+	}
+
+	// Find CDROM disk and get current ISO path for logging
+	var currentISOPath string
+	var cdromFound bool
+	for _, disk := range domainXML.Devices.Disks {
+		if disk.Device == "cdrom" {
+			cdromFound = true
+			currentISOPath = disk.Source.File
+			break
+		}
+	}
+
+	if !cdromFound {
+		return fmt.Errorf("no CDROM device found in VM configuration")
+	}
+
+	// Update XML to remove source (empty source = no media)
+	updatedXML, err := s.updateCDROMSource(xmlDesc, "")
+	if err != nil {
+		return fmt.Errorf("failed to update CDROM source: %w", err)
+	}
+
+	// Update domain definition
+	_, err = s.conn.DomainDefineXML(updatedXML)
+	if err != nil {
+		return fmt.Errorf("failed to detach media: %w", err)
+	}
+
+	logger.Log.Info("CDROM media detached",
+		zap.String("vm_name", name),
+		zap.String("iso_path", currentISOPath))
+
+	return nil
+}
+
+// AttachMedia attaches ISO/CDROM media to a VM
+func (s *VMService) AttachMedia(name string, isoPath string) error {
+	// Verify ISO file exists before proceeding
+	if _, err := os.Stat(isoPath); os.IsNotExist(err) {
+		return fmt.Errorf("ISO file not found: %s", isoPath)
+	}
+
+	dom, err := s.conn.LookupDomainByName(name)
+	if err != nil {
+		return fmt.Errorf("VM not found: %w", err)
+	}
+	defer dom.Free()
+
+	// Get current XML
+	xmlDesc, err := dom.GetXMLDesc(0)
+	if err != nil {
+		return fmt.Errorf("failed to get VM XML: %w", err)
+	}
+
+	// Parse XML to check if CDROM exists
+	domainXML, err := s.parseDomainXML(xmlDesc)
+	if err != nil {
+		return err
+	}
+
+	// Find CDROM disk
+	var cdromExists bool
+	for _, disk := range domainXML.Devices.Disks {
+		if disk.Device == "cdrom" {
+			cdromExists = true
+			break
+		}
+	}
+
+	if !cdromExists {
+		return fmt.Errorf("CDROM device not found in VM configuration. Please recreate VM with ISO support")
+	}
+
+	// Update XML with new ISO path
+	updatedXML, err := s.updateCDROMSource(xmlDesc, isoPath)
+	if err != nil {
+		return fmt.Errorf("failed to update CDROM source: %w", err)
+	}
+
+	// Update domain definition
+	_, err = s.conn.DomainDefineXML(updatedXML)
+	if err != nil {
+		return fmt.Errorf("failed to attach media: %w", err)
+	}
+
+	logger.Log.Info("CDROM media attached",
+		zap.String("vm_name", name),
+		zap.String("iso_path", isoPath))
+
+	return nil
+}
+
+// GetCurrentMedia returns the currently attached media (ISO) path for a VM
+func (s *VMService) GetCurrentMedia(name string) (string, error) {
+	dom, err := s.conn.LookupDomainByName(name)
+	if err != nil {
+		return "", fmt.Errorf("VM not found: %w", err)
+	}
+	defer dom.Free()
+
+	// Get current XML
+	xmlDesc, err := dom.GetXMLDesc(0)
+	if err != nil {
+		return "", fmt.Errorf("failed to get VM XML: %w", err)
+	}
+
+	// Parse XML to find CDROM disk
+	domainXML, err := s.parseDomainXML(xmlDesc)
+	if err != nil {
+		return "", err
+	}
+
+	// Find CDROM disk and get current ISO path
+	for _, disk := range domainXML.Devices.Disks {
+		if disk.Device == "cdrom" {
+			if disk.Source.File != "" {
+				return disk.Source.File, nil
+			}
+			// CDROM exists but no media attached
+			return "", nil
+		}
+	}
+
+	// No CDROM device found
+	return "", fmt.Errorf("no CDROM device found in VM configuration")
+}
+
+// ListISOs returns a list of available ISO files in the ISO directory
+func (s *VMService) ListISOs() ([]map[string]interface{}, error) {
+	files, err := os.ReadDir(s.isoDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []map[string]interface{}{}, nil // Return empty list if directory doesn't exist
+		}
+		return nil, fmt.Errorf("failed to read ISO directory: %w", err)
+	}
+
+	var isos []map[string]interface{}
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		// Check if file has ISO extension (case-insensitive)
+		name := file.Name()
+		ext := strings.ToLower(filepath.Ext(name))
+		if ext != ".iso" && ext != ".img" {
+			continue
+		}
+
+		// Get file info
+		info, err := file.Info()
+		if err != nil {
+			logger.Log.Warn("Failed to get file info", zap.String("file", name), zap.Error(err))
+			continue
+		}
+
+		fullPath := filepath.Join(s.isoDir, name)
+		isos = append(isos, map[string]interface{}{
+			"name":     name,
+			"path":     fullPath,
+			"size":     info.Size(),
+			"modified": info.ModTime().Format(time.RFC3339),
+		})
+	}
+
+	return isos, nil
 }
 
 func (s *VMService) GetVNCPort(name string) (string, error) {
@@ -377,14 +763,14 @@ func (s *VMService) GetVNCPort(name string) (string, error) {
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		dom, err := s.conn.LookupDomainByName(name)
 		if err != nil {
-			return "", fmt.Errorf("VM not found: %v", err)
+			return "", fmt.Errorf("VM not found: %w", err)
 		}
 
 		// Check if VM is running
 		active, err := dom.IsActive()
 		if err != nil {
 			dom.Free()
-			return "", fmt.Errorf("failed to check VM status: %v", err)
+			return "", fmt.Errorf("failed to check VM status: %w", err)
 		}
 		if !active {
 			dom.Free()
@@ -394,7 +780,7 @@ func (s *VMService) GetVNCPort(name string) (string, error) {
 		xmlDesc, err := dom.GetXMLDesc(0)
 		if err != nil {
 			dom.Free()
-			return "", fmt.Errorf("failed to get VM XML: %v", err)
+			return "", fmt.Errorf("failed to get VM XML: %w", err)
 		}
 		dom.Free()
 
@@ -409,7 +795,7 @@ func (s *VMService) GetVNCPort(name string) (string, error) {
 		}
 
 		if err := xml.Unmarshal([]byte(xmlDesc), &domainXML); err != nil {
-			return "", fmt.Errorf("failed to parse VM XML: %v", err)
+			return "", fmt.Errorf("failed to parse VM XML: %w", err)
 		}
 
 		for _, g := range domainXML.Devices.Graphics {
@@ -489,7 +875,7 @@ func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
 	// Get current max vCPU count
 	maxVcpu, err := dom.GetMaxVcpus()
 	if err != nil {
-		return fmt.Errorf("failed to get max vcpus: %v", err)
+		return fmt.Errorf("failed to get max vcpus: %w", err)
 	}
 
 	// If requested vCPU is greater than max, update max first
@@ -497,7 +883,7 @@ func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
 		// DOMAIN_VCPU_MAXIMUM = 1 (set maximum)
 		maxVcpuFlags := libvirt.DomainVcpuFlags(1)
 		if err := dom.SetVcpusFlags(uint(vcpu), maxVcpuFlags); err != nil {
-			return fmt.Errorf("failed to set max vcpus: %v", err)
+			return fmt.Errorf("failed to set max vcpus: %w", err)
 		}
 	}
 
@@ -506,14 +892,14 @@ func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
 	memFlags := libvirt.DomainMemoryModFlags(2)
 
 	if err := dom.SetMemoryFlags(uint64(memoryMB*1024), memFlags); err != nil {
-		return fmt.Errorf("failed to set memory: %v", err)
+		return fmt.Errorf("failed to set memory: %w", err)
 	}
 
 	// Update VCPU (Config)
 	// DOMAIN_VCPU_CONFIG = 2
 	vcpuFlags := libvirt.DomainVcpuFlags(2)
 	if err := dom.SetVcpusFlags(uint(vcpu), vcpuFlags); err != nil {
-		return fmt.Errorf("failed to set vcpus: %v", err)
+		return fmt.Errorf("failed to set vcpus: %w", err)
 	}
 
 	return nil

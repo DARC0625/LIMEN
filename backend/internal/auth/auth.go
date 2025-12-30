@@ -3,6 +3,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"time"
 
@@ -12,10 +14,22 @@ import (
 )
 
 var (
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrTokenExpired       = errors.New("token expired")
-	ErrInvalidToken       = errors.New("invalid token")
+	ErrInvalidCredentials   = errors.New("invalid credentials")
+	ErrTokenExpired         = errors.New("token expired")
+	ErrInvalidToken         = errors.New("invalid token")
+	ErrInvalidRefreshToken  = errors.New("invalid or expired refresh token")
+	ErrInvalidCSRFToken     = errors.New("invalid CSRF token")
 )
+
+// RefreshTokenClaims represents JWT claims for refresh tokens.
+type RefreshTokenClaims struct {
+	UserID   uint   `json:"user_id"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
+	Approved bool   `json:"approved"`
+	TokenID  string `json:"token_id"` // Unique token ID for rotation
+	jwt.RegisteredClaims
+}
 
 // HashPassword hashes a password using Argon2id.
 // Argon2id is the winner of the Password Hashing Competition (PHC)
@@ -114,4 +128,87 @@ func ExtractTokenFromHeader(authHeader string) (string, error) {
 	}
 
 	return authHeader[len(bearerPrefix):], nil
+}
+
+// GenerateAccessToken generates a short-lived access token (15 minutes).
+func GenerateAccessToken(userID uint, username, role string, approved bool, secret string) (string, error) {
+	expirationTime := time.Now().Add(15 * time.Minute) // 15 minutes
+	claims := &Claims{
+		UserID:   userID,
+		Username: username,
+		Role:     role,
+		Approved: approved,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "limen",
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(secret))
+}
+
+// GenerateRefreshToken generates a long-lived refresh token (7 days).
+func GenerateRefreshToken(userID uint, username, role string, approved bool, secret string) (string, string, error) {
+	// Generate unique token ID for rotation
+	tokenID, err := generateTokenID()
+	if err != nil {
+		return "", "", err
+	}
+
+	expirationTime := time.Now().Add(7 * 24 * time.Hour) // 7 days
+	claims := &RefreshTokenClaims{
+		UserID:   userID,
+		Username: username,
+		Role:     role,
+		Approved: approved,
+		TokenID:  tokenID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "limen",
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(secret))
+	if err != nil {
+		return "", "", err
+	}
+
+	return tokenString, tokenID, nil
+}
+
+// ValidateRefreshToken validates a refresh token and returns the claims.
+func ValidateRefreshToken(tokenString, secret string) (*RefreshTokenClaims, error) {
+	claims := &RefreshTokenClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return []byte(secret), nil
+	})
+
+	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return nil, ErrTokenExpired
+		}
+		return nil, ErrInvalidRefreshToken
+	}
+
+	if !token.Valid {
+		return nil, ErrInvalidRefreshToken
+	}
+
+	return claims, nil
+}
+
+// generateTokenID generates a unique token ID for refresh token rotation.
+func generateTokenID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
 }

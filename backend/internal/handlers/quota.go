@@ -49,8 +49,9 @@ func (h *Handler) HandleGetQuota(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get current usage - system-wide (all users' VMs)
+	// Optimized: Only fetch necessary fields (status, cpu, memory) for quota calculation
 	var allVMs []models.VM
-	if err := h.DB.Find(&allVMs).Error; err != nil {
+	if err := h.DB.Select("status", "cpu", "memory").Find(&allVMs).Error; err != nil {
 		logger.Log.Error("Failed to get VMs", zap.Error(err))
 		errors.WriteInternalError(w, err, false)
 		return

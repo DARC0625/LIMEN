@@ -2,6 +2,7 @@ package vm
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
@@ -51,20 +52,35 @@ func (s *VMService) SyncVMStatus(vm *models.VM) error {
 }
 
 // SyncAllVMStatuses syncs all VM statuses from libvirt to database
+// Optimized: Use parallel processing with limited concurrency
 func (s *VMService) SyncAllVMStatuses() error {
 	var vms []models.VM
-	if err := s.db.Find(&vms).Error; err != nil {
+	// Optimized: Only fetch necessary fields
+	if err := s.db.Select("id", "name", "status").Find(&vms).Error; err != nil {
 		return err
 	}
 
+	// Use goroutines for parallel status sync (limited concurrency)
+	const maxConcurrency = 5
+	sem := make(chan struct{}, maxConcurrency)
+	var wg sync.WaitGroup
+
 	for i := range vms {
-		if err := s.SyncVMStatus(&vms[i]); err != nil {
-			logger.Log.Warn("Failed to sync VM status",
-				zap.String("vm_name", vms[i].Name),
-				zap.Error(err))
-			// Continue with other VMs even if one fails
-		}
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			sem <- struct{}{} // Acquire semaphore
+			defer func() { <-sem }() // Release semaphore
+
+			if err := s.SyncVMStatus(&vms[idx]); err != nil {
+				logger.Log.Warn("Failed to sync VM status",
+					zap.String("vm_name", vms[idx].Name),
+					zap.Error(err))
+				// Continue with other VMs even if one fails
+			}
+		}(i)
 	}
+	wg.Wait()
 
 	return nil
 }

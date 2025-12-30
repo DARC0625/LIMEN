@@ -29,6 +29,10 @@ go.work
 logs/
 *.log.*
 
+# PID files
+pids/
+*.pid
+
 # Database
 *.db
 *.sqlite
@@ -81,6 +85,7 @@ coverage/
 # Profiling data
 *.prof
 *.pprof
+
 
 
 

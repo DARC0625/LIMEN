@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -109,8 +110,23 @@ func (b *VMStatusBroadcaster) BroadcastVMList(vms []models.VM) {
 
 // HandleVMStatusWebSocket handles WebSocket connections for VM status updates
 func (h *Handler) HandleVMStatusWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
-	// Set CORS headers for WebSocket (before authentication)
+	// Log incoming WebSocket connection attempt with detailed info
 	origin := r.Header.Get("Origin")
+	logger.Log.Info("VM status WebSocket connection attempt - DETAILED",
+		zap.String("remote_addr", r.RemoteAddr),
+		zap.String("origin", origin),
+		zap.String("user_agent", r.Header.Get("User-Agent")),
+		zap.String("path", r.URL.Path),
+		zap.String("full_url", r.URL.String()),
+		zap.String("query", r.URL.RawQuery),
+		zap.String("upgrade", r.Header.Get("Upgrade")),
+		zap.String("connection", r.Header.Get("Connection")),
+		zap.String("method", r.Method),
+		zap.String("host", r.Host),
+		zap.String("referer", r.Header.Get("Referer")),
+		zap.Strings("allowed_origins", h.Config.AllowedOrigins))
+	
+	// Set CORS headers for WebSocket (before authentication)
 	if h.isOriginAllowed(origin) {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -120,6 +136,7 @@ func (h *Handler) HandleVMStatusWebSocket(w http.ResponseWriter, r *http.Request
 
 	// Handle OPTIONS preflight request
 	if r.Method == "OPTIONS" {
+		logger.Log.Info("VM status WebSocket OPTIONS preflight", zap.String("origin", origin))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -134,7 +151,10 @@ func (h *Handler) HandleVMStatusWebSocket(w http.ResponseWriter, r *http.Request
 	}
 
 	if token == "" {
-		logger.Log.Warn("VM status WebSocket connection attempt without token")
+		logger.Log.Warn("VM status WebSocket connection attempt without token",
+			zap.String("path", r.URL.Path),
+			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("origin", origin))
 		http.Error(w, "Authentication required", http.StatusUnauthorized)
 		return
 	}
@@ -142,27 +162,58 @@ func (h *Handler) HandleVMStatusWebSocket(w http.ResponseWriter, r *http.Request
 	// Verify token
 	claims, err := auth.ValidateToken(token, cfg.JWTSecret)
 	if err != nil {
-		logger.Log.Warn("Invalid token for VM status WebSocket", zap.Error(err))
+		logger.Log.Warn("Invalid token for VM status WebSocket",
+			zap.Error(err),
+			zap.String("path", r.URL.Path),
+			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("origin", origin))
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
 	}
 
-	logger.Log.Info("VM status WebSocket connection", zap.Uint("user_id", claims.UserID))
+	logger.Log.Info("VM status WebSocket authentication successful",
+		zap.Uint("user_id", claims.UserID),
+		zap.String("username", claims.Username))
 
+	logger.Log.Info("Attempting WebSocket upgrade for VM status",
+		zap.String("path", r.URL.Path),
+		zap.Uint("user_id", claims.UserID))
+	
 	upgrader := h.newWebSocketUpgrader()
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		logger.Log.Error("WebSocket upgrade failed for VM status", zap.Error(err))
+		logger.Log.Error("WebSocket upgrade failed for VM status - DETAILED",
+			zap.Error(err),
+			zap.String("path", r.URL.Path),
+			zap.String("query", r.URL.RawQuery),
+			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("user_agent", r.Header.Get("User-Agent")),
+			zap.String("origin", r.Header.Get("Origin")),
+			zap.String("upgrade_header", r.Header.Get("Upgrade")),
+			zap.String("connection_header", r.Header.Get("Connection")),
+			zap.Uint("user_id", claims.UserID),
+			zap.String("username", claims.Username),
+			zap.String("error_type", fmt.Sprintf("%T", err)))
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		logger.Log.Info("VM status WebSocket connection closing",
+			zap.Uint("user_id", claims.UserID))
+		conn.Close()
+	}()
+	
+	logger.Log.Info("VM status WebSocket upgrade SUCCESS",
+		zap.String("path", r.URL.Path),
+		zap.Uint("user_id", claims.UserID),
+		zap.String("username", claims.Username))
 
 	// Register client
 	h.VMStatusBroadcaster.register <- conn
 
 	// Send initial VM list directly to this client
 	var vms []models.VM
-	if err := h.DB.Find(&vms).Error; err == nil {
+	// Optimized: Only fetch necessary fields for WebSocket status updates
+	if err := h.DB.Select("id", "uuid", "name", "status", "cpu", "memory").Find(&vms).Error; err == nil {
 		message, err := json.Marshal(map[string]interface{}{
 			"type": "vm_list",
 			"vms":  vms,

@@ -16,14 +16,16 @@ func (h *Handler) HandleMetrics(w http.ResponseWriter, r *http.Request) {
 // UpdateMetrics updates all metrics based on current database state.
 func (h *Handler) UpdateMetrics() error {
 	// Update VM metrics
+	// Optimized: Only fetch necessary fields for metrics calculation
 	var vms []models.VM
-	if err := h.DB.Find(&vms).Error; err != nil {
+	if err := h.DB.Select("status", "cpu", "memory").Find(&vms).Error; err != nil {
 		return err
 	}
 
-	vmCountByStatus := make(map[string]int)
-	cpuByStatus := make(map[string]int)
-	memoryByStatus := make(map[string]int)
+	// Optimized: Pre-allocate maps with estimated capacity
+	vmCountByStatus := make(map[string]int, 4) // Typically: running, stopped, paused, error
+	cpuByStatus := make(map[string]int, 4)
+	memoryByStatus := make(map[string]int, 4)
 
 	for _, vm := range vms {
 		status := string(vm.Status)

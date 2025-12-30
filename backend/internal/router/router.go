@@ -64,6 +64,22 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *mux.Router {
 	api.HandleFunc("/auth/register", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleRegister(w, r, cfg)
 	}).Methods("POST")
+	
+	// Session management endpoints (public - no authentication required)
+	api.HandleFunc("/auth/session", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleGetSession(w, r, cfg)
+	}).Methods("GET")
+	api.HandleFunc("/auth/session", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleCreateSession(w, r, cfg)
+	}).Methods("POST")
+	api.HandleFunc("/auth/session", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleDeleteSession(w, r, cfg)
+	}).Methods("DELETE")
+	
+	// Token refresh endpoint (public - no authentication required)
+	api.HandleFunc("/auth/refresh", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleRefreshToken(w, r, cfg)
+	}).Methods("POST")
 
 	// Admin-only endpoints for user management
 	// IMPORTANT: Register these BEFORE other protected endpoints to ensure proper matching
@@ -126,6 +142,10 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *mux.Router {
 	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}", h.HandleVMDelete).Methods("DELETE")
 	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}/action", h.HandleVMAction).Methods("POST")
 	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}/stats", h.HandleVMStats).Methods("GET")
+	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}/media", h.HandleVMMedia).Methods("GET", "POST")
+	api.HandleFunc("/vms/isos", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleListISOs(w, r, cfg)
+	}).Methods("GET")
 
 	// Snapshot endpoints
 	api.HandleFunc("/vms/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}/snapshots", h.HandleListSnapshots).Methods("GET")
@@ -145,13 +165,20 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *mux.Router {
 	// WebSocket routes (must be before middleware to avoid ResponseWriter wrapping)
 	// These routes need direct access to http.Hijacker for WebSocket upgrade
 	r.HandleFunc("/ws/vnc", h.HandleVNC).Methods("GET")
+	r.HandleFunc("/vnc", h.HandleVNC).Methods("GET") // Alternative path for VNC WebSocket (for Envoy compatibility)
 	r.HandleFunc("/ws/vm-status", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleVMStatusWebSocket(w, r, cfg)
 	}).Methods("GET")
 
-	// Static file serving
+	// Static file serving (must be before middleware to avoid authentication)
 	fs := http.FileServer(http.Dir("./uploads"))
 	r.PathPrefix("/downloads/").Handler(http.StripPrefix("/downloads/", fs))
+	
+	// Handle /media requests
+	// If it's a static file request (e.g., images, icons), serve from uploads/media directory
+	// If the file doesn't exist, return 404 (frontend should handle this gracefully)
+	mediaFS := http.FileServer(http.Dir("./uploads/media"))
+	r.PathPrefix("/media/").Handler(http.StripPrefix("/media/", mediaFS))
 
 	// Agent reverse proxy (/agent/* -> http://127.0.0.1:9000)
 	agentTarget, err := url.Parse("http://127.0.0.1:9000")
