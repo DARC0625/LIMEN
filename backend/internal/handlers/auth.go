@@ -427,6 +427,10 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 		}
 	}
 	
+	// Check if request is from login page - if so, return early without checking session
+	referer := r.Header.Get("Referer")
+	isLoginPage := strings.Contains(referer, "/login") || strings.Contains(r.URL.Path, "/login")
+	
 	// Log request for debugging (passive monitoring - no blocking)
 	hasRefreshToken := false
 	if _, err := r.Cookie("refresh_token"); err == nil {
@@ -435,9 +439,24 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 	logger.Log.Info("GET /api/auth/session request",
 		zap.String("remote_addr", r.RemoteAddr),
 		zap.String("origin", r.Header.Get("Origin")),
+		zap.String("referer", referer),
+		zap.Bool("is_login_page", isLoginPage),
 		zap.Bool("has_refresh_token_cookie", hasRefreshToken),
 		zap.Bool("has_csrf_token", csrfToken != ""),
 		zap.String("user_agent", r.Header.Get("User-Agent")))
+	
+	// If request is from login page and no refresh token, return early (no session)
+	if isLoginPage && !hasRefreshToken {
+		logger.Log.Debug("Session check from login page without token - returning no session",
+			zap.String("referer", referer))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(SessionResponse{
+			Valid: false,
+			Reason: "로그인이 필요합니다.",
+		})
+		return
+	}
 
 	// Get refresh token from cookie
 	refreshToken := ""

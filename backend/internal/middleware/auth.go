@@ -96,12 +96,24 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 			if tokenString == "" || err != nil {
 				if cookie, err := r.Cookie("refresh_token"); err == nil {
 					refreshToken := cookie.Value
+					logger.Log.Debug("Attempting authentication via refresh token cookie",
+						zap.String("path", r.URL.Path),
+						zap.String("refresh_token_preview", refreshToken[:min(20, len(refreshToken))]+"..."))
+					
 					refreshClaims, refreshErr := auth.ValidateRefreshToken(refreshToken, cfg.JWTSecret)
-					if refreshErr == nil {
+					if refreshErr != nil {
+						logger.Log.Warn("Refresh token validation failed",
+							zap.String("path", r.URL.Path),
+							zap.Error(refreshErr))
+					} else {
 						// Get session to verify refresh token is valid
 						sessionStore := auth.GetSessionStore()
 						session, exists := sessionStore.GetSessionByRefreshToken(refreshToken)
-						if exists {
+						if !exists {
+							logger.Log.Warn("Refresh token not found in session store",
+								zap.String("path", r.URL.Path),
+								zap.Uint("user_id", refreshClaims.UserID))
+						} else {
 							// Generate new access token from refresh token
 							tokenString, err = auth.GenerateAccessToken(refreshClaims.UserID, refreshClaims.Username, refreshClaims.Role, refreshClaims.Approved, cfg.JWTSecret)
 							if err == nil {
@@ -117,9 +129,17 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 								logger.Log.Debug("Authenticated via refresh token cookie",
 									zap.String("path", r.URL.Path),
 									zap.Uint("user_id", claims.UserID))
+							} else {
+								logger.Log.Warn("Failed to generate access token from refresh token",
+									zap.String("path", r.URL.Path),
+									zap.Error(err))
 							}
 						}
 					}
+				} else {
+					logger.Log.Debug("No refresh_token cookie found",
+						zap.String("path", r.URL.Path),
+						zap.Error(err))
 				}
 			}
 
@@ -204,4 +224,12 @@ func GetUserID(ctx context.Context) (uint, bool) {
 func GetUsername(ctx context.Context) (string, bool) {
 	username, ok := ctx.Value(UsernameKey).(string)
 	return username, ok
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
