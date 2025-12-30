@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -54,7 +55,9 @@ func TestHandleVMAction_InvalidUUID(t *testing.T) {
 	h, _ := setupTestHandler(t)
 
 	req := httptest.NewRequest("POST", "/api/vms/invalid-uuid/action", bytes.NewBufferString(`{"action":"start"}`))
-	req = mux.SetURLVars(req, map[string]string{"uuid": "invalid-uuid"})
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("uuid", "invalid-uuid")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
 	// Create a handler function wrapper
@@ -84,7 +87,9 @@ func TestHandleVMAction_InvalidAction(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/vms/12345678-1234-1234-1234-123456789abc/action", 
 		bytes.NewBufferString(`{"action":"invalid-action"}`))
-	req = mux.SetURLVars(req, map[string]string{"uuid": vm.UUID})
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("uuid", vm.UUID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
 	h.HandleVMAction(w, req)
@@ -115,7 +120,9 @@ func TestHandleVMAction_MissingBody(t *testing.T) {
 	h.DB.Create(&vm)
 
 	req := httptest.NewRequest("POST", "/api/vms/12345678-1234-1234-1234-123456789abc/action", nil)
-	req = mux.SetURLVars(req, map[string]string{"uuid": vm.UUID})
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("uuid", vm.UUID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
 	h.HandleVMAction(w, req)
@@ -152,7 +159,9 @@ func TestHandleVMMedia_InvalidAction(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/vms/12345678-1234-1234-1234-123456789abc/media", 
 		bytes.NewBufferString(`{"action":"invalid"}`))
-	req = mux.SetURLVars(req, map[string]string{"uuid": vm.UUID})
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("uuid", vm.UUID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
 	h.HandleVMMedia(w, req)
@@ -174,7 +183,9 @@ func TestHandleVMMedia_AttachMissingISOPath(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/vms/12345678-1234-1234-1234-123456789abc/media", 
 		bytes.NewBufferString(`{"action":"attach"}`))
-	req = mux.SetURLVars(req, map[string]string{"uuid": vm.UUID})
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("uuid", vm.UUID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
 	h.HandleVMMedia(w, req)
