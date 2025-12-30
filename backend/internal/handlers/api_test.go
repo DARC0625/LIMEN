@@ -9,7 +9,7 @@ import (
 
 	"github.com/DARC0625/LIMEN/backend/internal/config"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
-	"github.com/gorilla/mux"
+	"github.com/go-chi/chi/v5"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
