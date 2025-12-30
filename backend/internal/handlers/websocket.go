@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,7 +12,7 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/config"
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
-	"github.com/gorilla/websocket"
+	"nhooyr.io/websocket"
 	"go.uber.org/zap"
 )
 
@@ -48,7 +49,7 @@ func (b *VMStatusBroadcaster) Run() {
 			b.mu.Lock()
 			if _, ok := b.clients[conn]; ok {
 				delete(b.clients, conn)
-				conn.Close()
+				conn.Close(websocket.StatusNormalClosure, "")
 			}
 			b.mu.Unlock()
 			logger.Log.Info("WebSocket client unregistered for VM status", zap.Int("total_clients", len(b.clients)))
@@ -56,13 +57,14 @@ func (b *VMStatusBroadcaster) Run() {
 		case message := <-b.broadcast:
 			b.mu.RLock()
 			for conn := range b.clients {
-				err := conn.WriteMessage(websocket.TextMessage, message)
+				// Use background context for broadcast (no timeout)
+				err := conn.Write(context.Background(), websocket.MessageText, message)
 				if err != nil {
 					logger.Log.Warn("Failed to send message to WebSocket client", zap.Error(err))
 					b.mu.RUnlock()
 					b.mu.Lock()
 					delete(b.clients, conn)
-					conn.Close()
+					conn.Close(websocket.StatusInternalError, "Write failed")
 					b.mu.Unlock()
 					b.mu.RLock()
 				}
@@ -179,8 +181,7 @@ func (h *Handler) HandleVMStatusWebSocket(w http.ResponseWriter, r *http.Request
 		zap.String("path", r.URL.Path),
 		zap.Uint("user_id", claims.UserID))
 	
-	upgrader := h.newWebSocketUpgrader()
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := h.acceptWebSocket(w, r)
 	if err != nil {
 		logger.Log.Error("WebSocket upgrade failed for VM status - DETAILED",
 			zap.Error(err),
@@ -199,7 +200,7 @@ func (h *Handler) HandleVMStatusWebSocket(w http.ResponseWriter, r *http.Request
 	defer func() {
 		logger.Log.Info("VM status WebSocket connection closing",
 			zap.Uint("user_id", claims.UserID))
-		conn.Close()
+		conn.Close(websocket.StatusNormalClosure, "")
 	}()
 	
 	logger.Log.Info("VM status WebSocket upgrade SUCCESS",
@@ -219,15 +220,16 @@ func (h *Handler) HandleVMStatusWebSocket(w http.ResponseWriter, r *http.Request
 			"vms":  vms,
 		})
 		if err == nil {
-			conn.WriteMessage(websocket.TextMessage, message)
+			conn.Write(context.Background(), websocket.MessageText, message)
 		}
 	}
 
 	// Keep connection alive and handle pings
 	for {
-		_, _, err := conn.ReadMessage()
+		_, _, err := conn.Read(context.Background())
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			closeStatus := websocket.CloseStatus(err)
+			if closeStatus != websocket.StatusNormalClosure && closeStatus != websocket.StatusGoingAway && closeStatus != websocket.StatusAbnormalClosure {
 				logger.Log.Warn("WebSocket error for VM status", zap.Error(err))
 			}
 			break

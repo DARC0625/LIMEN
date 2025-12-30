@@ -21,7 +21,7 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/validator"
 	"github.com/DARC0625/LIMEN/backend/internal/vm"
 	"github.com/go-chi/chi/v5"
-	"github.com/gorilla/websocket"
+	"nhooyr.io/websocket"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -597,28 +597,36 @@ func (h *Handler) HandleVMDelete(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// newWebSocketUpgrader creates a WebSocket upgrader.
+// acceptWebSocket accepts a WebSocket connection with origin validation.
 // Origin validation uses the same CORS configuration as HTTP requests.
-func (h *Handler) newWebSocketUpgrader() websocket.Upgrader {
-	return websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			origin := r.Header.Get("Origin")
-			allowed := h.isOriginAllowed(origin)
-			if !allowed {
-				logger.Log.Warn("WebSocket origin not allowed - CheckOrigin returning false (will cause 403)",
-					zap.String("origin", origin),
-					zap.String("path", r.URL.Path),
-					zap.String("remote_addr", r.RemoteAddr),
-					zap.String("host", r.Host),
-					zap.Strings("allowed_origins", h.Config.AllowedOrigins))
-			}
-			// Removed verbose logging for allowed origins to reduce log noise
-			return allowed
-		},
-		ReadBufferSize:  8192,  // Increased from 1024 for better performance
-		WriteBufferSize: 8192,  // Increased from 1024 for better performance
-		EnableCompression: true, // Enable compression for better bandwidth usage
+func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
+	origin := r.Header.Get("Origin")
+	allowed := h.isOriginAllowed(origin)
+	if !allowed {
+		logger.Log.Warn("WebSocket origin not allowed",
+			zap.String("origin", origin),
+			zap.String("path", r.URL.Path),
+			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("host", r.Host),
+			zap.Strings("allowed_origins", h.Config.AllowedOrigins))
+		return nil, fmt.Errorf("origin not allowed: %s", origin)
 	}
+
+	// nhooyr.io/websocket options
+	opts := &websocket.AcceptOptions{
+		OriginPatterns: h.Config.AllowedOrigins,
+		CompressionMode: websocket.CompressionContextTakeover, // Enable compression
+	}
+
+	conn, err := websocket.Accept(w, r, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set read limit (8KB buffer)
+	conn.SetReadLimit(8192)
+
+	return conn, nil
 }
 
 // isOriginAllowed checks if the given origin is in the allowed origins list.
@@ -771,10 +779,9 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		zap.Uint("user_id", claims.UserID),
 		zap.String("username", claims.Username))
 	
-	upgrader := h.newWebSocketUpgrader()
-	ws, err := upgrader.Upgrade(w, r, nil)
+	ws, err := h.acceptWebSocket(w, r)
 	if err != nil {
-		logger.Log.Error("WebSocket upgrade failed - DETAILED",
+		logger.Log.Error("WebSocket accept failed - DETAILED",
 			zap.Error(err),
 			zap.String("path", r.URL.Path),
 			zap.String("query", r.URL.RawQuery),
@@ -786,31 +793,31 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			zap.Uint("user_id", claims.UserID),
 			zap.String("username", claims.Username),
 			zap.String("error_type", fmt.Sprintf("%T", err)))
-		http.Error(w, fmt.Sprintf("WebSocket upgrade failed: %v", err), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("WebSocket accept failed: %v", err), http.StatusBadRequest)
 		return
 	}
 	defer func() {
 		logger.Log.Info("WebSocket connection closing",
 			zap.String("vm_uuid", r.URL.Query().Get("id")),
 			zap.Uint("user_id", claims.UserID))
-		ws.Close()
+		ws.Close(websocket.StatusNormalClosure, "")
 	}()
 	
-	logger.Log.Info("WebSocket upgrade SUCCESS",
+	logger.Log.Info("WebSocket accept SUCCESS",
 		zap.String("path", r.URL.Path),
 		zap.Uint("user_id", claims.UserID),
 		zap.String("username", claims.Username))
 
 	// Send initial connection status
-	ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"status","message":"Connected, checking VM status..."}`)); err != nil {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	if err := ws.Write(ctx, websocket.MessageText, []byte(`{"type":"status","message":"Connected, checking VM status..."}`)); err != nil {
 		logger.Log.Warn("Failed to send initial status", 
 			zap.Error(err),
 			zap.Uint("user_id", claims.UserID),
 			zap.String("username", claims.Username))
 		return
 	}
-	ws.SetWriteDeadline(time.Time{}) // Clear deadline
 	
 	logger.Log.Info("Initial status message sent successfully",
 		zap.Uint("user_id", claims.UserID))
@@ -829,9 +836,9 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		logger.Log.Warn("VNC connection attempt without VM UUID",
 			zap.Uint("user_id", claims.UserID),
 			zap.String("username", claims.Username))
-		ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","error":"VM UUID is required","code":"MISSING_VM_UUID"}`))
-		ws.SetWriteDeadline(time.Time{})
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		ws.Write(ctx, websocket.MessageText, []byte(`{"type":"error","error":"VM UUID is required","code":"MISSING_VM_UUID"}`))
+		cancel()
 		return
 	}
 
@@ -843,18 +850,18 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 				zap.String("uuid", uuidStr),
 				zap.Uint("user_id", claims.UserID),
 				zap.String("username", claims.Username))
-			ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-			ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`{"type":"error","error":"VM not found","code":"VM_NOT_FOUND","vm_uuid":"%s"}`, uuidStr)))
-			ws.SetWriteDeadline(time.Time{})
+			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			ws.Write(ctx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"error","error":"VM not found","code":"VM_NOT_FOUND","vm_uuid":"%s"}`, uuidStr)))
+			cancel()
 		} else {
 			logger.Log.Error("Failed to find VM for VNC",
 				zap.Error(err),
 				zap.String("uuid", uuidStr),
 				zap.Uint("user_id", claims.UserID),
 				zap.String("username", claims.Username))
-			ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-			ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`{"type":"error","error":"Database error","code":"DB_ERROR","details":"%s"}`, err.Error())))
-			ws.SetWriteDeadline(time.Time{})
+			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			ws.Write(ctx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"error","error":"Database error","code":"DB_ERROR","details":"%s"}`, err.Error())))
+			cancel()
 		}
 		return
 	}
@@ -885,25 +892,25 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			zap.String("username", claims.Username))
 
 		// Try to start the VM
-		ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"status","message":"Starting VM..."}`))
-		ws.SetWriteDeadline(time.Time{})
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		ws.Write(ctx, websocket.MessageText, []byte(`{"type":"status","message":"Starting VM..."}`))
+		cancel()
 
 		if err := h.VMService.StartVM(vmRec.Name); err != nil {
 			logger.Log.Error("Failed to start VM for VNC connection",
 				zap.Error(err),
 				zap.String("vm_name", vmRec.Name),
 				zap.Uint("user_id", claims.UserID))
-			ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-			ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`{"type":"error","error":"Failed to start VM","code":"VM_START_FAILED","status":"%s","details":"%v"}`, vmRec.Status, err)))
-			ws.SetWriteDeadline(time.Time{})
+			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			ws.Write(ctx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"error","error":"Failed to start VM","code":"VM_START_FAILED","status":"%s","details":"%v"}`, vmRec.Status, err)))
+			cancel()
 			return
 		}
 
 		// Optimized: Use context with timeout instead of fixed sleep
 		// Wait for VM to start and VNC to initialize (max 5 seconds)
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+		vmCtx, vmCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer vmCancel()
 		
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
@@ -911,7 +918,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		vmStarted := false
 		for {
 			select {
-			case <-ctx.Done():
+			case <-vmCtx.Done():
 				logger.Log.Warn("Timeout waiting for VM to start", zap.String("vm_name", vmRec.Name))
 				break
 			case <-ticker.C:
@@ -935,9 +942,9 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 				zap.String("vm_name", vmRec.Name),
 				zap.String("status", string(vmRec.Status)),
 				zap.Uint("user_id", claims.UserID))
-			ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-			ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`{"type":"error","error":"VM is not running","code":"VM_NOT_RUNNING","status":"%s","message":"VM failed to start"}`, vmRec.Status)))
-			ws.SetWriteDeadline(time.Time{})
+			errorCtx, errorCancel := context.WithTimeout(r.Context(), 5*time.Second)
+			ws.Write(errorCtx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"error","error":"VM is not running","code":"VM_NOT_RUNNING","status":"%s","message":"VM failed to start"}`, vmRec.Status)))
+			errorCancel()
 			return
 		}
 
@@ -947,9 +954,9 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send status update
-	ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"status","message":"Getting VNC port..."}`))
-	ws.SetWriteDeadline(time.Time{})
+	portCtx, portCancel := context.WithTimeout(r.Context(), 5*time.Second)
+	ws.Write(portCtx, websocket.MessageText, []byte(`{"type":"status","message":"Getting VNC port..."}`))
+	portCancel()
 
 	// Get VNC port with retry (GetVNCPort already has retry logic)
 	vncPort, err := h.VMService.GetVNCPort(vmRec.Name)
@@ -960,9 +967,9 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			zap.String("vm_uuid", vmRec.UUID),
 			zap.Uint("user_id", claims.UserID),
 			zap.String("username", claims.Username))
-		ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`{"type":"error","error":"Failed to get VNC port","code":"VNC_PORT_ERROR","details":"%v","message":"VNC port not available yet. Please wait a moment and try again."}`, err)))
-		ws.SetWriteDeadline(time.Time{})
+		portErrorCtx, portErrorCancel := context.WithTimeout(r.Context(), 5*time.Second)
+		ws.Write(portErrorCtx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"error","error":"Failed to get VNC port","code":"VNC_PORT_ERROR","details":"%v","message":"VNC port not available yet. Please wait a moment and try again."}`, err)))
+		portErrorCancel()
 		return
 	}
 
@@ -972,9 +979,9 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		zap.Uint("user_id", claims.UserID))
 
 	// Send status update
-	ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`{"type":"status","message":"Connecting to VNC server on port %s..."}`, vncPort)))
-	ws.SetWriteDeadline(time.Time{})
+	connectCtx, connectCancel := context.WithTimeout(r.Context(), 5*time.Second)
+	ws.Write(connectCtx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"status","message":"Connecting to VNC server on port %s..."}`, vncPort)))
+	connectCancel()
 
 	targetAddr := fmt.Sprintf("localhost:%s", vncPort)
 
@@ -1007,9 +1014,9 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			zap.String("vnc_port", vncPort),
 			zap.Uint("user_id", claims.UserID),
 			zap.String("username", claims.Username))
-		ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`{"type":"error","error":"Failed to connect to VNC server","code":"VNC_CONNECTION_FAILED","address":"%s","message":"VNC server not ready. Please wait a moment and try again."}`, targetAddr)))
-		ws.SetWriteDeadline(time.Time{})
+		connectErrorCtx, connectErrorCancel := context.WithTimeout(r.Context(), 5*time.Second)
+		ws.Write(connectErrorCtx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"error","error":"Failed to connect to VNC server","code":"VNC_CONNECTION_FAILED","address":"%s","message":"VNC server not ready. Please wait a moment and try again."}`, targetAddr)))
+		connectErrorCancel()
 		return
 	}
 	defer conn.Close()
@@ -1023,19 +1030,20 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		zap.String("username", claims.Username))
 
 	// Send success status
-	ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"status","message":"VNC connection established, starting proxy..."}`))
-	ws.SetWriteDeadline(time.Time{})
+	successCtx, successCancel := context.WithTimeout(r.Context(), 5*time.Second)
+	ws.Write(successCtx, websocket.MessageText, []byte(`{"type":"status","message":"VNC connection established, starting proxy..."}`))
+	successCancel()
 
 	errc := make(chan error, 2)
 
 	go func() {
 		messageCount := 0
 		for {
-			_, message, err := ws.ReadMessage()
+			_, message, err := ws.Read(r.Context())
 			if err != nil {
 				// Only log non-normal closure errors
-				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+				closeStatus := websocket.CloseStatus(err)
+				if closeStatus != websocket.StatusNormalClosure && closeStatus != websocket.StatusGoingAway {
 					logger.Log.Info("VNC WebSocket read error",
 						zap.Error(err),
 						zap.String("vm_uuid", vmRec.UUID),
@@ -1101,10 +1109,12 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 					zap.Int32("read_count", count),
 					zap.String("vm_uuid", vmRec.UUID))
 			}
-			ws.SetWriteDeadline(time.Now().Add(30 * time.Second)) // Set write deadline for each message
-			if err := ws.WriteMessage(websocket.BinaryMessage, buf[:n]); err != nil {
+			writeCtx, writeCancel := context.WithTimeout(r.Context(), 30*time.Second)
+			if err := ws.Write(writeCtx, websocket.MessageBinary, buf[:n]); err != nil {
+				writeCancel()
 				// Check if it's a close error - don't log as error if it's a normal closure
-				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+				closeStatus := websocket.CloseStatus(err)
+				if closeStatus != websocket.StatusNormalClosure && closeStatus != websocket.StatusGoingAway {
 					logger.Log.Error("VNC WebSocket write error",
 						zap.Error(err),
 						zap.String("vm_uuid", vmRec.UUID),
@@ -1114,7 +1124,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 				errc <- err
 				return
 			}
-			ws.SetWriteDeadline(time.Time{}) // Clear deadline after successful write
+			writeCancel()
 		}
 	}()
 
@@ -1127,16 +1137,14 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	// Send close message to WebSocket if not already closed
-	if err != nil && !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+	closeStatus := websocket.CloseStatus(err)
+	if err != nil && closeStatus != websocket.StatusNormalClosure && closeStatus != websocket.StatusGoingAway {
 		// Try to send close frame
-		closeMsg := websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "Connection closed")
-		ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		ws.WriteMessage(websocket.CloseMessage, closeMsg)
-		ws.SetWriteDeadline(time.Time{})
+		ws.Close(websocket.StatusInternalError, "Connection closed")
 	}
 	
 	// Log connection closure
-	if err != nil && !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+	if err != nil && closeStatus != websocket.StatusNormalClosure && closeStatus != websocket.StatusGoingAway {
 		logger.Log.Info("VNC connection closed with error",
 			zap.Error(err),
 			zap.String("vm_uuid", vmRec.UUID),
