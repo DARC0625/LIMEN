@@ -137,7 +137,9 @@ func TestHandleVMMedia_InvalidUUID(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/vms/invalid-uuid/media", 
 		bytes.NewBufferString(`{"action":"detach"}`))
-	req = mux.SetURLVars(req, map[string]string{"uuid": "invalid-uuid"})
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("uuid", "invalid-uuid")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
 	h.HandleVMMedia(w, req)
