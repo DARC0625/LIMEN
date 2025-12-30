@@ -116,7 +116,7 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 	case "GET":
 		var vms []models.VM
 		// Optimized: Use Select to fetch only necessary fields for better performance
-		if err := h.DB.Select("id", "uuid", "name", "status", "cpu", "memory", "disk_size", "owner_id", "created_at", "updated_at").Find(&vms).Error; err != nil {
+		if err := h.DB.Select("id", "uuid", "name", "status", "cpu", "memory", "owner_id", "created_at", "updated_at").Find(&vms).Error; err != nil {
 			logger.Log.Error("Failed to fetch VMs", zap.Error(err))
 			errors.WriteInternalError(w, err, cfg.Env == "development")
 			return
