@@ -258,6 +258,15 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 		zap.String("username", user.Username),
 		zap.String("session_id", session.ID))
 
+	// Log cookie settings for debugging
+	logger.Log.Info("Login response cookies",
+		zap.String("username", user.Username),
+		zap.Bool("refresh_cookie_set", refreshCookie != nil),
+		zap.Bool("csrf_cookie_set", csrfCookie != nil),
+		zap.Bool("is_https", isHTTPS),
+		zap.String("origin", r.Header.Get("Origin")),
+		zap.String("referer", r.Header.Get("Referer")))
+
 	// Update metrics
 	metrics.UserLoginTotal.Inc()
 
@@ -504,11 +513,13 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 			zap.String("session_id", session.ID),
 			zap.String("remote_addr", r.RemoteAddr),
 			zap.String("origin", r.Header.Get("Origin")),
-			zap.Uint("user_id", session.UserID))
+			zap.Uint("user_id", session.UserID),
+			zap.String("provided_csrf", csrfToken[:min(10, len(csrfToken))]+"..."),
+			zap.String("expected_csrf", session.CSRFToken[:min(10, len(session.CSRFToken))]+"..."))
 		// For GET requests, we don't block - just log (passive monitoring)
-		// But still return error to encourage proper CSRF token usage
-		errors.WriteForbidden(w, "Invalid CSRF token")
-		return
+		// GET /api/auth/session is a read operation, so CSRF validation failure should not block
+		// However, we log it for security awareness
+		// Continue to return session info even if CSRF token is invalid (for GET requests only)
 	}
 
 	// Generate new access token (refresh it)
