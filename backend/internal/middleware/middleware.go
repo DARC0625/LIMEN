@@ -62,7 +62,7 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 						zap.String("origin", origin),
 						zap.String("path", r.URL.Path))
 				} else {
-					logger.Log.Info("CORS preflight allowed",
+					logger.Log.Debug("CORS preflight allowed",
 						zap.String("origin", origin),
 						zap.String("path", r.URL.Path))
 				}
@@ -161,15 +161,20 @@ func Logging(next http.Handler) http.Handler {
 			// Server errors - ERROR level
 			logger.Log.Error("HTTP request - server error", logFields...)
 		} else if wrapped.statusCode >= 400 {
-			// Client errors - WARN level (but not 404s for static assets)
-			if wrapped.statusCode != 404 || !strings.HasPrefix(r.URL.Path, "/static/") {
+			// Client errors - WARN level (but not 404s for static assets or health checks)
+			if wrapped.statusCode != 404 || (!strings.HasPrefix(r.URL.Path, "/static/") && r.URL.Path != "/api/health") {
 				logger.Log.Warn("HTTP request - client error", logFields...)
+			} else {
+				// 404 for static assets or health checks - DEBUG level to reduce noise
+				logger.Log.Debug("HTTP request", logFields...)
+			}
+		} else {
+			// Success - DEBUG level for health checks, INFO for others
+			if r.URL.Path == "/api/health" || r.URL.Path == "/api/health_proxy" {
+				logger.Log.Debug("HTTP request", logFields...)
 			} else {
 				logger.Log.Info("HTTP request", logFields...)
 			}
-		} else {
-			// Success - INFO level
-			logger.Log.Info("HTTP request", logFields...)
 		}
 	})
 }

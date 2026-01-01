@@ -57,18 +57,9 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 					zap.String("fixed", r.URL.Path))
 			}
 
-			// Log ALL requests to auth middleware
-			logger.Log.Info("Auth middleware - request received",
-				zap.String("path", r.URL.Path),
-				zap.String("method", r.Method),
-				zap.String("remote_addr", r.RemoteAddr),
-				zap.String("host", r.Host),
-				zap.String("user_agent", r.Header.Get("User-Agent")),
-				zap.Bool("is_public", IsPublicEndpoint(r.URL.Path)))
-
 			// Skip authentication for public endpoints
 			if IsPublicEndpoint(r.URL.Path) {
-				logger.Log.Info("Public endpoint accessed - allowing",
+				logger.Log.Debug("Public endpoint accessed - allowing",
 					zap.String("path", r.URL.Path),
 					zap.String("method", r.Method))
 				next.ServeHTTP(w, r)
@@ -94,26 +85,14 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 
 			// 2. Fallback to refresh token cookie (validate and generate new access token)
 			if tokenString == "" || err != nil {
-				// Log all cookies for debugging
-				allCookies := r.Cookies()
-				cookieNames := make([]string, 0, len(allCookies))
-				for _, c := range allCookies {
-					cookieNames = append(cookieNames, c.Name)
-				}
-				logger.Log.Info("Auth middleware - checking refresh token cookie",
-					zap.String("path", r.URL.Path),
-					zap.Strings("all_cookies", cookieNames),
-					zap.String("cookie_header", r.Header.Get("Cookie")))
-				
 				if cookie, err := r.Cookie("refresh_token"); err == nil {
 					refreshToken := cookie.Value
-					logger.Log.Info("Refresh token cookie found, attempting authentication",
-						zap.String("path", r.URL.Path),
-						zap.String("refresh_token_preview", refreshToken[:min(20, len(refreshToken))]+"..."))
+					logger.Log.Debug("Attempting authentication via refresh token cookie",
+						zap.String("path", r.URL.Path))
 					
 					refreshClaims, refreshErr := auth.ValidateRefreshToken(refreshToken, cfg.JWTSecret)
 					if refreshErr != nil {
-						logger.Log.Warn("Refresh token validation failed",
+						logger.Log.Debug("Refresh token validation failed",
 							zap.String("path", r.URL.Path),
 							zap.Error(refreshErr))
 					} else {
@@ -137,10 +116,9 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 								}
 								// Update session with new access token
 								sessionStore.UpdateSessionTokens(session.ID, tokenString, "", "")
-								logger.Log.Info("Authenticated via refresh token cookie",
+								logger.Log.Debug("Authenticated via refresh token cookie",
 									zap.String("path", r.URL.Path),
-									zap.Uint("user_id", claims.UserID),
-									zap.String("username", claims.Username))
+									zap.Uint("user_id", claims.UserID))
 							} else {
 								logger.Log.Warn("Failed to generate access token from refresh token",
 									zap.String("path", r.URL.Path),
@@ -149,11 +127,8 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 						}
 					}
 				} else {
-					logger.Log.Warn("No refresh_token cookie found in request",
-						zap.String("path", r.URL.Path),
-						zap.Error(err),
-						zap.Strings("available_cookies", cookieNames),
-						zap.String("cookie_header", r.Header.Get("Cookie")))
+					logger.Log.Debug("No refresh_token cookie found",
+						zap.String("path", r.URL.Path))
 				}
 			}
 

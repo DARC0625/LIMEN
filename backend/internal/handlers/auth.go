@@ -225,13 +225,9 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 	}
 	http.SetCookie(w, refreshCookie)
 	
-	logger.Log.Info("Refresh token cookie set",
+	logger.Log.Debug("Refresh token cookie set",
 		zap.String("username", user.Username),
-		zap.Bool("secure", isHTTPS),
-		zap.String("same_site", "Lax"),
-		zap.String("domain", "auto"), // 브라우저가 자동 설정
-		zap.String("path", refreshCookie.Path),
-		zap.String("set_cookie_header", w.Header().Get("Set-Cookie")))
+		zap.Bool("secure", isHTTPS))
 
 	// Set CSRF Token cookie (for client-side access)
 	csrfCookie := &http.Cookie{
@@ -247,12 +243,6 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 		csrfCookie.Secure = true
 	}
 	http.SetCookie(w, csrfCookie)
-	
-	logger.Log.Info("CSRF token cookie set",
-		zap.String("username", user.Username),
-		zap.Bool("secure", isHTTPS),
-		zap.String("same_site", "Lax"),
-		zap.String("path", csrfCookie.Path))
 
 	// Prepare response (Refresh Token is sent via cookie, not in body)
 	response := LoginResponse{
@@ -265,8 +255,8 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 		zap.String("username", user.Username),
 		zap.String("session_id", session.ID))
 
-	// Log cookie settings for debugging
-	logger.Log.Info("Login response cookies",
+	// Log cookie settings for debugging (only in debug mode)
+	logger.Log.Debug("Login response cookies",
 		zap.String("username", user.Username),
 		zap.Bool("refresh_cookie_set", refreshCookie != nil),
 		zap.Bool("csrf_cookie_set", csrfCookie != nil),
@@ -575,8 +565,7 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 
 	logger.Log.Debug("Session check - cookies re-set",
 		zap.String("session_id", session.ID),
-		zap.Uint("user_id", session.UserID),
-		zap.Bool("secure", isHTTPS))
+		zap.Uint("user_id", session.UserID))
 
 	// Session is valid
 	response := SessionResponse{
