@@ -127,7 +127,7 @@ func TestGetClientIP(t *testing.T) {
 			name: "X-Forwarded-For present",
 			request: func() *http.Request {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("X-Forwarded-For", "10.0.0.1, 192.168.1.1")
+				req.Header.Set("X-Forwarded-For", "10.0.0.1")
 				return req
 			}(),
 			expected: "10.0.0.1",

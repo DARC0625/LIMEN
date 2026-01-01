@@ -23,7 +23,7 @@ func TestAnalyzeLogs(t *testing.T) {
 `)
 	f.Close()
 	
-	stats, err := AnalyzeLogs(tempDir)
+	stats, err := AnalyzeLogs(tempDir, 1*time.Hour)
 	if err != nil {
 		t.Errorf("AnalyzeLogs() error = %v", err)
 	}
@@ -48,7 +48,7 @@ func TestSearchLogs(t *testing.T) {
 `)
 	f.Close()
 	
-	results, err := SearchLogs(tempDir, "test", time.Now().Add(-1*time.Hour), time.Now())
+	results, err := SearchLogs(tempDir, "test", 1*time.Hour, 100)
 	if err != nil {
 		t.Errorf("SearchLogs() error = %v", err)
 	}
@@ -61,12 +61,15 @@ func TestFormatLogStats(t *testing.T) {
 	Init("debug")
 	
 	stats := &LogStats{
-		TotalLogs:    100,
-		ErrorCount:   10,
-		WarningCount: 20,
-		InfoCount:    70,
-		StartTime:    time.Now().Add(-1 * time.Hour),
-		EndTime:      time.Now(),
+		TotalEntries:      100,
+		ErrorCount:        10,
+		WarningCount:      20,
+		InfoCount:         70,
+		LevelDistribution: map[string]int{"error": 10, "warn": 20, "info": 70},
+		TimeRange: TimeRange{
+			Start: time.Now().Add(-1 * time.Hour),
+			End:   time.Now(),
+		},
 	}
 	
 	formatted := FormatLogStats(stats)
