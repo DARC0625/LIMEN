@@ -766,7 +766,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			refreshClaims, refreshErr := auth.ValidateRefreshToken(cookie.Value, h.Config.JWTSecret)
 			if refreshErr == nil {
 				sessionStore := auth.GetSessionStore()
-				session, exists := sessionStore.GetSessionByRefreshToken(cookie.Value)
+				_, exists := sessionStore.GetSessionByRefreshToken(cookie.Value)
 				if exists {
 					// Generate new access token from refresh token
 					token, err = auth.GenerateAccessToken(refreshClaims.UserID, refreshClaims.Username, refreshClaims.Role, refreshClaims.Approved, h.Config.JWTSecret)
@@ -792,7 +792,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			zap.String("referer", r.Header.Get("Referer")),
 			zap.String("origin", r.Header.Get("Origin")),
 			zap.Bool("has_auth_header", r.Header.Get("Authorization") != ""),
-			zap.Bool("has_refresh_cookie", r.Cookie("refresh_token") == nil),
+			zap.Bool("has_refresh_cookie", func() bool { _, err := r.Cookie("refresh_token"); return err == nil }()),
 			zap.Error(err))
 		http.Error(w, "Authentication token required", http.StatusUnauthorized)
 		return
