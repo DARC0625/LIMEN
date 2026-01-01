@@ -753,22 +753,6 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 
 	// 1. Try query parameter (for backward compatibility)
 	token = r.URL.Query().Get("token")
-	// Also check if token is in the path (malformed URL like /vnc/{uuid}&token=...)
-	if token == "" {
-		// Check if path contains &token= (malformed URL)
-		if idx := strings.Index(r.URL.Path, "&token="); idx != -1 {
-			tokenPart := r.URL.Path[idx+7:] // Skip "&token="
-			// Extract token (may have more & or end of string)
-			if endIdx := strings.Index(tokenPart, "&"); endIdx != -1 {
-				token = tokenPart[:endIdx]
-			} else {
-				token = tokenPart
-			}
-			logger.Log.Warn("VNC: Token extracted from malformed path (contains &token=)",
-				zap.String("path", r.URL.Path),
-				zap.String("token_preview", token[:min(20, len(token))]+"..."))
-		}
-	}
 	if token != "" {
 		claims, err = auth.ValidateToken(token, h.Config.JWTSecret)
 		if err == nil {
@@ -925,17 +909,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		// Try to extract from path (e.g., /vnc/{uuid})
 		pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 		if len(pathParts) >= 2 && pathParts[0] == "vnc" {
-			// Extract UUID from path part, handling cases like "uuid&token=..."
-			pathPart := pathParts[1]
-			// If path part contains '&', it means token was incorrectly appended
-			if idx := strings.Index(pathPart, "&"); idx != -1 {
-				uuidStr = pathPart[:idx]
-				logger.Log.Warn("VNC: UUID extracted from malformed path (contains &)",
-					zap.String("original_path", pathPart),
-					zap.String("extracted_uuid", uuidStr))
-			} else {
-				uuidStr = pathPart
-			}
+			uuidStr = pathParts[1]
 		}
 		// Also try chi URL parameter if available
 		if uuidStr == "" {
