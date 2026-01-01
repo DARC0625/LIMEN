@@ -106,7 +106,7 @@ type SecurityInfo struct {
 var (
 	currentSpec *Spec
 	specMutex   sync.RWMutex
-	specFile    = "/home/darc0/projects/LIMEN/.server-spec.json"
+	specFile    = ".server-spec.json" // Relative to working directory
 )
 
 // DetectSpec detects the complete hardware specification.

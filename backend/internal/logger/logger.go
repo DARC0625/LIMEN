@@ -67,8 +67,8 @@ func GetLogDir() string {
 	if logDir != "" {
 		return logDir
 	}
-	// Default to /var/log/limen if not set
-	return "/var/log/limen"
+	// Default to relative path ./logs if not set
+	return "./logs"
 }
 
 // SetLogDir sets the log directory.

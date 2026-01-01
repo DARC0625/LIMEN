@@ -72,16 +72,20 @@ func (s *VMService) EnsureISO(osType string) (string, error) {
 
 	imagePath := image.Path
 
-	// Ensure path uses correct project directory (LIMEN)
-	if strings.Contains(imagePath, "/home/darc0/projects/") && !strings.Contains(imagePath, "/home/darc0/projects/LIMEN") {
-		// Replace any old project paths with LIMEN
-		imagePath = strings.Replace(imagePath, "/home/darc0/projects/", "/home/darc0/projects/LIMEN/", 1)
-		// Update DB with corrected path
-		image.Path = imagePath
-		if err := s.db.Save(&image).Error; err != nil {
-			logger.Log.Warn("Failed to update image path in DB", zap.String("os_type", osType), zap.Error(err))
-		} else {
-			logger.Log.Info("Updated image path in DB", zap.String("os_type", osType), zap.String("new_path", imagePath))
+	// Convert absolute paths to relative paths if they point to the project directory
+	// This ensures portability across different environments
+	if filepath.IsAbs(imagePath) {
+		// Try to make it relative to the ISO directory
+		relPath, err := filepath.Rel(s.isoDir, imagePath)
+		if err == nil && !strings.HasPrefix(relPath, "..") {
+			// Path is within ISO directory, use relative path
+			imagePath = relPath
+			image.Path = imagePath
+			if err := s.db.Save(&image).Error; err != nil {
+				logger.Log.Warn("Failed to update image path in DB", zap.String("os_type", osType), zap.Error(err))
+			} else {
+				logger.Log.Debug("Converted absolute path to relative", zap.String("os_type", osType), zap.String("new_path", imagePath))
+			}
 		}
 	}
 
