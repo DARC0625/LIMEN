@@ -359,7 +359,16 @@ func (s *VMService) StartVM(name string) error {
 	}
 	if active {
 		logger.Log.Info("VM is already running", zap.String("vm_name", name))
+		// Even if running, ensure VNC is configured
+		if err := s.ensureVNCGraphics(name); err != nil {
+			logger.Log.Warn("Failed to ensure VNC graphics on running VM", zap.String("vm_name", name), zap.Error(err))
+		}
 		return nil
+	}
+
+	// Ensure VNC graphics is configured before starting
+	if err := s.ensureVNCGraphics(name); err != nil {
+		logger.Log.Warn("Failed to ensure VNC graphics, VM may not have VNC access", zap.String("vm_name", name), zap.Error(err))
 	}
 
 	// Start VM
@@ -867,6 +876,86 @@ func (s *VMService) verifyVNCPort(port int) bool {
 		return true
 	}
 	return false
+}
+
+// ensureVNCGraphics ensures VNC graphics is configured in VM XML
+// If VNC graphics is missing, it will be added automatically
+func (s *VMService) ensureVNCGraphics(name string) error {
+	dom, err := s.conn.LookupDomainByName(name)
+	if err != nil {
+		return fmt.Errorf("VM not found: %w", err)
+	}
+	defer dom.Free()
+
+	// Get current XML
+	xmlDesc, err := dom.GetXMLDesc(0)
+	if err != nil {
+		return fmt.Errorf("failed to get VM XML: %w", err)
+	}
+
+	// Parse XML to check if VNC graphics exists
+	var domainXML struct {
+		Devices struct {
+			Graphics []struct {
+				Type     string `xml:"type,attr"`
+				Port     string `xml:"port,attr"`
+				AutoPort string `xml:"autoport,attr"`
+			} `xml:"graphics"`
+		} `xml:"devices"`
+	}
+
+	if err := xml.Unmarshal([]byte(xmlDesc), &domainXML); err != nil {
+		return fmt.Errorf("failed to parse VM XML: %w", err)
+	}
+
+	// Check if VNC graphics already exists
+	hasVNC := false
+	for _, g := range domainXML.Devices.Graphics {
+		if g.Type == "vnc" {
+			hasVNC = true
+			break
+		}
+	}
+
+	if hasVNC {
+		// VNC already configured, nothing to do
+		return nil
+	}
+
+	// VNC graphics not found, add it
+	logger.Log.Info("VNC graphics not found, adding to VM configuration", zap.String("vm_name", name))
+
+	// Find the closing </devices> tag and insert VNC graphics before it
+	// We'll insert it after the last device (before </devices>)
+	// Look for </devices> and insert before it
+	devicesCloseTag := "</devices>"
+	if !strings.Contains(xmlDesc, devicesCloseTag) {
+		return fmt.Errorf("could not find </devices> tag in VM XML")
+	}
+
+	// Insert VNC graphics configuration before </devices>
+	vncConfig := `    <graphics type='vnc' port='-1' autoport='yes' listen='0.0.0.0'>
+      <listen type='address' address='0.0.0.0'/>
+    </graphics>
+`
+	
+	// Find the position to insert (before </devices>)
+	insertPos := strings.LastIndex(xmlDesc, devicesCloseTag)
+	if insertPos == -1 {
+		return fmt.Errorf("could not find </devices> tag in VM XML")
+	}
+
+	// Insert VNC config before </devices>
+	updatedXML := xmlDesc[:insertPos] + vncConfig + xmlDesc[insertPos:]
+
+	// Update domain definition
+	_, err = s.conn.DomainDefineXML(updatedXML)
+	if err != nil {
+		return fmt.Errorf("failed to add VNC graphics to VM: %w", err)
+	}
+
+	logger.Log.Info("VNC graphics added to VM configuration", zap.String("vm_name", name))
+	return nil
 }
 
 func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
