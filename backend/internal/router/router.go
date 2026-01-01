@@ -151,9 +151,10 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *chi.Mux {
 
 	// WebSocket routes (must be before middleware to avoid ResponseWriter wrapping)
 	// These routes need direct access to http.Hijacker for WebSocket upgrade
+	// IMPORTANT: More specific routes must be registered first
+	r.Get("/vnc/{uuid}", h.HandleVNC) // VNC WebSocket with UUID in path (most specific - register first)
 	r.Get("/ws/vnc", h.HandleVNC)
 	r.Get("/vnc", h.HandleVNC) // Alternative path for VNC WebSocket (for Envoy compatibility)
-	r.Get("/vnc/{uuid}", h.HandleVNC) // VNC WebSocket with UUID in path
 	r.Get("/ws/vm-status", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleVMStatusWebSocket(w, r, cfg)
 	})
