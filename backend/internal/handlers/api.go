@@ -718,6 +718,16 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log incoming WebSocket connection attempt with ALL headers for debugging
+	allCookies := r.Cookies()
+	cookieNames := make([]string, 0, len(allCookies))
+	hasRefreshToken := false
+	for _, c := range allCookies {
+		cookieNames = append(cookieNames, c.Name)
+		if c.Name == "refresh_token" {
+			hasRefreshToken = true
+		}
+	}
+	
 	logger.Log.Info("VNC WebSocket connection attempt - DETAILED",
 		zap.String("remote_addr", r.RemoteAddr),
 		zap.String("origin", origin),
@@ -730,6 +740,10 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		zap.String("method", r.Method),
 		zap.String("host", r.Host),
 		zap.String("referer", r.Header.Get("Referer")),
+		zap.String("authorization", r.Header.Get("Authorization")),
+		zap.String("cookie_header", r.Header.Get("Cookie")),
+		zap.Strings("cookie_names", cookieNames),
+		zap.Bool("has_refresh_token_cookie", hasRefreshToken),
 		zap.Strings("allowed_origins", h.Config.AllowedOrigins))
 
 	// Verify authentication: Try multiple methods (query param, Authorization header, refresh token cookie)
@@ -763,11 +777,20 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 	// 3. Try refresh token cookie (for session-based auth)
 	if token == "" || err != nil {
 		if cookie, cookieErr := r.Cookie("refresh_token"); cookieErr == nil {
+			logger.Log.Info("VNC: refresh_token cookie found, attempting authentication",
+				zap.String("cookie_preview", cookie.Value[:min(20, len(cookie.Value))]+"..."))
 			refreshClaims, refreshErr := auth.ValidateRefreshToken(cookie.Value, h.Config.JWTSecret)
-			if refreshErr == nil {
+			if refreshErr != nil {
+				logger.Log.Warn("VNC: refresh token validation failed",
+					zap.Error(refreshErr),
+					zap.String("cookie_preview", cookie.Value[:min(20, len(cookie.Value))]+"..."))
+			} else {
 				sessionStore := auth.GetSessionStore()
 				_, exists := sessionStore.GetSessionByRefreshToken(cookie.Value)
-				if exists {
+				if !exists {
+					logger.Log.Warn("VNC: refresh token not found in session store",
+						zap.Uint("user_id", refreshClaims.UserID))
+				} else {
 					// Generate new access token from refresh token
 					token, err = auth.GenerateAccessToken(refreshClaims.UserID, refreshClaims.Username, refreshClaims.Role, refreshClaims.Approved, h.Config.JWTSecret)
 					if err == nil {
@@ -777,10 +800,18 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 							Role:     refreshClaims.Role,
 							Approved: refreshClaims.Approved,
 						}
-						logger.Log.Debug("VNC authentication via refresh token cookie")
+						logger.Log.Info("VNC authentication via refresh token cookie - SUCCESS",
+							zap.Uint("user_id", claims.UserID),
+							zap.String("username", claims.Username))
+					} else {
+						logger.Log.Warn("VNC: failed to generate access token from refresh token",
+							zap.Error(err))
 					}
 				}
 			}
+		} else {
+			logger.Log.Debug("VNC: no refresh_token cookie found",
+				zap.Error(cookieErr))
 		}
 	}
 
