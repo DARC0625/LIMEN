@@ -541,6 +541,43 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 	// Update session with new access token
 	sessionStore.UpdateSessionTokens(session.ID, newAccessToken, "", "")
 
+	// Re-set refresh token cookie to ensure it's present (in case it was lost)
+	// This helps recover from cases where the cookie wasn't saved by the browser
+	isHTTPS := r.Header.Get("X-Forwarded-Proto") == "https" || r.TLS != nil
+	refreshCookie := &http.Cookie{
+		Name:     "refresh_token",
+		Value:    refreshToken, // Use the same refresh token (not rotating here)
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+		MaxAge:   604800, // 7 days
+		// Domain을 명시적으로 설정하지 않음 (빈 문자열) - 브라우저가 자동으로 현재 도메인 사용
+	}
+	if isHTTPS {
+		refreshCookie.Secure = true
+	}
+	http.SetCookie(w, refreshCookie)
+
+	// Re-set CSRF token cookie to ensure it's present
+	csrfCookie := &http.Cookie{
+		Name:     "csrf_token",
+		Value:    session.CSRFToken,
+		HttpOnly: false,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+		MaxAge:   604800, // 7 days
+		// Domain을 명시적으로 설정하지 않음 (빈 문자열) - 브라우저가 자동으로 현재 도메인 사용
+	}
+	if isHTTPS {
+		csrfCookie.Secure = true
+	}
+	http.SetCookie(w, csrfCookie)
+
+	logger.Log.Debug("Session check - cookies re-set",
+		zap.String("session_id", session.ID),
+		zap.Uint("user_id", session.UserID),
+		zap.Bool("secure", isHTTPS))
+
 	// Session is valid
 	response := SessionResponse{
 		Valid:       true,

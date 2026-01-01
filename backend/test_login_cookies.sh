@@ -25,3 +25,4 @@ echo "  1. fetch/axios 요청에 credentials: 'include' 옵션 사용"
 echo "  2. 브라우저 개발자 도구 → Network → Response Headers에서 Set-Cookie 확인"
 echo "  3. Application → Cookies에서 refresh_token, csrf_token 확인"
 
+
