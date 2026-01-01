@@ -49,7 +49,9 @@ func TestNewMultiCore(t *testing.T) {
 	config := DefaultRotationConfig(tempDir)
 	fileCore := NewRotatingFileCore(config, zapcore.InfoLevel)
 	
-	consoleEncoderConfig := zapcore.NewDevelopmentEncoderConfig()
+	// Use production encoder config for testing
+	consoleEncoderConfig := zapcore.NewProductionEncoderConfig()
+	consoleEncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	consoleEncoder := zapcore.NewConsoleEncoder(consoleEncoderConfig)
 	consoleCore := zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), zapcore.InfoLevel)
 	core := NewMultiCore(fileCore, consoleCore)
