@@ -221,7 +221,7 @@ func TestHandleGetSession_NoCookie(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/auth/session", nil)
 	w := httptest.NewRecorder()
 
-	h.HandleGetSession(w, req)
+	h.HandleGetSession(w, req, cfg)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
@@ -309,7 +309,7 @@ func TestHandleRefreshToken_Success(t *testing.T) {
 	})
 	w := httptest.NewRecorder()
 
-	h.HandleRefreshToken(w, req)
+	h.HandleRefreshToken(w, req, cfg)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d. Body: %s", w.Code, w.Body.String())
@@ -335,7 +335,7 @@ func TestHandleRefreshToken_InvalidToken(t *testing.T) {
 	})
 	w := httptest.NewRecorder()
 
-	h.HandleRefreshToken(w, req)
+	h.HandleRefreshToken(w, req, cfg)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("Expected status 401, got %d", w.Code)
@@ -357,8 +357,11 @@ func TestHandleDeleteSession_Success(t *testing.T) {
 
 	// Create session
 	sessionStore := auth.GetSessionStore()
-	refreshToken, _ := auth.GenerateRefreshToken(user.ID, user.Username, user.Role, user.Approved, cfg.JWTSecret)
-	sessionStore.CreateSession(user.ID, user.Username, user.Role, user.Approved, refreshToken, "token-id")
+	refreshToken, tokenID, _ := auth.GenerateRefreshToken(user.ID, user.Username, string(user.Role), user.Approved, cfg.JWTSecret)
+	accessToken, _ := auth.GenerateAccessToken(user.ID, user.Username, string(user.Role), user.Approved, cfg.JWTSecret)
+	csrfToken := security.GenerateCSRFToken()
+	expiresAt := time.Now().Add(7 * 24 * time.Hour)
+	sessionStore.CreateSession(accessToken, refreshToken, tokenID, csrfToken, user.ID, user.Username, string(user.Role), expiresAt)
 
 	req := httptest.NewRequest("DELETE", "/api/auth/session", nil)
 	req.AddCookie(&http.Cookie{
@@ -367,7 +370,7 @@ func TestHandleDeleteSession_Success(t *testing.T) {
 	})
 	w := httptest.NewRecorder()
 
-	h.HandleDeleteSession(w, req)
+	h.HandleDeleteSession(w, req, cfg)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d. Body: %s", w.Code, w.Body.String())
