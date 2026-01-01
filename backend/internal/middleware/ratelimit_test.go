@@ -241,9 +241,8 @@ func TestGetClientIP(t *testing.T) {
 	}
 }
 
-func TestIPRateLimiter_cleanup(t *testing.T) {
+func TestIPRateLimiter_cleanupExpiredNow(t *testing.T) {
 	limiter := NewIPRateLimiter(rate.Limit(10), 20)
-	limiter.cleanup()
 
 	// Add some IPs
 	ip1 := "192.168.1.1"
