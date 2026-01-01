@@ -89,6 +89,11 @@ func (s *VMService) EnsureISO(osType string) (string, error) {
 		}
 	}
 
+	// Resolve path: if relative, make it relative to ISO directory
+	if !filepath.IsAbs(imagePath) {
+		imagePath = filepath.Join(s.isoDir, imagePath)
+	}
+	
 	if _, err := os.Stat(imagePath); err == nil {
 		return imagePath, nil
 	}
