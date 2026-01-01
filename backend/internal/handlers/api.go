@@ -909,7 +909,17 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		// Try to extract from path (e.g., /vnc/{uuid})
 		pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 		if len(pathParts) >= 2 && pathParts[0] == "vnc" {
-			uuidStr = pathParts[1]
+			// Extract UUID from path part, handling cases like "uuid&token=..."
+			pathPart := pathParts[1]
+			// If path part contains '&', it means token was incorrectly appended
+			if idx := strings.Index(pathPart, "&"); idx != -1 {
+				uuidStr = pathPart[:idx]
+				logger.Log.Warn("VNC: UUID extracted from malformed path (contains &)",
+					zap.String("original_path", pathPart),
+					zap.String("extracted_uuid", uuidStr))
+			} else {
+				uuidStr = pathPart
+			}
 		}
 		// Also try chi URL parameter if available
 		if uuidStr == "" {
