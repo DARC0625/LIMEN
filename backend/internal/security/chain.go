@@ -343,50 +343,42 @@ func GetCurrentChain() *SecurityChain {
 	return currentChain
 }
 
-// StartChainMonitoring starts periodic security chain monitoring.
-func StartChainMonitoring(ctx context.Context, interval time.Duration) {
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
+// CheckSecurityChain checks security chain on-demand (event-driven).
+// Call this when security configuration changes or when needed.
+func CheckSecurityChain(ctx context.Context) (*SecurityChain, error) {
+	chain, err := ValidateSecurityChain(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-		logger.Log.Info("Security chain monitoring started",
-			zap.Duration("interval", interval),
+	// Log weak links
+	if len(chain.WeakLinks) > 0 {
+		logger.Log.Warn("Security chain weak links detected",
+			zap.Int("count", len(chain.WeakLinks)),
+			zap.String("overall_status", string(chain.Overall)),
 		)
-
-		for {
-			select {
-			case <-ctx.Done():
-				logger.Log.Info("Security chain monitoring stopped")
-				return
-			case <-ticker.C:
-				chain, err := ValidateSecurityChain(ctx)
-				if err != nil {
-					logger.Log.Error("Failed to validate security chain", zap.Error(err))
-					continue
-				}
-
-				// Log weak links
-				if len(chain.WeakLinks) > 0 {
-					logger.Log.Warn("Security chain weak links detected",
-						zap.Int("count", len(chain.WeakLinks)),
-						zap.String("overall_status", string(chain.Overall)),
-					)
-					for _, link := range chain.WeakLinks {
-						logger.Log.Warn("Weak link detected",
-							zap.String("component", link.Component),
-							zap.String("severity", link.Severity),
-							zap.String("issue", link.Issue),
-							zap.String("recommendation", link.Recommendation),
-						)
-					}
-				} else {
-					logger.Log.Info("Security chain validation passed",
-						zap.String("overall_status", string(chain.Overall)),
-					)
-				}
-			}
+		for _, link := range chain.WeakLinks {
+			logger.Log.Warn("Weak link detected",
+				zap.String("component", link.Component),
+				zap.String("severity", link.Severity),
+				zap.String("issue", link.Issue),
+				zap.String("recommendation", link.Recommendation),
+			)
 		}
-	}()
+	} else {
+		logger.Log.Info("Security chain validation passed",
+			zap.String("overall_status", string(chain.Overall)),
+		)
+	}
+
+	return chain, nil
+}
+
+// StartChainMonitoring is deprecated - use CheckSecurityChain() for event-driven checks.
+// Kept for backward compatibility but does nothing (event-driven approach).
+func StartChainMonitoring(ctx context.Context, interval time.Duration) {
+	logger.Log.Info("Security chain monitoring is now event-driven - use CheckSecurityChain() when needed",
+		zap.String("note", "Periodic monitoring disabled for efficiency"))
 }
 
 // GetWeakestLink returns the weakest link in the security chain.

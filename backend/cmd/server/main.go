@@ -105,9 +105,11 @@ func main() {
 			zap.Bool("hardware_accel", secConfig.EnableHardwareAccel),
 		)
 
-		// Start hardware monitoring (check every 5 minutes)
-		hardware.StartMonitor(5 * time.Minute)
-		defer hardware.StopMonitor()
+		// Check hardware changes once at startup (event-driven)
+		if err := hardware.CheckHardwareChanges(); err != nil {
+			logger.Log.Warn("Failed to check hardware changes", zap.Error(err))
+		}
+		logger.Log.Info("Hardware monitoring initialized (event-driven)")
 	}
 
 	// Initialize security chain monitoring
@@ -115,9 +117,11 @@ func main() {
 	if _, err := security.ValidateSecurityChain(ctx); err != nil {
 		logger.Log.Warn("Failed to validate security chain", zap.Error(err))
 	} else {
-		// Start security chain monitoring (check every 10 minutes)
-		security.StartChainMonitoring(ctx, 10*time.Minute)
-		logger.Log.Info("Security chain monitoring started")
+		// Check security chain once at startup (event-driven)
+		if _, err := security.CheckSecurityChain(ctx); err != nil {
+			logger.Log.Warn("Failed to check security chain", zap.Error(err))
+		}
+		logger.Log.Info("Security chain monitoring initialized (event-driven)")
 	}
 
 	// Connect to database

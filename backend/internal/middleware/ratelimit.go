@@ -32,9 +32,13 @@ func NewIPRateLimiter(r rate.Limit, b int) *IPRateLimiter {
 }
 
 // getLimiter returns the rate limiter for the given IP.
+// Event-driven: cleans up expired entries on-demand when accessed.
 func (i *IPRateLimiter) getLimiter(ip string) *rate.Limiter {
 	i.mu.Lock()
 	defer i.mu.Unlock()
+
+	// Cleanup expired entries on-demand (event-driven)
+	i.cleanupExpiredNow()
 
 	limiter, exists := i.ips[ip]
 	if !exists {
@@ -47,26 +51,20 @@ func (i *IPRateLimiter) getLimiter(ip string) *rate.Limiter {
 	return limiter
 }
 
-// cleanup removes old IP entries periodically to prevent memory leaks.
+// cleanupExpiredNow removes old IP entries on-demand (event-driven).
 // Removes entries that haven't been accessed in the last hour.
-func (i *IPRateLimiter) cleanup() {
-	ticker := time.NewTicker(10 * time.Minute)
-	go func() {
-		for range ticker.C {
-			i.mu.Lock()
-			now := time.Now()
-			cutoff := now.Add(-1 * time.Hour) // Remove entries older than 1 hour
+// Called automatically when getLimiter is accessed.
+func (i *IPRateLimiter) cleanupExpiredNow() {
+	now := time.Now()
+	cutoff := now.Add(-1 * time.Hour) // Remove entries older than 1 hour
 
-			// Remove stale entries
-			for ip, lastAccess := range i.lastAccess {
-				if lastAccess.Before(cutoff) {
-					delete(i.ips, ip)
-					delete(i.lastAccess, ip)
-				}
-			}
-			i.mu.Unlock()
+	// Remove stale entries
+	for ip, lastAccess := range i.lastAccess {
+		if lastAccess.Before(cutoff) {
+			delete(i.ips, ip)
+			delete(i.lastAccess, ip)
 		}
-	}()
+	}
 }
 
 // RateLimitConfig defines rate limit configuration for different endpoint types.
@@ -91,11 +89,10 @@ func RateLimit(requestsPerSecond float64, burstSize int) func(http.Handler) http
 
 // RateLimitWithConfig creates a rate limiting middleware with endpoint-specific configurations.
 func RateLimitWithConfig(config RateLimitConfig) func(http.Handler) http.Handler {
-	// Create default limiter
+	// Create default limiter (event-driven cleanup, no periodic goroutine)
 	defaultLimiter := NewIPRateLimiter(rate.Limit(config.DefaultRPS), config.DefaultBurst)
-	defaultLimiter.cleanup()
 
-	// Create endpoint-specific limiters
+	// Create endpoint-specific limiters (event-driven cleanup, no periodic goroutine)
 	endpointLimiters := make(map[string]*IPRateLimiter)
 	for path, rps := range config.EndpointRPS {
 		burst := config.DefaultBurst
@@ -103,7 +100,6 @@ func RateLimitWithConfig(config RateLimitConfig) func(http.Handler) http.Handler
 			burst = b
 		}
 		limiter := NewIPRateLimiter(rate.Limit(rps), burst)
-		limiter.cleanup()
 		endpointLimiters[path] = limiter
 	}
 

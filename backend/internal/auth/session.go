@@ -53,8 +53,7 @@ func NewSessionStore() *SessionStore {
 		sessions:    make(map[string]*Session),
 		stopCleanup: make(chan struct{}),
 	}
-	// Start cleanup goroutine
-	go store.cleanupExpiredSessions()
+	// No periodic cleanup - cleanup happens on-demand when sessions are accessed
 	return store
 }
 
@@ -87,6 +86,8 @@ func (s *SessionStore) CreateSession(accessToken, refreshToken, tokenID, csrfTok
 	}
 
 	s.mu.Lock()
+	// Cleanup expired sessions before creating new one (event-driven)
+	s.cleanupExpiredSessionsNow()
 	s.sessions[sessionID] = session
 	s.mu.Unlock()
 
@@ -100,8 +101,11 @@ func (s *SessionStore) CreateSession(accessToken, refreshToken, tokenID, csrfTok
 
 // GetSessionByRefreshToken retrieves a session by refresh token.
 func (s *SessionStore) GetSessionByRefreshToken(refreshToken string) (*Session, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Cleanup expired sessions on-demand (event-driven)
+	s.cleanupExpiredSessionsNow()
 
 	for _, session := range s.sessions {
 		if session.RefreshToken == refreshToken {
@@ -118,8 +122,11 @@ func (s *SessionStore) GetSessionByRefreshToken(refreshToken string) (*Session, 
 
 // GetSessionByTokenID retrieves a session by token ID (for refresh token rotation).
 func (s *SessionStore) GetSessionByTokenID(tokenID string) (*Session, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Cleanup expired sessions on-demand (event-driven)
+	s.cleanupExpiredSessionsNow()
 
 	for _, session := range s.sessions {
 		if session.TokenID == tokenID {
@@ -206,35 +213,24 @@ func (s *SessionStore) DeleteSession(sessionID string) {
 	}
 }
 
-// cleanupExpiredSessions periodically removes expired sessions.
-func (s *SessionStore) cleanupExpiredSessions() {
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			s.mu.Lock()
-			now := time.Now()
-			count := 0
-			for id, session := range s.sessions {
-				if now.After(session.ExpiresAt) {
-					delete(s.sessions, id)
-					count++
-				}
-			}
-			s.mu.Unlock()
-			if count > 0 {
-				logger.Log.Debug("Cleaned up expired sessions", zap.Int("count", count))
-			}
-		case <-s.stopCleanup:
-			return
+// cleanupExpiredSessionsNow removes expired sessions immediately (event-driven).
+// Called on-demand when sessions are accessed or created.
+func (s *SessionStore) cleanupExpiredSessionsNow() {
+	now := time.Now()
+	count := 0
+	for id, session := range s.sessions {
+		if now.After(session.ExpiresAt) {
+			delete(s.sessions, id)
+			count++
 		}
+	}
+	if count > 0 {
+		logger.Log.Debug("Cleaned up expired sessions", zap.Int("count", count))
 	}
 }
 
-// Stop stops the cleanup goroutine.
+// Stop stops the session store (no-op for event-driven cleanup).
 func (s *SessionStore) Stop() {
-	close(s.stopCleanup)
+	// No periodic cleanup goroutine to stop
 }
 
