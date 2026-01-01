@@ -94,9 +94,20 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 
 			// 2. Fallback to refresh token cookie (validate and generate new access token)
 			if tokenString == "" || err != nil {
+				// Log all cookies for debugging
+				allCookies := r.Cookies()
+				cookieNames := make([]string, 0, len(allCookies))
+				for _, c := range allCookies {
+					cookieNames = append(cookieNames, c.Name)
+				}
+				logger.Log.Info("Auth middleware - checking refresh token cookie",
+					zap.String("path", r.URL.Path),
+					zap.Strings("all_cookies", cookieNames),
+					zap.String("cookie_header", r.Header.Get("Cookie")))
+				
 				if cookie, err := r.Cookie("refresh_token"); err == nil {
 					refreshToken := cookie.Value
-					logger.Log.Debug("Attempting authentication via refresh token cookie",
+					logger.Log.Info("Refresh token cookie found, attempting authentication",
 						zap.String("path", r.URL.Path),
 						zap.String("refresh_token_preview", refreshToken[:min(20, len(refreshToken))]+"..."))
 					
@@ -126,9 +137,10 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 								}
 								// Update session with new access token
 								sessionStore.UpdateSessionTokens(session.ID, tokenString, "", "")
-								logger.Log.Debug("Authenticated via refresh token cookie",
+								logger.Log.Info("Authenticated via refresh token cookie",
 									zap.String("path", r.URL.Path),
-									zap.Uint("user_id", claims.UserID))
+									zap.Uint("user_id", claims.UserID),
+									zap.String("username", claims.Username))
 							} else {
 								logger.Log.Warn("Failed to generate access token from refresh token",
 									zap.String("path", r.URL.Path),
@@ -137,9 +149,11 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 						}
 					}
 				} else {
-					logger.Log.Debug("No refresh_token cookie found",
+					logger.Log.Warn("No refresh_token cookie found in request",
 						zap.String("path", r.URL.Path),
-						zap.Error(err))
+						zap.Error(err),
+						zap.Strings("available_cookies", cookieNames),
+						zap.String("cookie_header", r.Header.Get("Cookie")))
 				}
 			}
 
