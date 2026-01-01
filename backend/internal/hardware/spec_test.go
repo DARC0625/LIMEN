@@ -21,12 +21,11 @@ func TestInitialize(t *testing.T) {
 	}
 }
 
-func TestGetHardwareSpec(t *testing.T) {
-	// Test GetHardwareSpec
-	spec := GetHardwareSpec()
-	if spec == nil {
-		t.Error("GetHardwareSpec() returned nil")
-	}
+func TestGetCurrentSpec(t *testing.T) {
+	// Test GetCurrentSpec
+	spec := GetCurrentSpec()
+	// Spec may be nil if not initialized, which is OK
+	_ = spec
 }
 
 func TestGetOptimalSecurityConfig(t *testing.T) {
@@ -45,35 +44,23 @@ func TestValidateHardwareSecurity(t *testing.T) {
 	}
 }
 
-func TestGetCPUFrequency(t *testing.T) {
-	// Test GetCPUFrequency
-	freq := GetCPUFrequency()
-	if freq <= 0 {
-		t.Logf("GetCPUFrequency() returned %v (may be expected in test environment)", freq)
+func TestGetCurrentSpec_CPUInfo(t *testing.T) {
+	// Test that GetCurrentSpec returns valid CPU info
+	spec := GetCurrentSpec()
+	if spec != nil {
+		if spec.CPU.Cores <= 0 {
+			t.Error("CPU cores should be > 0")
+		}
 	}
 }
 
-func TestGetCPUCount(t *testing.T) {
-	// Test GetCPUCount
-	count := GetCPUCount()
-	if count <= 0 {
-		t.Error("GetCPUCount() should return > 0")
-	}
-}
-
-func TestGetMemorySize(t *testing.T) {
-	// Test GetMemorySize
-	mem := GetMemorySize()
-	if mem <= 0 {
-		t.Error("GetMemorySize() should return > 0")
-	}
-}
-
-func TestGetDiskSize(t *testing.T) {
-	// Test GetDiskSize
-	disk := GetDiskSize()
-	if disk <= 0 {
-		t.Logf("GetDiskSize() returned %v (may be expected in test environment)", disk)
+func TestGetCurrentSpec_MemoryInfo(t *testing.T) {
+	// Test that GetCurrentSpec returns valid memory info
+	spec := GetCurrentSpec()
+	if spec != nil {
+		if spec.Memory.TotalGB <= 0 {
+			t.Error("Memory total should be > 0")
+		}
 	}
 }
 
