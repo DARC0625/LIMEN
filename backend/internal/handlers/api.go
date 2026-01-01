@@ -732,42 +732,69 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		zap.String("referer", r.Header.Get("Referer")),
 		zap.Strings("allowed_origins", h.Config.AllowedOrigins))
 
-	// Verify authentication via token in query parameter or header
-	// WebSocket doesn't support custom headers easily, so we use query param
-	token := r.URL.Query().Get("token")
-	if token == "" {
-		// Try Authorization header as fallback
+	// Verify authentication: Try multiple methods (query param, Authorization header, refresh token cookie)
+	var token string
+	var claims *auth.Claims
+	var err error
+
+	// 1. Try query parameter (for backward compatibility)
+	token = r.URL.Query().Get("token")
+	if token != "" {
+		claims, err = auth.ValidateToken(token, h.Config.JWTSecret)
+		if err == nil {
+			logger.Log.Debug("VNC authentication via query parameter")
+		}
+	}
+
+	// 2. Try Authorization header (preferred method from frontend)
+	if token == "" || err != nil {
 		authHeader := r.Header.Get("Authorization")
-		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
-			token = strings.TrimPrefix(authHeader, "Bearer ")
+		if authHeader != "" {
+			token, err = auth.ExtractTokenFromHeader(authHeader)
+			if err == nil {
+				claims, err = auth.ValidateToken(token, h.Config.JWTSecret)
+				if err == nil {
+					logger.Log.Debug("VNC authentication via Authorization header")
+				}
+			}
+		}
+	}
+
+	// 3. Try refresh token cookie (for session-based auth)
+	if token == "" || err != nil {
+		if cookie, cookieErr := r.Cookie("refresh_token"); cookieErr == nil {
+			refreshClaims, refreshErr := auth.ValidateRefreshToken(cookie.Value, h.Config.JWTSecret)
+			if refreshErr == nil {
+				sessionStore := auth.GetSessionStore()
+				session, exists := sessionStore.GetSessionByRefreshToken(cookie.Value)
+				if exists {
+					// Generate new access token from refresh token
+					token, err = auth.GenerateAccessToken(refreshClaims.UserID, refreshClaims.Username, refreshClaims.Role, refreshClaims.Approved, h.Config.JWTSecret)
+					if err == nil {
+						claims = &auth.Claims{
+							UserID:   refreshClaims.UserID,
+							Username: refreshClaims.Username,
+							Role:     refreshClaims.Role,
+							Approved: refreshClaims.Approved,
+						}
+						logger.Log.Debug("VNC authentication via refresh token cookie")
+					}
+				}
+			}
 		}
 	}
 
 	// Token is REQUIRED for production security
-	if token == "" {
-		logger.Log.Warn("VNC connection attempt without token",
+	if token == "" || err != nil {
+		logger.Log.Warn("VNC connection attempt without valid token",
 			zap.String("remote_addr", r.RemoteAddr),
 			zap.String("user_agent", r.Header.Get("User-Agent")),
 			zap.String("referer", r.Header.Get("Referer")),
-			zap.String("origin", r.Header.Get("Origin")))
-		http.Error(w, "Authentication token required", http.StatusUnauthorized)
-		return
-	}
-
-	// Validate JWT token
-	claims, err := auth.ValidateToken(token, h.Config.JWTSecret)
-	if err != nil {
-		tokenPrefix := token
-		if len(token) > 20 {
-			tokenPrefix = token[:20]
-		}
-		logger.Log.Warn("VNC connection with invalid token",
-			zap.Error(err),
-			zap.String("remote_addr", r.RemoteAddr),
-			zap.String("user_agent", r.Header.Get("User-Agent")),
 			zap.String("origin", r.Header.Get("Origin")),
-			zap.String("token_prefix", tokenPrefix))
-		http.Error(w, fmt.Sprintf("Invalid or expired token: %v", err), http.StatusUnauthorized)
+			zap.Bool("has_auth_header", r.Header.Get("Authorization") != ""),
+			zap.Bool("has_refresh_cookie", r.Cookie("refresh_token") == nil),
+			zap.Error(err))
+		http.Error(w, "Authentication token required", http.StatusUnauthorized)
 		return
 	}
 
