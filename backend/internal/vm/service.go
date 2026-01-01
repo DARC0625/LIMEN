@@ -414,6 +414,11 @@ func (s *VMService) StartVM(name string) error {
 // RestartVM restarts a VM (stops and starts)
 // Media is not automatically detached - user must manually detach if needed
 func (s *VMService) RestartVM(name string) error {
+	// Ensure VNC graphics is configured before restarting
+	if err := s.ensureVNCGraphics(name); err != nil {
+		logger.Log.Warn("Failed to ensure VNC graphics before restart, VM may not have VNC access", zap.String("vm_name", name), zap.Error(err))
+	}
+
 	// Stop VM first
 	if err := s.StopVM(name); err != nil {
 		return fmt.Errorf("failed to stop VM: %w", err)
