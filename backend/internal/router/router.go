@@ -153,6 +153,7 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *chi.Mux {
 	// These routes need direct access to http.Hijacker for WebSocket upgrade
 	r.Get("/ws/vnc", h.HandleVNC)
 	r.Get("/vnc", h.HandleVNC) // Alternative path for VNC WebSocket (for Envoy compatibility)
+	r.Get("/vnc/{uuid}", h.HandleVNC) // VNC WebSocket with UUID in path
 	r.Get("/ws/vm-status", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleVMStatusWebSocket(w, r, cfg)
 	})

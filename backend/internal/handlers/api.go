@@ -869,17 +869,39 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		zap.Uint("user_id", claims.UserID),
 		zap.String("username", claims.Username))
 
-	// Get VM UUID from query parameter
+	// Get VM UUID from query parameter, path parameter, or URL path
 	uuidStr := r.URL.Query().Get("id")
+	if uuidStr == "" {
+		uuidStr = r.URL.Query().Get("uuid")
+	}
+	if uuidStr == "" {
+		// Try to extract from path (e.g., /vnc/{uuid})
+		pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(pathParts) >= 2 && pathParts[0] == "vnc" {
+			uuidStr = pathParts[1]
+		}
+		// Also try chi URL parameter if available
+		if uuidStr == "" {
+			uuidStr = chi.URLParam(r, "uuid")
+		}
+	}
+	
 	if uuidStr == "" {
 		logger.Log.Warn("VNC connection attempt without VM UUID",
 			zap.Uint("user_id", claims.UserID),
-			zap.String("username", claims.Username))
+			zap.String("username", claims.Username),
+			zap.String("path", r.URL.Path),
+			zap.String("query", r.URL.RawQuery))
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel() // Ensure context is cancelled to prevent resource leak
 		ws.Write(ctx, websocket.MessageText, []byte(`{"type":"error","error":"VM UUID is required","code":"MISSING_VM_UUID"}`))
 		return
 	}
+
+	logger.Log.Info("VNC connection request", 
+		zap.String("vm_uuid", uuidStr),
+		zap.Uint("user_id", claims.UserID),
+		zap.String("username", claims.Username))
 
 	// Find VM by UUID only
 	var vmRec models.VM
@@ -905,7 +927,24 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Log.Info("VNC connection request", zap.String("vm_uuid", vmRec.UUID), zap.String("vm_name", vmRec.Name), zap.Int("vm_id", int(vmRec.ID)))
+	// Get VM UUID from query parameter or path parameter
+	uuidStr := r.URL.Query().Get("uuid")
+	if uuidStr == "" {
+		// Try to extract from path (e.g., /vnc/{uuid})
+		pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(pathParts) >= 2 && pathParts[0] == "vnc" {
+			uuidStr = pathParts[1]
+		}
+		// Also try chi URL parameter if available
+		if uuidStr == "" {
+			uuidStr = chi.URLParam(r, "uuid")
+		}
+	}
+
+	logger.Log.Info("VNC connection request", 
+		zap.String("vm_uuid", uuidStr),
+		zap.String("vm_name", func() string { if vmRec != nil { return vmRec.Name } else { return "" } }()),
+		zap.Int("vm_id", func() int { if vmRec != nil { return int(vmRec.ID) } else { return 0 } }()))
 
 	logger.Log.Info("VM found for VNC", zap.String("vm_name", vmRec.Name), zap.String("status", string(vmRec.Status)))
 
