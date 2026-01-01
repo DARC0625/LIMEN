@@ -55,9 +55,34 @@ make test-integration  # 통합 테스트만
 
 ## 현재 커버리지
 
-- `validator`: 100%
-- `models`: 100%
-- `config`: 94.1%
+전체 커버리지: **15.4%** (목표: 100%)
+
+### 패키지별 커버리지
+- `errors`: 95.2% ✅
+- `validator`: 95.0% ✅
+- `auth`: 84.8% ✅
+- `middleware`: 72.8% ✅
+- `config`: 65.8%
+- `security`: 33.2%
+- `models`: 16.0%
+- `handlers`: 5.5%
+- `vm`: 0.0%
+- `logger`: 0.0%
+- `router`: 0.0%
+- `database`: 0.0%
+- `hardware`: 0.0%
+- `metrics`: 0.0%
+- `crypto`: 0.0%
+- `alerting`: 0.0%
+
+### 최근 추가된 테스트
+- `security` 패키지: 0% → 33.2%
+  - `zerotrust_test.go`: 입력 검증, CSRF 토큰, 경로 검증
+  - `user_security_test.go`: 비밀번호 정책, 계정 잠금, 사용자 감사
+- `middleware` 패키지: 28.2% → 72.8%
+  - `middleware_test.go`: Admin, RateLimit, IPWhitelist, EnhancedLogging
+- `auth` 패키지: 84.8% (이미 높은 커버리지)
+- `errors` 패키지: 95.2% (거의 완료)
 
 ## 주의 사항
 

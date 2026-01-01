@@ -4,11 +4,117 @@
 
 LIMEN API는 가상 머신(VM) 관리 시스템을 위한 RESTful API입니다.
 
-**Base URL**: `http://localhost:8080`
+**Base URL**: `http://localhost:18443` (또는 환경에 따라 다름)
 
 ## 인증
 
-현재 버전에서는 인증이 구현되지 않았습니다. 향후 JWT 기반 인증이 추가될 예정입니다.
+LIMEN API는 JWT(JSON Web Token) 기반 인증을 사용합니다.
+
+### 인증 방법
+
+#### 1. Authorization Header (권장)
+```http
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+#### 2. refresh_token 쿠키 (세션 기반)
+- 로그인 시 `refresh_token` 쿠키가 자동 설정됨
+- 쿠키가 있으면 자동으로 access token 생성
+- `credentials: 'include'` 옵션 필요
+
+#### 3. Query Parameter (하위 호환)
+```
+?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### 인증 엔드포인트
+
+#### POST /api/auth/login
+로그인하여 access token과 refresh token을 받습니다.
+
+**Request Body**
+```json
+{
+  "username": "admin",
+  "password": "password"
+}
+```
+
+**Response 200 OK**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "expires_in": 900,
+  "token_type": "Bearer"
+}
+```
+
+**Set-Cookie Headers**
+- `refresh_token`: HttpOnly, SameSite=Lax, Path=/, MaxAge=604800 (7일)
+- `csrf_token`: SameSite=Lax, Path=/, MaxAge=604800 (7일)
+
+#### GET /api/auth/session
+현재 세션 상태를 확인합니다.
+
+**Response 200 OK**
+```json
+{
+  "valid": true,
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": {
+    "id": 1,
+    "username": "admin",
+    "role": "admin"
+  }
+}
+```
+
+**Set-Cookie Headers**
+- 세션 체크 성공 시 `refresh_token` 및 `csrf_token` 쿠키 재설정
+
+#### POST /api/auth/refresh
+Access token을 갱신합니다.
+
+**Request Body** (선택사항 - 쿠키에 refresh_token이 있으면 생략 가능)
+```json
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+**Response 200 OK**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "expires_in": 900
+}
+```
+
+**Set-Cookie Headers**
+- 새로운 `refresh_token` 쿠키 설정 (토큰 로테이션)
+
+#### DELETE /api/auth/session
+현재 세션을 삭제합니다 (로그아웃).
+
+**Response 200 OK**
+```json
+{
+  "message": "Session deleted successfully"
+}
+```
+
+### Public Endpoints (인증 불필요)
+- `GET /api/health`
+- `GET /api/health_proxy`
+- `POST /api/auth/login`
+- `POST /api/auth/register`
+- `GET /api/auth/session`
+- `POST /api/auth/session`
+- `DELETE /api/auth/session`
+- `POST /api/auth/refresh`
+- `GET /ws/vnc` (VNC 핸들러에서 자체 인증 처리)
+- `GET /vnc` (VNC 핸들러에서 자체 인증 처리)
+- `GET /vnc/{uuid}` (VNC 핸들러에서 자체 인증 처리)
 
 ## 엔드포인트
 
@@ -160,21 +266,55 @@ VM에 액션을 수행합니다.
 ### VNC 콘솔
 
 #### GET /ws/vnc
+#### GET /vnc
+#### GET /vnc/{uuid}
 
 VNC 콘솔에 대한 WebSocket 연결을 설정합니다.
 
+**인증 방법** (다음 순서로 시도):
+1. Query parameter: `?token=...` (하위 호환)
+2. Authorization header: `Authorization: Bearer ...` (권장)
+3. refresh_token cookie: 쿠키에서 자동으로 access token 생성
+
+**Path Parameters:**
+- `uuid` (string, optional): VM UUID (path parameter 사용 시)
+
 **Query Parameters:**
-- `id` (integer, required): VM ID
+- `id` (string, optional): VM UUID (query parameter 사용 시)
+- `uuid` (string, optional): VM UUID (query parameter 사용 시)
+- `token` (string, optional): JWT access token (하위 호환)
+
+**Request Headers:**
+- `Authorization: Bearer <token>` (선택사항)
+- `Cookie: refresh_token=...` (선택사항)
 
 **Response 101 Switching Protocols**
 
 WebSocket 연결이 설정되면, VNC 프로토콜 데이터가 전송됩니다.
 
+**WebSocket 메시지 형식:**
+```json
+{"type":"status","message":"Connected, checking VM status..."}
+{"type":"status","message":"Starting VM..."}
+{"type":"status","message":"Getting VNC port..."}
+{"type":"status","message":"Connecting to VNC server on port 5900..."}
+{"type":"status","message":"VNC connection established, starting proxy..."}
+{"type":"error","error":"VM UUID is required","code":"MISSING_VM_UUID"}
+{"type":"error","error":"VM not found","code":"VM_NOT_FOUND","vm_uuid":"..."}
+{"type":"error","error":"VM is not running","code":"VM_NOT_RUNNING","status":"Stopped"}
+```
+
+**Response 401 Unauthorized**
+인증 토큰이 없거나 유효하지 않은 경우
+
 **Response 400 Bad Request**
-VM ID가 제공되지 않았거나 유효하지 않은 경우
+VM UUID가 제공되지 않았거나 유효하지 않은 경우
 
 **Response 404 Not Found**
 VM을 찾을 수 없는 경우
+
+**Response 500 Internal Server Error**
+VNC 포트를 가져올 수 없거나 VNC 서버에 연결할 수 없는 경우
 
 ---
 
