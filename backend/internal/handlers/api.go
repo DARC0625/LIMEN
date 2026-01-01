@@ -927,24 +927,10 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get VM UUID from query parameter or path parameter
-	uuidStr := r.URL.Query().Get("uuid")
-	if uuidStr == "" {
-		// Try to extract from path (e.g., /vnc/{uuid})
-		pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-		if len(pathParts) >= 2 && pathParts[0] == "vnc" {
-			uuidStr = pathParts[1]
-		}
-		// Also try chi URL parameter if available
-		if uuidStr == "" {
-			uuidStr = chi.URLParam(r, "uuid")
-		}
-	}
-
 	logger.Log.Info("VNC connection request", 
 		zap.String("vm_uuid", uuidStr),
-		zap.String("vm_name", func() string { if vmRec != nil { return vmRec.Name } else { return "" } }()),
-		zap.Int("vm_id", func() int { if vmRec != nil { return int(vmRec.ID) } else { return 0 } }()))
+		zap.String("vm_name", vmRec.Name),
+		zap.Int("vm_id", int(vmRec.ID)))
 
 	logger.Log.Info("VM found for VNC", zap.String("vm_name", vmRec.Name), zap.String("status", string(vmRec.Status)))
 
