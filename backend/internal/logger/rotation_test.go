@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -49,8 +50,8 @@ func TestNewMultiCore(t *testing.T) {
 	config := DefaultRotationConfig(tempDir)
 	fileCore := NewRotatingFileCore(config, zapcore.InfoLevel)
 	
-	// Use production encoder config for testing
-	consoleEncoderConfig := zapcore.NewProductionEncoderConfig()
+	// Use development encoder config for testing (same as rotation.go)
+	consoleEncoderConfig := zap.NewDevelopmentEncoderConfig()
 	consoleEncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	consoleEncoder := zapcore.NewConsoleEncoder(consoleEncoderConfig)
 	consoleCore := zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), zapcore.InfoLevel)
