@@ -7,10 +7,16 @@ import (
 
 	"github.com/DARC0625/LIMEN/backend/internal/config"
 	"github.com/DARC0625/LIMEN/backend/internal/handlers"
+	"github.com/DARC0625/LIMEN/backend/internal/logger"
 	"github.com/go-chi/chi/v5"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+func init() {
+	// Initialize logger for tests
+	logger.Init("debug")
+}
 
 func setupTestRouter(t *testing.T) (*chi.Mux, *handlers.Handler, *config.Config) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
