@@ -170,6 +170,7 @@ func main() {
 		// Some proxies may not send Upgrade header initially, so also check path
 		isWebSocketPath := strings.HasPrefix(r.URL.Path, "/ws/") || 
 			r.URL.Path == "/vnc" ||
+			strings.HasPrefix(r.URL.Path, "/vnc/") || // VNC with UUID in path
 			r.URL.Path == "/ws/vnc" ||
 			r.URL.Path == "/ws/vm-status"
 		isWebSocketUpgrade := r.Header.Get("Upgrade") == "websocket" || 

@@ -184,6 +184,7 @@ func IsPublicEndpoint(path string) bool {
 		"/apiauth/register", // Handle Envoy rewrite issue
 		"/ws/vnc",           // WebSocket endpoints need special handling
 		"/vnc",              // VNC WebSocket endpoint (with or without UUID)
+		"/vnc/",             // VNC WebSocket endpoint with UUID in path
 	}
 
 	for _, publicPath := range publicPaths {
