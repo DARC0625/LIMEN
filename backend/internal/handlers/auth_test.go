@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +12,6 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/config"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
 	"github.com/DARC0625/LIMEN/backend/internal/security"
-	"github.com/go-chi/chi/v5"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -254,7 +252,7 @@ func TestHandleGetSession_ValidCookie(t *testing.T) {
 	sessionStore := auth.GetSessionStore()
 	refreshToken, tokenID, _ := auth.GenerateRefreshToken(user.ID, user.Username, string(user.Role), user.Approved, cfg.JWTSecret)
 	accessToken, _ := auth.GenerateAccessToken(user.ID, user.Username, string(user.Role), user.Approved, cfg.JWTSecret)
-	csrfToken := security.GenerateCSRFToken()
+	csrfToken, _ := security.GenerateCSRFToken()
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 	sessionStore.CreateSession(accessToken, refreshToken, tokenID, csrfToken, user.ID, user.Username, string(user.Role), expiresAt)
 
@@ -298,7 +296,7 @@ func TestHandleRefreshToken_Success(t *testing.T) {
 	sessionStore := auth.GetSessionStore()
 	refreshToken, tokenID, _ := auth.GenerateRefreshToken(user.ID, user.Username, string(user.Role), user.Approved, cfg.JWTSecret)
 	accessToken, _ := auth.GenerateAccessToken(user.ID, user.Username, string(user.Role), user.Approved, cfg.JWTSecret)
-	csrfToken := security.GenerateCSRFToken()
+	csrfToken, _ := security.GenerateCSRFToken()
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 	sessionStore.CreateSession(accessToken, refreshToken, tokenID, csrfToken, user.ID, user.Username, string(user.Role), expiresAt)
 
@@ -326,7 +324,7 @@ func TestHandleRefreshToken_Success(t *testing.T) {
 }
 
 func TestHandleRefreshToken_InvalidToken(t *testing.T) {
-	h, _ := setupTestAuthHandler(t)
+	h, cfg := setupTestAuthHandler(t)
 
 	req := httptest.NewRequest("POST", "/api/auth/refresh", nil)
 	req.AddCookie(&http.Cookie{
@@ -359,7 +357,7 @@ func TestHandleDeleteSession_Success(t *testing.T) {
 	sessionStore := auth.GetSessionStore()
 	refreshToken, tokenID, _ := auth.GenerateRefreshToken(user.ID, user.Username, string(user.Role), user.Approved, cfg.JWTSecret)
 	accessToken, _ := auth.GenerateAccessToken(user.ID, user.Username, string(user.Role), user.Approved, cfg.JWTSecret)
-	csrfToken := security.GenerateCSRFToken()
+	csrfToken, _ := security.GenerateCSRFToken()
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 	sessionStore.CreateSession(accessToken, refreshToken, tokenID, csrfToken, user.ID, user.Username, string(user.Role), expiresAt)
 
