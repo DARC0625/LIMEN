@@ -10,11 +10,17 @@ import (
 
 	"github.com/DARC0625/LIMEN/backend/internal/auth"
 	"github.com/DARC0625/LIMEN/backend/internal/config"
+	"github.com/DARC0625/LIMEN/backend/internal/logger"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
 	"github.com/DARC0625/LIMEN/backend/internal/security"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+func init() {
+	// Initialize logger for tests
+	logger.Init("debug")
+}
 
 // setupTestAuthHandler creates a test handler with auth dependencies
 func setupTestAuthHandler(t *testing.T) (*Handler, *config.Config) {
