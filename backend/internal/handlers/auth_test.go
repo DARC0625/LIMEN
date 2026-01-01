@@ -395,7 +395,7 @@ func TestMin(t *testing.T) {
 		expected int
 	}{
 		{"a < b", 1, 2, 1},
-		{"a > b", 2, 1, 2},
+		{"a > b", 2, 1, 1}, // min returns the smaller value
 		{"a == b", 1, 1, 1},
 	}
 
