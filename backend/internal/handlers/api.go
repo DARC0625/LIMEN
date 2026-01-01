@@ -625,8 +625,25 @@ func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*webs
 	}
 
 	// nhooyr.io/websocket options
+	// Build origin patterns that match both protocol and domain
+	// nhooyr.io/websocket requires patterns like "https://limen.kr" or "limen.kr"
+	originPatterns := make([]string, 0, len(h.Config.AllowedOrigins)*2)
+	for _, allowedOrigin := range h.Config.AllowedOrigins {
+		// Add as-is (may already have protocol)
+		originPatterns = append(originPatterns, allowedOrigin)
+		// Also add without protocol if it has one
+		if strings.HasPrefix(allowedOrigin, "https://") {
+			originPatterns = append(originPatterns, strings.TrimPrefix(allowedOrigin, "https://"))
+		} else if strings.HasPrefix(allowedOrigin, "http://") {
+			originPatterns = append(originPatterns, strings.TrimPrefix(allowedOrigin, "http://"))
+		} else {
+			// If no protocol, add with https://
+			originPatterns = append(originPatterns, "https://"+allowedOrigin)
+		}
+	}
+	
 	opts := &websocket.AcceptOptions{
-		OriginPatterns: h.Config.AllowedOrigins,
+		OriginPatterns: originPatterns,
 		CompressionMode: websocket.CompressionContextTakeover, // Enable compression
 	}
 
