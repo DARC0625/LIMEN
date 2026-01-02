@@ -41,7 +41,7 @@ jobs:
         run: |
           # Add your lint command here
           npm run lint
-          echo "Linting completed"
+          echo "Linting would run here"
 
   build:
     needs: test
