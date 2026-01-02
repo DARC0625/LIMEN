@@ -1,4 +1,4 @@
-name: Deploy to Frontend Server
+name: Deploy Frontend
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Deploy to Frontend Server
+      - name: Sync to Frontend Server
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.FRONTEND_HOST }}
@@ -44,34 +44,20 @@ jobs:
             CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
             echo "📋 현재 브랜치: $CURRENT_BRANCH"
             
-            # Git pull (최신 코드 가져오기) - 프론트엔드 우선
-            echo "⬇️  최신 코드 가져오는 중 (프론트엔드 우선)..."
+            # Git pull (최신 코드 가져오기) - 프론트엔드 우선순위
+            echo "⬇️  최신 코드 가져오는 중 (프론트엔드 우선순위)..."
             git fetch origin || {
               echo "⚠️  git fetch 실패, 계속 진행..."
             }
-            
-            # 프론트엔드 코드 우선 동기화
-            echo "📦 프론트엔드 코드 동기화 중..."
-            git checkout origin/main -- frontend/ || {
-              echo "⚠️  frontend/ 체크아웃 실패, 전체 동기화 시도..."
-              git reset --hard origin/main || git reset --hard origin/$CURRENT_BRANCH || {
-                echo "❌ git reset 실패"
-                exit 1
-              }
+            # 항상 최신 main 브랜치로 강제 업데이트
+            git reset --hard origin/main || {
+              echo "❌ git reset 실패"
+              exit 1
             }
-            
-            # RAG 문서 동기화 (항상 최신)
-            echo "📚 RAG 문서 동기화 중..."
-            git checkout origin/main -- RAG/ || {
-              echo "⚠️  RAG/ 체크아웃 실패"
-            }
-            
-            # 나머지 필수 파일들 동기화
-            git checkout origin/main -- scripts/ config/ infra/ .github/workflows/deploy-frontend.yml || true
-            
             git clean -fd || {
               echo "⚠️  git clean 실패, 계속 진행..."
             }
+            echo "✅ 프론트엔드 서버가 최신 상태로 업데이트됨"
             
             # RAG 인덱싱 실행
             if [ -f "scripts/rag-index.sh" ]; then
@@ -80,7 +66,7 @@ jobs:
               ./scripts/rag-index.sh --auto || true
             fi
             
-            # 프론트엔드 서비스 재시작 (선택적)
+            # 프론트엔드 서비스 재시작
             if command -v pm2 &> /dev/null; then
               echo "🔄 프론트엔드 서비스 재시작 중..."
               cd /home/darc/LIMEN/frontend
@@ -100,5 +86,4 @@ jobs:
             echo "   - GitHub Secrets 확인 필요 (FRONTEND_HOST, FRONTEND_USER, FRONTEND_SSH_KEY)"
             echo "   - 서버 경로 확인: /home/darc/LIMEN"
             echo "   - SSH 연결 확인 필요"
-            echo "   - 프론트엔드 코드 변경사항 확인 필요"
           fi
