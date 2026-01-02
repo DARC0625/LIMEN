@@ -17,18 +17,8 @@ jobs:
   sync-backend:
     name: Sync to Backend Server
     runs-on: ubuntu-latest
-    # 백엔드 관련 변경사항이 있을 때 우선 실행, 또는 수동 실행
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && (
-        contains(join(github.event.commits.*.modified, ' '), 'backend/') ||
-        contains(join(github.event.commits.*.added, ' '), 'backend/') ||
-        contains(join(github.event.commits.*.removed, ' '), 'backend/') ||
-        contains(github.event.head_commit.message, 'backend') ||
-        contains(github.event.head_commit.message, 'Backend') ||
-        contains(github.event.head_commit.message, 'BACKEND') ||
-        true  # 모든 변경사항에 대해 항상 최신 상태 유지
-      ))
+    # 모든 push에 대해 항상 실행 (백엔드 우선순위)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     
     steps:
       - name: Checkout code
@@ -61,7 +51,7 @@ jobs:
             git fetch origin || {
               echo "⚠️  git fetch 실패, 계속 진행..."
             }
-            git reset --hard origin/main || git reset --hard origin/$CURRENT_BRANCH || {
+            git reset --hard origin/main || {
               echo "❌ git reset 실패"
               exit 1
             }
@@ -101,18 +91,8 @@ jobs:
   sync-frontend:
     name: Sync to Frontend Server
     runs-on: ubuntu-latest
-    # 프론트엔드 관련 변경사항이 있을 때 우선 실행, 또는 수동 실행
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && (
-        contains(join(github.event.commits.*.modified, ' '), 'frontend/') ||
-        contains(join(github.event.commits.*.added, ' '), 'frontend/') ||
-        contains(join(github.event.commits.*.removed, ' '), 'frontend/') ||
-        contains(github.event.head_commit.message, 'frontend') ||
-        contains(github.event.head_commit.message, 'Frontend') ||
-        contains(github.event.head_commit.message, 'FRONTEND') ||
-        true  # 모든 변경사항에 대해 항상 최신 상태 유지
-      ))
+    # 모든 push에 대해 항상 실행 (프론트엔드 우선순위)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     
     steps:
       - name: Checkout code
@@ -145,7 +125,7 @@ jobs:
             git fetch origin || {
               echo "⚠️  git fetch 실패, 계속 진행..."
             }
-            git reset --hard origin/main || git reset --hard origin/$CURRENT_BRANCH || {
+            git reset --hard origin/main || {
               echo "❌ git reset 실패"
               exit 1
             }
