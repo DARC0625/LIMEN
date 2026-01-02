@@ -18,7 +18,7 @@ const SnapshotManager = dynamicImport(
 );
 
 interface VMListSectionProps {
-  onAction?: (uuid: string, action: 'start' | 'stop' | 'delete') => void;
+  onAction?: (uuid: string, action: 'start' | 'stop' | 'restart' | 'delete') => void;
   onEdit?: (vm: VM | null) => void;
   processingId?: string | null;
   editingVM?: VM | null;
@@ -630,7 +630,7 @@ export default function VMListSection({
                             : 'opacity-0 pointer-events-none'
                       }`}>
                         <div className="grid grid-cols-3 gap-2 max-w-[200px] mx-auto px-2">
-                          {/* Row 1: Start, Stop, VNC */}
+                          {/* Row 1: Start, Restart, Stop */}
                           {onAction && (
                             <button 
                               onClick={(e) => {
@@ -644,6 +644,30 @@ export default function VMListSection({
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            </button>
+                          )}
+                          {onAction && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onAction?.(vm.uuid, 'restart');
+                                setTouchedVM(null);
+                              }}
+                              onTouchEnd={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                if (!processingId && vm.status === 'Running') {
+                                  onAction?.(vm.uuid, 'restart');
+                                  setTouchedVM(null);
+                                }
+                              }}
+                              disabled={processingId === vm.uuid || vm.status !== 'Running'}
+                              aria-label={`Restart virtual machine ${vm.name}`}
+                              className="w-10 h-10 flex items-center justify-center text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                               </svg>
                             </button>
                           )}
@@ -672,6 +696,7 @@ export default function VMListSection({
                               </svg>
                             </button>
                           )}
+                          {/* Row 2: VNC, Edit, Snapshot */}
                           <a 
                             href={`/vnc/${vm.uuid}`}
                             onClick={(e) => {

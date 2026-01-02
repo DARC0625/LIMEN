@@ -135,8 +135,9 @@ export default function Home() {
     );
   };
 
-  const handleAction = async (uuid: string, action: 'start' | 'stop' | 'delete') => {
+  const handleAction = async (uuid: string, action: 'start' | 'stop' | 'restart' | 'delete') => {
     if (action === 'delete' && !confirm('Are you sure you want to delete this VM?')) return;
+    if (action === 'restart' && !confirm('Are you sure you want to restart this VM? The VM will be stopped and then started.')) return;
     
     setProcessingId(uuid);
     vmActionMutation.mutate(

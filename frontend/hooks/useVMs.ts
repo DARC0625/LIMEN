@@ -229,7 +229,7 @@ export function useVMAction() {
   return useMutation({
     mutationFn: ({ uuid, action, cpu, memory, name }: { 
       uuid: string; 
-      action: 'start' | 'stop' | 'delete' | 'update';
+      action: 'start' | 'stop' | 'restart' | 'delete' | 'update';
       cpu?: number;
       memory?: number;
       name?: string;
@@ -272,15 +272,15 @@ export function useVMAction() {
             }
             return old;
           });
-        } else if (action === 'start' || action === 'stop') {
-          // 시작/중지: 상태만 즉시 업데이트
+        } else if (action === 'start' || action === 'stop' || action === 'restart') {
+          // 시작/중지/재시작: 상태만 즉시 업데이트
           queryClient.setQueryData<VM[]>(['vms'], (old) => {
             if (!old) return [];
             return old.map(vm => {
               if (vm.uuid === uuid) {
                 return {
                   ...vm,
-                  status: action === 'start' ? 'Running' : 'Stopped',
+                  status: action === 'start' ? 'Running' : action === 'restart' ? 'Restarting' : 'Stopped',
                 };
               }
               return vm;
@@ -361,6 +361,7 @@ export function useVMAction() {
         const actionMessages = {
         start: 'VM started successfully',
         stop: 'VM stopped successfully',
+        restart: 'VM restarted successfully',
         update: 'VM updated successfully',
           delete: 'VM deleted successfully',
         };
@@ -387,6 +388,7 @@ export function useVMAction() {
         const actionMessages = {
         start: 'starting',
         stop: 'stopping',
+        restart: 'restarting',
         delete: 'deleting',
           update: 'updating',
         };
