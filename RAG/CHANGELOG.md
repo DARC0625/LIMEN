@@ -1,3 +1,12 @@
+## 2026-01-03 00:04:58 - operations
+
+**파일**: `frontend/envoy.yaml`
+
+**변경 내용**:
+src/components/VNCViewer.tsx VNC WebSocket 연결 수정: Envoy 설정 개선, 프론트엔드 상대 경로 지원
+
+---
+
 ## 2026-01-03 00:00:41 - development
 
 **파일**: `backend/internal/models/models.go`

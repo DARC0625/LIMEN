@@ -48,17 +48,31 @@ export default function VNCViewer({ id }: { id: string }) {
   }, []);
 
   useEffect(() => {
-    // Construct WebSocket URL directly to backend
-    // Next.js rewrites don't support WebSocket upgrades, so connect directly
+    // Construct WebSocket URL
+    // In production, use relative path through Envoy proxy (/vnc/{uuid})
+    // In development, use direct backend connection (/ws/vnc?id={id})
+    const isProduction = process.env.NODE_ENV === 'production';
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const backendHost = process.env.NEXT_PUBLIC_BACKEND_URL 
-      ? process.env.NEXT_PUBLIC_BACKEND_URL.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '')
-      : 'localhost:8080';
     
-    // Get auth token from localStorage
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-    const url = `${protocol}://${backendHost}/ws/vnc?id=${id}${tokenParam}`;
+    let url: string;
+    if (isProduction) {
+      // Production: Use relative path through Envoy proxy
+      // Envoy will proxy /vnc/{uuid} to backend
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+      url = `${protocol}://${window.location.host}/vnc/${id}${tokenParam}`;
+      if (process.env.NEXT_PUBLIC_BACKEND_URL) {
+        console.warn('[VNCViewer] NEXT_PUBLIC_BACKEND_URL is set in production but will be ignored. Using relative path for Envoy proxy.');
+      }
+    } else {
+      // Development: Connect directly to backend
+      const backendHost = process.env.NEXT_PUBLIC_BACKEND_URL 
+        ? process.env.NEXT_PUBLIC_BACKEND_URL.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '')
+        : 'localhost:8080';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+      url = `${protocol}://${backendHost}/ws/vnc?id=${id}${tokenParam}`;
+    }
 
     let rfb: any;
 
