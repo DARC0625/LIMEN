@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 프론트엔드 서버 초기 설정 스크립트
-# 이 스크립트는 프론트엔드 서버에서 실행하여 frontend/와 docs/만 체크아웃합니다.
+# 이 스크립트는 프론트엔드 서버에서 실행하여 frontend/와 RAG/만 체크아웃합니다.
 
 set -e
 
@@ -51,7 +51,7 @@ git checkout main
 echo ""
 echo "5️⃣ 검증 중..."
 if [ -d "frontend" ] && [ -d "RAG" ]; then
-  if [ ! -d "backend" ] && [ ! -d "docs" ]; then
+  if [ ! -d "backend" ]; then
     echo "✅ 프론트엔드 서버 설정 완료!"
     echo ""
     echo "📁 위치: $(pwd)"
