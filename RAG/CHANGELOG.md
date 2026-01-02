@@ -1,3 +1,12 @@
+## 2026-01-02 23:47:04 - development
+
+**파일**: `RAG/02-development/automation-analysis.md`
+
+**변경 내용**:
+자동화 현황 분석 및 발전 계획 문서 추가
+
+---
+
 ## 2026-01-02 23:44:38 - development
 
 **파일**: `backend/internal/router/router.go`
