@@ -41,9 +41,9 @@ type VM struct {
 	Name      string         `gorm:"unique;not null;index" json:"name"`                      // Indexed for faster lookups
 	CPU       int            `gorm:"not null" json:"cpu"`                                    // Number of CPU cores
 	Memory    int            `gorm:"not null" json:"memory"`                                 // Memory in MB
-	Status    VMStatus       `gorm:"type:varchar(20);default:'Stopped';index" json:"status"` // VM state - indexed for filtering
+	Status    VMStatus       `gorm:"type:varchar(20);default:'Stopped';index;index:idx_vm_owner_status" json:"status"` // VM state - indexed for filtering and composite index
 	OSType    string         `gorm:"index" json:"os_type"`                                   // OS type identifier - indexed for filtering
-	OwnerID   uint           `gorm:"not null;index" json:"owner_id"`                         // Foreign key to User - indexed for joins
+	OwnerID   uint           `gorm:"not null;index;index:idx_vm_owner_status" json:"owner_id"` // Foreign key to User - indexed for joins and composite index
 	Owner     User           `gorm:"foreignKey:OwnerID" json:"owner,omitempty"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
@@ -74,11 +74,11 @@ type VMImage struct {
 // VMSnapshot represents a snapshot of a virtual machine.
 type VMSnapshot struct {
 	ID          uint           `gorm:"primaryKey" json:"id"`
-	VMID        uint           `gorm:"not null;index" json:"vm_id"` // Foreign key to VM
+	VMID        uint           `gorm:"not null;index;index:idx_snapshot_vm_name" json:"vm_id"` // Foreign key to VM - indexed for joins and composite index
 	VM          VM             `gorm:"foreignKey:VMID" json:"vm,omitempty"`
-	Name        string         `gorm:"not null" json:"name"`         // Snapshot name
+	Name        string         `gorm:"not null;index:idx_snapshot_vm_name" json:"name"`         // Snapshot name - composite index with VMID
 	Description string         `json:"description"`                  // Optional description
-	LibvirtName string         `gorm:"not null" json:"libvirt_name"` // libvirt snapshot name (UUID)
+	LibvirtName string         `gorm:"not null;index" json:"libvirt_name"` // libvirt snapshot name (UUID) - indexed for lookups
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // Soft delete

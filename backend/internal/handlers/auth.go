@@ -14,6 +14,7 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/metrics"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
 	"github.com/DARC0625/LIMEN/backend/internal/security"
+	"github.com/DARC0625/LIMEN/backend/internal/validator"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -299,22 +300,10 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request, cfg *co
 	// Sanitize username
 	req.Username = strings.TrimSpace(req.Username)
 
-	// Validate username
-	if req.Username == "" || len(req.Username) < 3 {
-		errors.WriteBadRequest(w, "Username must be at least 3 characters", nil)
+	// Validate username using enhanced validator (includes XSS and SQL injection protection)
+	if err := validator.ValidateUsername(req.Username); err != nil {
+		errors.WriteBadRequest(w, err.Error(), nil)
 		return
-	}
-	if len(req.Username) > 32 {
-		errors.WriteBadRequest(w, "Username must be at most 32 characters", nil)
-		return
-	}
-
-	// Validate username format (alphanumeric and underscore only)
-	for _, r := range req.Username {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_') {
-			errors.WriteBadRequest(w, "Username can only contain alphanumeric characters and underscores", nil)
-			return
-		}
 	}
 
 	// Validate password against security policy (zero-trust: enforce strong passwords)

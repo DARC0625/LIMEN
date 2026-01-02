@@ -1,3 +1,12 @@
+## 2026-01-03 00:00:41 - development
+
+**파일**: `backend/internal/models/models.go`
+
+**변경 내용**:
+backend/internal/validator/validator.go backend/internal/handlers/auth.go 백엔드 업그레이드: 복합 인덱스 추가, 입력 검증 강화, XSS 방지
+
+---
+
 ## 2026-01-02 23:54:07 - operations
 
 **파일**: `.github/workflows/frontend-auto-deploy.yml`
