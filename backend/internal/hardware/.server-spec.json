@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-01-02T22:01:56.272677501+09:00",
+  "timestamp": "2026-01-02T23:43:29.983944642+09:00",
   "hostname": "DARC",
   "architecture": "amd64",
   "os": "linux",
@@ -129,8 +129,8 @@
   },
   "memory": {
     "total_gb": 188.46484375,
-    "available_gb": 185.1410369873047,
-    "used_gb": 3.3238067626953125,
+    "available_gb": 175.7971076965332,
+    "used_gb": 12.667736053466797,
     "swap_total_gb": 32,
     "swap_used_gb": 0
   },
@@ -233,11 +233,19 @@
     },
     {
       "name": "virbr0",
-      "type": "DOWN",
+      "type": "UP",
       "mac": "",
       "ips": [
         "192.168.122.1/24"
       ],
+      "speed": "",
+      "duplex": ""
+    },
+    {
+      "name": "vnet4",
+      "type": "UNKNOWN",
+      "mac": "",
+      "ips": null,
       "speed": "",
       "duplex": ""
     }

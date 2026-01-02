@@ -59,6 +59,12 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *chi.Mux {
 	api.Get("/logs/search", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleLogSearch(w, r, cfg)
 	})
+
+	// RAG endpoints (public for documentation access)
+	api.Get("/rag/search", h.HandleRAGSearch)
+	api.Get("/rag/documents", h.HandleRAGListDocuments)
+	api.Get("/rag/categories", h.HandleRAGCategories)
+	api.Get("/rag/document", h.HandleRAGGetDocument) // Path is passed as query parameter
 	api.Post("/auth/login", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleLogin(w, r, cfg)
 	})

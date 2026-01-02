@@ -30,6 +30,7 @@ type Config struct {
 	// File System Paths
 	ISODir string // ISO images directory
 	VMDir  string // VM disk images directory
+	RAGPath string // RAG documents directory
 
 	// Security Configuration
 	AdminUser            string   // Default admin username
@@ -83,6 +84,7 @@ func Load() *Config {
 		LibvirtURI:       getEnv("LIBVIRT_URI", "qemu:///system"),
 		ISODir:           getEnv("ISO_DIR", "../database/iso"),
 		VMDir:            getEnv("VM_DIR", "../database/vms"),
+		RAGPath:          getEnv("RAG_PATH", "../RAG"),
 		AdminUser:        getEnv("ADMIN_USER", "admin"),
 		AdminPassword:    getEnv("ADMIN_PASSWORD", ""),
 		JWTSecret:        getEnv("JWT_SECRET", ""),

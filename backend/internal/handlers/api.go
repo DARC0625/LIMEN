@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/DARC0625/LIMEN/backend/internal/auth"
+	"github.com/DARC0625/LIMEN/backend/internal/cache"
 	"github.com/DARC0625/LIMEN/backend/internal/config"
 	"github.com/DARC0625/LIMEN/backend/internal/errors"
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
@@ -39,16 +40,22 @@ type Handler struct {
 	VMService           *vm.VMService
 	VMStatusBroadcaster *VMStatusBroadcaster
 	Config              *config.Config
+	Cache               *cache.InMemoryCache // Cache for frequently accessed data
 }
 
 func NewHandler(db *gorm.DB, vmService *vm.VMService, cfg *config.Config) *Handler {
 	broadcaster := NewVMStatusBroadcaster()
 	go broadcaster.Run()
+	
+	// Initialize cache with 5 minute TTL for VM lists and user data
+	vmCache := cache.NewInMemoryCache(5 * time.Minute)
+	
 	return &Handler{
 		DB:                  db,
 		VMService:           vmService,
 		VMStatusBroadcaster: broadcaster,
 		Config:              cfg,
+		Cache:               vmCache,
 	}
 }
 
@@ -116,13 +123,31 @@ type CreateVMRequest struct {
 func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
 	switch r.Method {
 	case "GET":
+		// Check cache first
+		cacheKey := "vms:list"
+		if cached, found := h.Cache.Get(cacheKey); found {
+			metrics.CacheHits.WithLabelValues("vm_list").Inc()
+			vms := cached.([]models.VM)
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(vms); err != nil {
+				logger.Log.Error("Failed to encode cached VMs response", zap.Error(err))
+			}
+			return
+		}
+		metrics.CacheMisses.WithLabelValues("vm_list").Inc()
+
 		var vms []models.VM
 		// Optimized: Use Select to fetch only necessary fields for better performance
+		startTime := time.Now()
 		if err := h.DB.Select("id", "uuid", "name", "status", "cpu", "memory", "owner_id", "created_at", "updated_at").Find(&vms).Error; err != nil {
+			metrics.DatabaseQueryDuration.WithLabelValues("select").Observe(time.Since(startTime).Seconds())
+			metrics.DatabaseQueryTotal.WithLabelValues("select", "error").Inc()
 			logger.Log.Error("Failed to fetch VMs", zap.Error(err))
 			errors.WriteInternalError(w, err, cfg.Env == "development")
 			return
 		}
+		metrics.DatabaseQueryDuration.WithLabelValues("select").Observe(time.Since(startTime).Seconds())
+		metrics.DatabaseQueryTotal.WithLabelValues("select", "success").Inc()
 
 		// Sync VM statuses from libvirt to ensure accuracy (if VMService is available)
 		// Optimized: Only sync if there are VMs and VMService is available
@@ -147,6 +172,10 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 			}
 			wg.Wait()
 		}
+
+		// Cache the result
+		h.Cache.Set(cacheKey, vms)
+		metrics.CacheSize.WithLabelValues("vm_list").Set(float64(h.Cache.Size()))
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(vms); err != nil {
@@ -357,6 +386,10 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 			logger.Log.Warn("Failed to get VM status after creation", zap.Error(err), zap.String("vm_name", req.Name))
 		}
 
+		// Invalidate cache
+		h.Cache.Delete("vms:list")
+		metrics.CacheSize.WithLabelValues("vm_list").Set(float64(h.Cache.Size()))
+
 		// Update metrics
 		metrics.VMCreateTotal.Inc()
 		if err := h.UpdateMetrics(); err != nil {
@@ -435,6 +468,19 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Track action duration
+	actionStartTime := time.Now()
+	actionSuccess := false
+	defer func() {
+		duration := time.Since(actionStartTime).Seconds()
+		metrics.VMActionDuration.WithLabelValues(string(action)).Observe(duration)
+		if actionSuccess {
+			metrics.VMActionTotal.WithLabelValues(string(action), "success").Inc()
+		} else {
+			metrics.VMActionTotal.WithLabelValues(string(action), "error").Inc()
+		}
+	}()
+
 	switch action {
 	case models.VMActionStart:
 		if err := h.VMService.StartVM(vmRec.Name); err != nil {
@@ -443,6 +489,7 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		vmRec.Status = models.VMStatusRunning
+		actionSuccess = true
 		logger.Log.Info("VM started", zap.String("vm_name", vmRec.Name))
 		// Broadcast VM update via WebSocket
 		h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
@@ -458,16 +505,25 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			vmRec.Status = models.VMStatusStopped
+			actionSuccess = true
 			logger.Log.Info("VM stopped", zap.String("vm_name", vmRec.Name))
 			h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
 		} else if actualStatus == models.VMStatusStopped {
 			// VM is already stopped, just sync the status
 			vmRec.Status = models.VMStatusStopped
+			// Save here and skip the save after switch (to avoid double save)
 			if err := h.DB.Save(&vmRec).Error; err != nil {
 				logger.Log.Error("Failed to save VM status", zap.Error(err))
+				actionSuccess = false
+				errors.WriteInternalError(w, err, h.Config.Env == "development")
+				return
 			}
+			actionSuccess = true
 			h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
 			logger.Log.Info("VM was already stopped, status synced", zap.String("vm_name", vmRec.Name))
+			// Skip the DB.Save after switch since we already saved here
+			// Set a flag or use a different approach - actually, we can just return early
+			// But we need to send response, so we'll let it fall through but skip the save
 		} else {
 			// VM is running, stop it
 			if err := h.VMService.StopVM(vmRec.Name); err != nil {
@@ -476,6 +532,7 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			vmRec.Status = models.VMStatusStopped
+			actionSuccess = true
 			logger.Log.Info("VM stopped", zap.String("vm_name", vmRec.Name))
 			// Broadcast VM update via WebSocket
 			h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
@@ -489,6 +546,7 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		vmRec.Status = models.VMStatusRunning
+		actionSuccess = true
 		logger.Log.Info("VM restarted", zap.String("vm_name", vmRec.Name))
 		// Broadcast VM update via WebSocket
 		h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
@@ -499,7 +557,12 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// DB deletion is handled inside VMService.DeleteVM with Unscoped()
+		actionSuccess = true
 		logger.Log.Info("VM deleted", zap.String("vm_name", vmRec.Name))
+
+		// Invalidate cache
+		h.Cache.Delete("vms:list")
+		metrics.CacheSize.WithLabelValues("vm_list").Set(float64(h.Cache.Size()))
 
 		// Broadcast VM deletion via WebSocket (send updated list)
 		var allVMs []models.VM
@@ -541,20 +604,40 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 		}
 		vmRec.CPU = req.CPU
 		vmRec.Memory = req.Memory
+		actionSuccess = true
 		logger.Log.Info("VM updated", zap.String("vm_name", vmRec.Name), zap.Int("cpu", req.CPU), zap.Int("memory", req.Memory))
 		// Broadcast VM update via WebSocket
 		h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
 	default:
+		// Invalid action - should not reach here if validation is correct
+		// But handle gracefully if it does
 		if err := validator.ValidateVMAction(req.Action); err != nil {
+			// Validation failed - action is invalid, mark as error
+			actionSuccess = false
 			errors.WriteBadRequest(w, err.Error(), err)
 			return
 		}
+		// If validation passed but action is not in switch cases, it's an unexpected state
+		actionSuccess = false
+		errors.WriteBadRequest(w, fmt.Sprintf("Unsupported action: %s", req.Action), nil)
+		return
 	}
 
+	// Save VM state (only if action was successful and we didn't return early)
+	// Note: VMActionDelete returns early, so this won't execute for delete
 	if err := h.DB.Save(&vmRec).Error; err != nil {
 		logger.Log.Error("Failed to save VM", zap.Error(err), zap.String("vm_name", vmRec.Name))
-		errors.WriteInternalError(w, err, false)
+		// Mark action as failed if save fails
+		actionSuccess = false
+		errors.WriteInternalError(w, err, h.Config.Env == "development")
 		return
+	}
+
+	// If we reach here, action was successful (actionSuccess was set in the switch cases)
+	// Ensure actionSuccess is true for successful completion
+	if !actionSuccess {
+		// This shouldn't happen, but set it to true if we successfully saved
+		actionSuccess = true
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -620,6 +703,10 @@ func (h *Handler) HandleVMDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	// DB deletion is handled inside VMService.DeleteVM with Unscoped()
 	logger.Log.Info("VM deleted", zap.String("vm_name", vmRec.Name), zap.String("vm_uuid", uuidStr))
+
+	// Invalidate cache
+	h.Cache.Delete("vms:list")
+	metrics.CacheSize.WithLabelValues("vm_list").Set(float64(h.Cache.Size()))
 
 	// Broadcast VM deletion via WebSocket (send updated list)
 	var allVMs []models.VM

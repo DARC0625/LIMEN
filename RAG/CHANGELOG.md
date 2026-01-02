@@ -1,3 +1,57 @@
+## 2026-01-02 23:44:38 - development
+
+**파일**: `backend/internal/router/router.go`
+
+**변경 내용**:
+파일 변경: `backend/internal/router/router.go`
+
+---
+
+## 2026-01-02 23:44:38 - development
+
+**파일**: `backend/internal/metrics/metrics.go`
+
+**변경 내용**:
+파일 변경: `backend/internal/metrics/metrics.go`
+
+---
+
+## 2026-01-02 23:44:38 - development
+
+**파일**: `backend/internal/hardware/.server-spec.json`
+
+**변경 내용**:
+파일 변경: `backend/internal/hardware/.server-spec.json`
+
+---
+
+## 2026-01-02 23:44:38 - api
+
+**파일**: `backend/internal/handlers/api.go`
+
+**변경 내용**:
+파일 변경: `backend/internal/handlers/api.go`
+
+---
+
+## 2026-01-02 23:44:38 - development
+
+**파일**: `backend/internal/errors/errors.go`
+
+**변경 내용**:
+파일 변경: `backend/internal/errors/errors.go`
+
+---
+
+## 2026-01-02 23:44:38 - development
+
+**파일**: `backend/internal/config/config.go`
+
+**변경 내용**:
+파일 변경: `backend/internal/config/config.go`
+
+---
+
 ## 2026-01-02 23:11:29 - operations
 
 **파일**: `scripts/sync-rag-docs.sh`

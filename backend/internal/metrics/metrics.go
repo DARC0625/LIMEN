@@ -108,6 +108,93 @@ var (
 			Help: "Libvirt connection status (1 = connected, 0 = disconnected)",
 		},
 	)
+
+	// VM operation metrics
+	VMActionTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vm_action_total",
+			Help: "Total number of VM actions",
+		},
+		[]string{"action", "status"}, // action: start, stop, pause, resume, status: success, error
+	)
+
+	VMActionDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "vm_action_duration_seconds",
+			Help:    "VM action duration in seconds",
+			Buckets: []float64{0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0},
+		},
+		[]string{"action"},
+	)
+
+	// Database query metrics
+	DatabaseQueryDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "database_query_duration_seconds",
+			Help:    "Database query duration in seconds",
+			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0},
+		},
+		[]string{"operation"}, // operation: select, insert, update, delete
+	)
+
+	DatabaseQueryTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "database_query_total",
+			Help: "Total number of database queries",
+		},
+		[]string{"operation", "status"}, // status: success, error
+	)
+
+	// Cache metrics
+	CacheHits = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cache_hits_total",
+			Help: "Total number of cache hits",
+		},
+		[]string{"cache_type"},
+	)
+
+	CacheMisses = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cache_misses_total",
+			Help: "Total number of cache misses",
+		},
+		[]string{"cache_type"},
+	)
+
+	CacheSize = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "cache_size",
+			Help: "Current cache size",
+		},
+		[]string{"cache_type"},
+	)
+
+	// WebSocket metrics
+	WebSocketConnections = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "websocket_connections",
+			Help: "Current number of WebSocket connections",
+		},
+	)
+
+	WebSocketMessagesTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "websocket_messages_total",
+			Help: "Total number of WebSocket messages",
+		},
+		[]string{"type"}, // type: sent, received
+	)
+
+	// API response time metrics
+	APIResponseTime = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "api_response_time_seconds",
+			Help:    "API response time in seconds",
+			Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0},
+		},
+		[]string{"endpoint", "method"},
+	)
 )
 
 // UpdateVMMetrics updates VM-related metrics based on current state.
