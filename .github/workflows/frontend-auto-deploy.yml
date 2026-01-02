@@ -18,20 +18,14 @@ on:
           - staging
 
 jobs:
-  # 1. 자동 코드 품질 검사 및 자동 수정
+  # 1. 자동 코드 품질 검사
   quality-check:
-    name: Code Quality Check & Auto Fix
+    name: Code Quality Check
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: write
-      pull-requests: write
     
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -44,36 +38,15 @@ jobs:
         working-directory: ./frontend
         run: npm ci
       
-      - name: Configure Git
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Run ESLint
+        working-directory: ./frontend
+        run: npm run lint
+        continue-on-error: false
       
-      - name: Run ESLint with auto-fix
+      - name: Check formatting
         working-directory: ./frontend
         run: |
-          npm run lint:fix || true
-          if [ -n "$(git status --porcelain frontend/)" ]; then
-            echo "ESLint auto-fix applied changes"
-            git add frontend/
-            git commit -m "chore(frontend): auto-fix ESLint errors [skip ci]" || true
-          fi
-        continue-on-error: true
-      
-      - name: Auto format code
-        working-directory: ./frontend
-        run: |
-          npm run format || true
-          if [ -n "$(git status --porcelain frontend/)" ]; then
-            echo "Prettier auto-format applied changes"
-            git add frontend/
-            git commit -m "chore(frontend): auto-format code [skip ci]" || true
-          fi
-        continue-on-error: true
-      
-      - name: Check formatting (after auto-fix)
-        working-directory: ./frontend
-        run: npm run format:check
+          npm run format:check || (echo "Code is not formatted. Run 'npm run format' in frontend directory" && exit 1)
         continue-on-error: false
       
       - name: Push auto-fixes
