@@ -32,7 +32,7 @@ jobs:
             echo "🔄 백엔드 서버 동기화 시작..."
             
             # LIMEN 디렉토리로 이동
-            cd /home/darc/LIMEN || exit 1
+            cd /home/darc0/LIMEN || exit 1
             
             # 현재 브랜치 확인
             CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
@@ -90,7 +90,7 @@ jobs:
             echo "🔄 프론트엔드 서버 동기화 시작..."
             
             # LIMEN 디렉토리로 이동
-            cd /path/to/LIMEN || exit 1
+            cd /home/darc/LIMEN || exit 1
             
             # 현재 브랜치 확인
             CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
