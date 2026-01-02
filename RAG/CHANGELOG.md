@@ -1,3 +1,12 @@
+## 2026-01-02 23:54:07 - operations
+
+**파일**: `.github/workflows/frontend-auto-deploy.yml`
+
+**변경 내용**:
+frontend-auto-deploy.yml DEPLOYMENT_URL → FRONTEND_URL 수정
+
+---
+
 ## 2026-01-02 23:53:40 - operations
 
 **파일**: `.github/workflows/frontend-auto-deploy.yml`

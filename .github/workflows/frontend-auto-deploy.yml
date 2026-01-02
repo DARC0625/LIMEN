@@ -171,7 +171,7 @@ jobs:
     timeout-minutes: 30
     environment:
       name: ${{ github.event.inputs.environment || 'production' }}
-      url: ${{ secrets.DEPLOYMENT_URL || 'https://limen.local' }}
+      url: ${{ secrets.FRONTEND_URL || 'http://10.0.0.10:9444' }}
     
     steps:
       - uses: actions/checkout@v4
