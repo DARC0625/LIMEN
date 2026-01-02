@@ -4,13 +4,7 @@ on:
   push:
     branches:
       - main
-    # paths 필터: 각 서버는 자신의 영역 변경사항에 우선 반응
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'RAG/**'
-      - 'scripts/**'
-      - '.github/workflows/auto-sync.yml'
+    # 모든 변경사항에 대해 동기화 (paths 필터 제거 - 전체 리포지토리 감지)
   workflow_dispatch:
 
 jobs:

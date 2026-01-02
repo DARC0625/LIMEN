@@ -4,13 +4,7 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'backend/**'
-      - 'RAG/**'
-      - 'scripts/**'
-      - 'config/**'
-      - 'infra/**'
-      - '.github/workflows/deploy-backend.yml'
+    # 모든 변경사항에 대해 배포 (paths 필터 제거 - 전체 리포지토리 감지)
   workflow_dispatch:
 
 jobs:
