@@ -37,12 +37,14 @@ log_error() {
 init_rag_dir() {
     if [ ! -d "$RAG_DIR" ]; then
         log_info "RAG 디렉토리 생성 중..."
-        mkdir -p "$RAG_DIR"/{docs,vectors,index,embeddings}
+        # RAG/ 자체가 문서 폴더이므로 docs 서브폴더는 생성하지 않음
+        mkdir -p "$RAG_DIR"/{vectors,index,embeddings}
         log_success "RAG 디렉토리 생성 완료"
     fi
     
-    if [ ! -d "$RAG_DOCS_DIR" ]; then
-        mkdir -p "$RAG_DOCS_DIR"
+    # RAG_DOCS_DIR은 RAG_DIR과 동일하므로 별도 생성 불필요
+    if [ ! -d "$RAG_DIR" ]; then
+        mkdir -p "$RAG_DIR"
     fi
 }
 

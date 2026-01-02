@@ -122,22 +122,20 @@ const docs = await ragClient.listDocuments('04-operations');
    ↓
 3. Git 커밋 및 푸시
    ↓
-4. sync-rag-docs.sh 실행 (RAG/ → RAG/RAG/)
+4. rag-index.sh 실행 (RAG/ 인덱싱)
    ↓
-5. rag-index.sh 실행 (RAG/RAG/ 인덱싱)
-   ↓
-6. 백엔드/프론트엔드에서 RAG/ 폴더 사용
+5. 백엔드/프론트엔드에서 RAG/ 폴더 사용
 ```
 
 ## 주의사항
 
-1. **직접 수정 금지**: `RAG/RAG/` 폴더는 직접 수정하지 마세요. `RAG/` 폴더에서 관리하고 자동 동기화를 사용하세요.
+1. **문서 위치**: 모든 문서는 `RAG/` 폴더에 직접 저장됩니다. `RAG/docs/` 같은 서브폴더는 없습니다.
 
 2. **벡터 데이터**: `RAG/vectors/`와 `RAG/index/`는 자동 생성되므로 수동 수정하지 마세요.
 
-3. **동기화 확인**: 문서를 수정한 후 `sync-rag-docs.sh status`로 동기화 상태를 확인하세요.
+3. **문서 확인**: 문서를 수정한 후 `sync-rag-docs.sh status`로 문서 상태를 확인하세요.
 
-4. **Git 관리**: `RAG/RAG/`는 Git에 포함되지만, `RAG/vectors/`와 `RAG/index/`는 `.gitignore`에 포함됩니다.
+4. **Git 관리**: `RAG/` 폴더의 문서는 Git에 포함되지만, `RAG/vectors/`와 `RAG/index/`는 `.gitignore`에 포함됩니다.
 
 ## 문제 해결
 

@@ -37,7 +37,8 @@ log_error() {
 
 # RAG 디렉토리 초기화
 init_rag_dir() {
-    mkdir -p "$RAG_DIR"/{docs,vectors,index,embeddings}
+    # RAG/ 자체가 문서 폴더이므로 docs 서브폴더는 생성하지 않음
+    mkdir -p "$RAG_DIR"/{vectors,index,embeddings}
     mkdir -p "$VECTOR_DB_DIR"
     
     if [ ! -f "$INDEX_FILE" ]; then

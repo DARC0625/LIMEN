@@ -26,7 +26,7 @@ func NewRAGClient() *RAGClient {
 
 	return &RAGClient{
 		RAGPath:     ragPath,
-		DocsPath:    filepath.Join(ragPath, "docs"),
+		DocsPath:    ragPath, // RAG/ 자체가 문서 폴더 (docs 서브폴더 없음)
 		VectorsPath: filepath.Join(ragPath, "vectors"),
 		IndexPath:   filepath.Join(ragPath, "index"),
 	}

@@ -1,3 +1,39 @@
+## 2026-01-02 23:11:29 - operations
+
+**파일**: `scripts/sync-rag-docs.sh`
+
+**변경 내용**:
+파일 변경: `scripts/sync-rag-docs.sh`
+
+---
+
+## 2026-01-02 23:11:29 - operations
+
+**파일**: `scripts/rag-index.sh`
+
+**변경 내용**:
+파일 변경: `scripts/rag-index.sh`
+
+---
+
+## 2026-01-02 23:11:29 - development
+
+**파일**: `backend/internal/rag/client.go.example`
+
+**변경 내용**:
+파일 변경: `backend/internal/rag/client.go.example`
+
+---
+
+## 2026-01-02 23:11:29 - development
+
+**파일**: `RAG/04-operations/rag-common-folder.md`
+
+**변경 내용**:
+파일 변경: `RAG/04-operations/rag-common-folder.md`
+
+---
+
 ## 2026-01-02 23:09:20 - operations
 
 **파일**: `scripts/validate-md-files.js`
