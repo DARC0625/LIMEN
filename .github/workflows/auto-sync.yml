@@ -11,18 +11,8 @@ jobs:
   sync-backend:
     name: Sync to Backend Server
     runs-on: ubuntu-latest
-    # 백엔드 변경사항이 있거나, 모든 변경사항에 대해 항상 동기화
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && (
-        contains(github.event.head_commit.message, 'backend') ||
-        contains(github.event.head_commit.message, 'Backend') ||
-        contains(github.event.head_commit.message, 'BACKEND') ||
-        contains(join(github.event.commits.*.message, ' '), 'backend') ||
-        contains(join(github.event.commits.*.modified, ' '), 'backend/') ||
-        contains(join(github.event.commits.*.added, ' '), 'backend/') ||
-        true  # 항상 실행 (모든 변경사항에 대해 최신 상태 유지)
-      ))
+    # 모든 push에 대해 항상 실행 - 백엔드 서버는 항상 최신 상태 유지
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     
     steps:
       - name: Checkout code
@@ -111,18 +101,8 @@ jobs:
   sync-frontend:
     name: Sync to Frontend Server
     runs-on: ubuntu-latest
-    # 프론트엔드 변경사항이 있거나, 모든 변경사항에 대해 항상 동기화
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && (
-        contains(github.event.head_commit.message, 'frontend') ||
-        contains(github.event.head_commit.message, 'Frontend') ||
-        contains(github.event.head_commit.message, 'FRONTEND') ||
-        contains(join(github.event.commits.*.message, ' '), 'frontend') ||
-        contains(join(github.event.commits.*.modified, ' '), 'frontend/') ||
-        contains(join(github.event.commits.*.added, ' '), 'frontend/') ||
-        true  # 항상 실행 (모든 변경사항에 대해 최신 상태 유지)
-      ))
+    # 모든 push에 대해 항상 실행 - 프론트엔드 서버는 항상 최신 상태 유지
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     
     steps:
       - name: Checkout code
