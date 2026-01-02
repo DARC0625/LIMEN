@@ -32,7 +32,6 @@ git sparse-checkout init --cone
 echo "3️⃣ 필요한 디렉토리 추가 중..."
 git sparse-checkout set \
   backend/ \
-  docs/ \
   RAG/ \
   .github/workflows/backend*.yml \
   .github/workflows/ci.yml \
@@ -41,7 +40,8 @@ git sparse-checkout set \
   scripts/check-rag-before-work.sh \
   scripts/record-changes-to-rag.sh \
   scripts/workflow-guide.sh \
-  scripts/verify-rag-structure.sh
+  scripts/verify-rag-structure.sh \
+  scripts/sync-rag-between-servers.sh
 
 # 체크아웃
 echo "4️⃣ 파일 체크아웃 중..."
@@ -50,8 +50,8 @@ git checkout main
 # 검증
 echo ""
 echo "5️⃣ 검증 중..."
-if [ -d "backend" ] && [ -d "docs" ]; then
-  if [ ! -d "frontend" ]; then
+if [ -d "backend" ] && [ -d "RAG" ]; then
+  if [ ! -d "frontend" ] && [ ! -d "docs" ]; then
     echo "✅ 백엔드 서버 설정 완료!"
     echo ""
     echo "📁 위치: $(pwd)"
@@ -64,10 +64,10 @@ if [ -d "backend" ] && [ -d "docs" ]; then
     echo "❌ 오류: frontend 디렉토리가 존재합니다!"
     exit 1
   fi
-else
-  echo "❌ 오류: backend 또는 docs 디렉토리가 없습니다!"
-  exit 1
-fi
+  else
+    echo "❌ 오류: backend 또는 RAG 디렉토리가 없습니다!"
+    exit 1
+  fi
 
 echo ""
 echo "🎉 설정 완료! 이제 백엔드 개발을 시작할 수 있습니다."
