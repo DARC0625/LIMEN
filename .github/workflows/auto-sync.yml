@@ -4,10 +4,11 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - '**.md'
-      - '.gitignore'
-      - '.gitattributes'
+    # RAG 문서 변경도 동기화 필요하므로 paths-ignore 제거
+    # paths-ignore:
+    #   - '**.md'
+    #   - '.gitignore'
+    #   - '.gitattributes'
   workflow_dispatch:
 
 jobs:
@@ -31,7 +32,11 @@ jobs:
             set -e
             echo "🔄 백엔드 서버 동기화 시작..."
             
-            # LIMEN 디렉토리로 이동
+            # LIMEN 디렉토리 확인 및 이동
+            if [ ! -d "/home/darc0/LIMEN" ]; then
+              echo "❌ 오류: /home/darc0/LIMEN 디렉토리가 존재하지 않습니다"
+              exit 1
+            fi
             cd /home/darc0/LIMEN || exit 1
             
             # 현재 브랜치 확인
@@ -67,6 +72,10 @@ jobs:
             echo "✅ 백엔드 서버 동기화 성공"
           else
             echo "❌ 백엔드 서버 동기화 실패"
+            echo "📋 오류 분석:"
+            echo "   - GitHub Secrets 확인 필요 (BACKEND_HOST, BACKEND_USER, BACKEND_SSH_KEY)"
+            echo "   - 서버 경로 확인: /home/darc0/LIMEN"
+            echo "   - SSH 연결 확인 필요"
           fi
 
   sync-frontend:
@@ -89,7 +98,11 @@ jobs:
             set -e
             echo "🔄 프론트엔드 서버 동기화 시작..."
             
-            # LIMEN 디렉토리로 이동
+            # LIMEN 디렉토리 확인 및 이동
+            if [ ! -d "/home/darc/LIMEN" ]; then
+              echo "❌ 오류: /home/darc/LIMEN 디렉토리가 존재하지 않습니다"
+              exit 1
+            fi
             cd /home/darc/LIMEN || exit 1
             
             # 현재 브랜치 확인
@@ -125,5 +138,9 @@ jobs:
             echo "✅ 프론트엔드 서버 동기화 성공"
           else
             echo "❌ 프론트엔드 서버 동기화 실패"
+            echo "📋 오류 분석:"
+            echo "   - GitHub Secrets 확인 필요 (FRONTEND_HOST, FRONTEND_USER, FRONTEND_SSH_KEY)"
+            echo "   - 서버 경로 확인: /home/darc/LIMEN"
+            echo "   - SSH 연결 확인 필요"
           fi
 
