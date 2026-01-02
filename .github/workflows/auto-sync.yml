@@ -1,0 +1,129 @@
+name: Auto Sync to Servers
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - '.gitattributes'
+  workflow_dispatch:
+
+jobs:
+  sync-backend:
+    name: Sync to Backend Server
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Sync to Backend Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.BACKEND_HOST }}
+          username: ${{ secrets.BACKEND_USER }}
+          key: ${{ secrets.BACKEND_SSH_KEY }}
+          port: ${{ secrets.BACKEND_SSH_PORT || 22 }}
+          script: |
+            set -e
+            echo "🔄 백엔드 서버 동기화 시작..."
+            
+            # LIMEN 디렉토리로 이동
+            cd /home/darc/LIMEN || exit 1
+            
+            # 현재 브랜치 확인
+            CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+            echo "📋 현재 브랜치: $CURRENT_BRANCH"
+            
+            # Git pull (최신 코드 가져오기)
+            echo "⬇️  최신 코드 가져오는 중..."
+            git fetch origin
+            git reset --hard origin/main || git reset --hard origin/$CURRENT_BRANCH
+            git clean -fd
+            
+            # RAG 인덱싱 실행
+            if [ -f "scripts/rag-index.sh" ]; then
+              echo "🔄 RAG 인덱싱 실행 중..."
+              chmod +x scripts/rag-index.sh
+              ./scripts/rag-index.sh --auto || true
+            fi
+            
+            # 백엔드 서비스 재시작 (선택적)
+            if command -v pm2 &> /dev/null; then
+              echo "🔄 백엔드 서비스 재시작 중..."
+              cd /home/darc0/LIMEN/backend
+              pm2 restart limen --update-env || true
+            fi
+            
+            echo "✅ 백엔드 서버 동기화 완료"
+      
+      - name: Notify Backend Sync Status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ 백엔드 서버 동기화 성공"
+          else
+            echo "❌ 백엔드 서버 동기화 실패"
+          fi
+
+  sync-frontend:
+    name: Sync to Frontend Server
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Sync to Frontend Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.FRONTEND_HOST }}
+          username: ${{ secrets.FRONTEND_USER }}
+          key: ${{ secrets.FRONTEND_SSH_KEY }}
+          port: ${{ secrets.FRONTEND_SSH_PORT || 22 }}
+          script: |
+            set -e
+            echo "🔄 프론트엔드 서버 동기화 시작..."
+            
+            # LIMEN 디렉토리로 이동
+            cd /path/to/LIMEN || exit 1
+            
+            # 현재 브랜치 확인
+            CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+            echo "📋 현재 브랜치: $CURRENT_BRANCH"
+            
+            # Git pull (최신 코드 가져오기)
+            echo "⬇️  최신 코드 가져오는 중..."
+            git fetch origin
+            git reset --hard origin/main || git reset --hard origin/$CURRENT_BRANCH
+            git clean -fd
+            
+            # RAG 인덱싱 실행
+            if [ -f "scripts/rag-index.sh" ]; then
+              echo "🔄 RAG 인덱싱 실행 중..."
+              chmod +x scripts/rag-index.sh
+              ./scripts/rag-index.sh --auto || true
+            fi
+            
+            # 프론트엔드 서비스 재시작 (선택적)
+            if command -v pm2 &> /dev/null; then
+              echo "🔄 프론트엔드 서비스 재시작 중..."
+              cd /home/darc/LIMEN/frontend
+              pm2 restart limen-frontend --update-env || true
+            fi
+            
+            echo "✅ 프론트엔드 서버 동기화 완료"
+      
+      - name: Notify Frontend Sync Status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ 프론트엔드 서버 동기화 성공"
+          else
+            echo "❌ 프론트엔드 서버 동기화 실패"
+          fi
+

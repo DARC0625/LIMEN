@@ -72,6 +72,18 @@ func (s *VMService) EnsureISO(osType string) (string, error) {
 
 	imagePath := image.Path
 
+	// Migrate old project path to new path
+	// Handle path migration from /home/darc0/projects/LIMEN to /home/darc0/LIMEN
+	if strings.Contains(imagePath, "/home/darc0/projects/LIMEN") {
+		imagePath = strings.Replace(imagePath, "/home/darc0/projects/LIMEN", "/home/darc0/LIMEN", 1)
+		image.Path = imagePath
+		if err := s.db.Save(&image).Error; err != nil {
+			logger.Log.Warn("Failed to update image path in DB", zap.String("os_type", osType), zap.Error(err))
+		} else {
+			logger.Log.Info("Migrated image path to new location", zap.String("os_type", osType), zap.String("new_path", imagePath))
+		}
+	}
+
 	// Convert absolute paths to relative paths if they point to the project directory
 	// This ensures portability across different environments
 	if filepath.IsAbs(imagePath) {
@@ -98,7 +110,7 @@ func (s *VMService) EnsureISO(osType string) (string, error) {
 		return imagePath, nil
 	}
 
-	return "", fmt.Errorf("iso file not found at %s. please upload it manually", imagePath)
+	return "", fmt.Errorf("ISO file not found. Please check VM configuration. Original error: %v", fmt.Errorf("iso file not found at %s. please upload it manually", imagePath))
 }
 
 func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string, vmUUID string, graphicsType string, vncEnabled bool) error {

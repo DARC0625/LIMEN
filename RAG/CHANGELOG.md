@@ -1,3 +1,66 @@
+## 2026-01-02 23:04:55 - development
+
+**파일**: `backend/internal/vm/service.go`
+
+**변경 내용**:
+파일 변경: `backend/internal/vm/service.go`
+
+---
+
+## 2026-01-02 23:04:55 - development
+
+**파일**: `RAG/CHANGELOG.md`
+
+**변경 내용**:
+파일 변경: `RAG/CHANGELOG.md`
+
+---
+
+## 2026-01-02 23:04:55 - development
+
+**파일**: `RAG/04-operations/auto-sync-guide.md`
+
+**변경 내용**:
+파일 변경: `RAG/04-operations/auto-sync-guide.md`
+
+---
+
+## 2026-01-02 23:04:55 - development
+
+**파일**: `INTEGRATION_SCRIPT.sh`
+
+**변경 내용**:
+파일 변경: `INTEGRATION_SCRIPT.sh`
+
+---
+
+## 2026-01-02 23:04:19 - operations
+
+**파일**: `.github/workflows/auto-sync.yml`
+
+**변경 내용**:
+프론트엔드 서버 경로 업데이트: /home/darc/LIMEN
+
+---
+
+## 2026-01-02 23:03:06 - operations
+
+**파일**: `.github/workflows/auto-sync.yml`
+
+**변경 내용**:
+자동 동기화 시스템 구축: 푸시 시 프론트엔드/백엔드 자동 동기화
+
+---
+
+## 2026-01-02 23:01:22 - development
+
+**파일**: `INTEGRATION_SCRIPT.sh`
+
+**변경 내용**:
+INTEGRATION_SCRIPT.sh를 scripts/ 폴더로 이동 및 코딩 스타일 규칙 문서화
+
+---
+
 ## 2026-01-02 22:50:53 - operations
 
 **파일**: `scripts/start-limen.sh`
