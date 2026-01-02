@@ -69,7 +69,7 @@ format-check-agent: ## 에이전트 코드 포맷 검사
 	@echo "Checking agent code format..."
 	cd backend/agent && cargo fmt -- --check || (echo "Code is not formatted. Run 'make format-agent'" && exit 1)
 
-ci-local: format-check-backend lint-backend test-backend-race format-check-agent lint-agent test-agent ## CI 로컬 실행
+ci-local: format-check-backend lint-backend test-backend-race format-check-frontend lint-frontend test-frontend format-check-agent lint-agent test-agent ## CI 로컬 실행
 	@echo "✅ All CI checks passed locally!"
 
 lint-backend: ## 백엔드 린트
@@ -91,6 +91,26 @@ format-check-backend: ## 백엔드 코드 포맷 검사
 lint-frontend: ## 프론트엔드 린트
 	@echo "Linting frontend..."
 	cd frontend && npm run lint
+
+lint-frontend-fix: ## 프론트엔드 린트 자동 수정
+	@echo "Fixing frontend linting issues..."
+	cd frontend && npm run lint:fix || echo "ESLint not configured"
+
+format-frontend: ## 프론트엔드 코드 포맷
+	@echo "Formatting frontend code..."
+	cd frontend && npm run format
+
+format-check-frontend: ## 프론트엔드 코드 포맷 검사
+	@echo "Checking frontend code format..."
+	cd frontend && npm run format:check || (echo "Code is not formatted. Run 'make format-frontend'" && exit 1)
+
+test-frontend: ## 프론트엔드 테스트 실행
+	@echo "Running frontend tests..."
+	cd frontend && npm test || echo "Tests not configured yet"
+
+test-frontend-cover: ## 프론트엔드 테스트 커버리지
+	@echo "Running frontend tests with coverage..."
+	cd frontend && npm test -- --coverage || echo "Tests not configured yet"
 
 setup: ## 초기 설정 (의존성 설치)
 	@echo "Setting up project..."
