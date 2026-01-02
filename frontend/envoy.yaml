@@ -36,13 +36,9 @@ static_resources:
                             cluster: limen_cluster
                             timeout: 60s
                         # VNC WebSocket 프록시 (백엔드로 직접)
-                        # 헤더 기반 라우팅: WebSocket 업그레이드만 백엔드로 프록시
-                        # 일반 HTTP GET은 다음 라우팅 규칙(/)으로 넘어가서 Next.js로 전달
+                        # 모든 /vnc/ 요청을 백엔드로 프록시 (WebSocket 업그레이드 자동 처리)
                         - match:
                             prefix: "/vnc/"
-                            headers:
-                              - name: "upgrade"
-                                exact_match: "websocket"
                           route:
                             cluster: backend_cluster
                             timeout: 604800s  # 7일 = 604800초
@@ -178,13 +174,9 @@ static_resources:
                             cluster: limen_cluster
                             timeout: 60s
                         # VNC WebSocket 프록시 (백엔드로 직접)
-                        # 헤더 기반 라우팅: WebSocket 업그레이드만 백엔드로 프록시
-                        # 일반 HTTP GET은 다음 라우팅 규칙(/)으로 넘어가서 Next.js로 전달
+                        # 모든 /vnc/ 요청을 백엔드로 프록시 (WebSocket 업그레이드 자동 처리)
                         - match:
                             prefix: "/vnc/"
-                            headers:
-                              - name: "upgrade"
-                                exact_match: "websocket"
                           route:
                             cluster: backend_cluster
                             timeout: 604800s  # 7일 = 604800초
