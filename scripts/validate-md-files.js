@@ -45,6 +45,15 @@ const ALLOWED_ENGLISH_FILES = [
   'CODE_OF_CONDUCT.md',
 ];
 
+// 영어로 작성되어도 되는 파일 (기존 문서)
+const ALLOWED_ENGLISH_CONTENT = [
+  'FRONTEND_COMPONENTS.md',
+  'FRONTEND_COMPONENTS_ARCHIVE.md',
+  'FRONTEND_DEVELOPMENT.md',
+  'DEVELOPMENT.md',
+  'UPGRADE_PLAN.md',
+];
+
 let hasErrors = false;
 const errors = [];
 
@@ -123,6 +132,11 @@ function validateMdFile(filePath) {
   
   // 영어 허용 파일은 스킵
   if (isAllowedEnglishFile(filePath)) {
+    return;
+  }
+  
+  // 영어로 작성되어도 되는 기존 문서는 스킵 (점진적 마이그레이션)
+  if (ALLOWED_ENGLISH_CONTENT.includes(fileName)) {
     return;
   }
   
