@@ -1,3 +1,12 @@
+## 2026-01-02 23:53:40 - operations
+
+**파일**: `.github/workflows/frontend-auto-deploy.yml`
+
+**변경 내용**:
+frontend-auto-deploy.yml을 FRONTEND_* Secrets 사용하도록 수정
+
+---
+
 ## 2026-01-02 23:52:16 - operations
 
 **파일**: `.github/workflows/test-secrets.yml`
