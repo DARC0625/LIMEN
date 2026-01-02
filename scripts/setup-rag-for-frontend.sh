@@ -158,9 +158,27 @@ for script in "${REQUIRED_SCRIPTS[@]}"; do
   fi
 done
 
-# 4. 프론트엔드 관련 문서를 RAG에 복사
+# 4. RAG 폴더 동기화 (Git에서 최신 버전 가져오기)
 echo ""
-echo "4️⃣ 프론트엔드 문서를 RAG에 복사 중..."
+echo "4️⃣ RAG 폴더 동기화 중..."
+
+# RAG 폴더가 Git에 추적되고 있는지 확인
+if git ls-files --error-unmatch RAG/ > /dev/null 2>&1; then
+  echo "  📥 Git에서 최신 RAG 폴더 가져오기..."
+  git fetch origin main
+  git checkout origin/main -- RAG/ 2>/dev/null || {
+    echo "  ⚠️  RAG 폴더가 원격에 없습니다. 초기 설정을 진행합니다."
+    # 초기 RAG 구조 생성은 이미 1단계에서 완료됨
+  }
+  echo "  ✅ RAG 폴더 동기화 완료"
+else
+  echo "  ⚠️  RAG 폴더가 Git에 추적되지 않습니다."
+  echo "  💡 RAG 폴더를 Git에 추가하세요: git add RAG/"
+fi
+
+# 5. 프론트엔드 관련 문서를 RAG에 복사 (로컬 개발용)
+echo ""
+echo "5️⃣ 프론트엔드 문서를 RAG에 복사 중 (로컬 개발용)..."
 
 if [ -d "docs/05-frontend" ]; then
   cp -r docs/05-frontend/* RAG/05-frontend/ 2>/dev/null || true
@@ -179,9 +197,13 @@ if [ -d "docs/components" ]; then
   echo "  ✅ 컴포넌트 문서 복사 완료"
 fi
 
-# 5. 검증
 echo ""
-echo "5️⃣ RAG 구조 검증 중..."
+echo "  ⚠️  중요: RAG 폴더의 변경사항은 반드시 커밋하여"
+echo "     프론트엔드와 백엔드 서버 간 동기화를 유지하세요!"
+
+# 6. 검증
+echo ""
+echo "6️⃣ RAG 구조 검증 중..."
 
 if [ -d "RAG" ] && [ -f "RAG/README.md" ]; then
   echo "  ✅ RAG 디렉토리 구조 확인"

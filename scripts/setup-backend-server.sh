@@ -33,10 +33,15 @@ echo "3️⃣ 필요한 디렉토리 추가 중..."
 git sparse-checkout set \
   backend/ \
   docs/ \
+  RAG/ \
   .github/workflows/backend*.yml \
   .github/workflows/ci.yml \
   .github/workflows/release.yml \
-  .github/workflows/validate-md.yml
+  .github/workflows/validate-md.yml \
+  scripts/check-rag-before-work.sh \
+  scripts/record-changes-to-rag.sh \
+  scripts/workflow-guide.sh \
+  scripts/verify-rag-structure.sh
 
 # 체크아웃
 echo "4️⃣ 파일 체크아웃 중..."
