@@ -1,0 +1,261 @@
+/**
+ * 인증 관련 로직 통합
+ * TokenManager, Security, AuthGuard의 인증 로직을 통합 관리
+ */
+
+import { tokenManager } from '../tokenManager';
+import { authAPI } from '../api/auth';
+import { validateTokenIntegrity } from '../security';
+import { getUserRoleFromToken, isUserApprovedFromToken, isTokenValid } from '../utils/token';
+import { AUTH_CONSTANTS } from '../constants';
+import type { SessionResponse } from '../types';
+
+/**
+ * 인증 확인 결과
+ */
+export interface AuthCheckResult {
+  valid: boolean;
+  reason?: string;
+}
+
+/**
+ * 인증 확인 (최신 방식: Refresh Token 패턴)
+ */
+export async function checkAuth(): Promise<AuthCheckResult> {
+  if (typeof window === 'undefined') {
+    return { valid: false };
+  }
+
+  // 중요: 로그인 페이지에서는 세션 확인 요청을 보내지 않음
+  // 이제 AuthGuard는 보호된 경로에서만 사용되므로 로그인 페이지 체크 불필요
+  // 보호된 경로에 접근하려면 반드시 토큰이 있어야 함
+
+  // 1. TokenManager에서 토큰 확인
+  if (tokenManager.hasValidToken()) {
+    try {
+      // Access Token 가져오기 (자동 갱신)
+      const accessToken = await tokenManager.getAccessToken();
+      if (accessToken) {
+        // 백엔드 세션 확인
+        const sessionResult = await checkBackendSession();
+        if (sessionResult.valid) {
+          return { valid: true };
+        }
+        // 세션이 유효하지 않으면 토큰 정리하지 않음 (재시도 가능)
+      }
+    } catch (error) {
+      // 토큰 갱신 실패는 무시하고 백엔드 세션 확인으로 진행
+      console.warn('[checkAuth] Token refresh failed, checking backend session:', error);
+    }
+  }
+
+  // 2. 백엔드 세션 확인 (폴백)
+  // 이제 AuthGuard는 보호된 경로에서만 사용되므로 로그인 페이지 체크 불필요
+
+  try {
+    const sessionResult = await checkBackendSession();
+    if (sessionResult.valid) {
+      return { valid: true };
+    }
+    
+    // 세션이 유효하지 않으면 토큰 정리
+    // 단, 네트워크 오류가 아닌 경우에만 정리
+    if (sessionResult.reason && !sessionResult.reason.includes('네트워크')) {
+      tokenManager.clearTokens();
+    }
+    return { valid: false, reason: sessionResult.reason || '세션이 유효하지 않습니다.' };
+  } catch (error) {
+    // 네트워크 오류 - localStorage 토큰으로 폴백
+    console.warn('[checkAuth] Backend session check failed, falling back to localStorage:', error);
+    return checkLocalStorageToken();
+  }
+}
+
+/**
+ * 백엔드 세션 확인
+ */
+// React Error #321 해결: checkBackendSession 호출을 debounce하기 위한 플래그
+let sessionCheckInProgress = false;
+let lastSessionCheckTime = 0;
+const SESSION_CHECK_DEBOUNCE_MS = 1000; // 1초 debounce
+
+async function checkBackendSession(): Promise<AuthCheckResult> {
+  // 중요: 로그인 페이지에서는 세션 확인 요청을 보내지 않음
+  // 루트 경로(/)는 로그인으로 리다이렉트되므로 제외
+  // 이제 AuthGuard는 보호된 경로에서만 사용되므로 로그인 페이지 체크 불필요
+  // 보호된 경로에 접근하려면 반드시 토큰이 있어야 함
+  
+  // React Error #321 해결: debounce 적용 - 너무 자주 호출되는 것 방지
+  const now = Date.now();
+  if (sessionCheckInProgress || (now - lastSessionCheckTime < SESSION_CHECK_DEBOUNCE_MS)) {
+    // 이미 체크 중이거나 최근에 체크했으면 이전 결과 반환
+    return { valid: false, reason: '세션 확인 중입니다.' };
+  }
+  
+  sessionCheckInProgress = true;
+  lastSessionCheckTime = now;
+  
+  try {
+    const csrfToken = tokenManager.getCSRFToken();
+    
+    // 상세 로깅 (항상 출력)
+    console.log('[checkBackendSession] Checking session', {
+      hasCSRFToken: !!csrfToken,
+    });
+    
+    // 요청 전 쿠키 확인
+    // Phase 4: 보안 강화 - localStorage 직접 사용 제거, tokenManager 사용
+    const cookiesBeforeRequest = document.cookie;
+    const hasRefreshToken = tokenManager.hasValidToken();
+    console.log('[checkBackendSession] Cookies before request:', {
+      hasCookies: !!cookiesBeforeRequest,
+      cookieCount: cookiesBeforeRequest ? cookiesBeforeRequest.split(';').length : 0,
+      cookies: cookiesBeforeRequest ? cookiesBeforeRequest.substring(0, 300) : 'none',
+      hasRefreshTokenInStorage: hasRefreshToken,
+    });
+    
+    const response = await fetch('/api/auth/session', {
+      method: 'GET',
+      credentials: 'include', // 쿠키 포함 필수
+      headers: {
+        'Content-Type': 'application/json',
+        // GET 요청은 읽기 전용이므로 CSRF 토큰이 없어도 백엔드에서 처리함
+        // 백엔드: GET 요청에서 CSRF 토큰 검증 실패 시에도 세션 정보 반환
+        ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+      },
+    });
+
+    // 상세 로깅 (항상 출력)
+    const setCookieHeaders = response.headers.getSetCookie();
+    console.log('[checkBackendSession] Session check response:', {
+      status: response.status,
+      ok: response.ok,
+      statusText: response.statusText,
+      setCookieCount: setCookieHeaders.length,
+      setCookies: setCookieHeaders.map(h => h.substring(0, 150)),
+    });
+
+    if (response.ok) {
+      const data: SessionResponse = await response.json();
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[checkBackendSession] Session data:', {
+          valid: data.valid,
+          reason: data.reason,
+        });
+      }
+      
+      if (data.valid === true) {
+        console.log('[checkBackendSession] Session is valid');
+        return { valid: true };
+      } else {
+        console.log('[checkBackendSession] Session is invalid:', data.reason);
+        return { valid: false, reason: data.reason || '세션이 유효하지 않습니다.' };
+      }
+    } else if (response.status === 401) {
+      // 401은 세션이 없거나 만료됨
+      console.log('[checkBackendSession] Session expired or not found (401)');
+      return { valid: false, reason: '인증이 필요합니다.' };
+    } else if (response.status === 403) {
+      // 403은 권한 문제 (백엔드 변경으로 GET 요청에서는 이제 발생하지 않아야 함)
+      // 하지만 혹시 모를 경우를 대비해 처리
+      console.warn('[checkBackendSession] Forbidden (403) - unexpected for GET request');
+      return { valid: false, reason: '권한이 없습니다.' };
+    } else {
+      // 기타 오류는 네트워크 문제로 간주하고 예외 발생
+      console.error('[checkBackendSession] Unexpected status:', response.status);
+      throw new Error(`HTTP ${response.status}`);
+    }
+  } catch (error) {
+    // 네트워크 오류 또는 기타 예외
+    console.error('[checkBackendSession] Session check failed:', error);
+    throw error;
+  } finally {
+    sessionCheckInProgress = false;
+  }
+}
+
+/**
+ * localStorage 토큰 확인 (폴백)
+ * Phase 4: 보안 강화 - localStorage 직접 사용 제거, tokenManager 사용
+ */
+async function checkLocalStorageToken(): Promise<AuthCheckResult> {
+  if (typeof window === 'undefined') {
+    return { valid: false };
+  }
+
+  try {
+    const accessToken = await tokenManager.getAccessToken();
+    if (!accessToken?.trim()) {
+      return { valid: false };
+    }
+
+    // 토큰 유효성 확인
+    if (!isTokenValid(accessToken)) {
+      tokenManager.clearTokens();
+      return { valid: false, reason: '토큰이 유효하지 않습니다.' };
+    }
+
+    // 백엔드 연결 실패 시 임시로 토큰 기반 인증 허용
+    return { valid: true };
+  } catch {
+    return { valid: false };
+  }
+}
+
+/**
+ * 사용자 역할 가져오기
+ * Phase 4: 보안 강화 - localStorage 직접 사용 제거, tokenManager 사용
+ */
+export async function getUserRole(): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const accessToken = await tokenManager.getAccessToken();
+    return getUserRoleFromToken(accessToken);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 사용자 승인 상태 확인
+ * Phase 4: 보안 강화 - localStorage 직접 사용 제거, tokenManager 사용
+ */
+export async function isUserApproved(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  try {
+    const accessToken = await tokenManager.getAccessToken();
+    return isUserApprovedFromToken(accessToken);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Admin 여부 확인
+ * Phase 4: 보안 강화 - 비동기 함수로 변경
+ */
+export async function isAdmin(): Promise<boolean> {
+  const role = await getUserRole();
+  return role === 'admin';
+}
+
+/**
+ * 로그아웃
+ */
+export function logout(): void {
+  if (typeof window === 'undefined') return;
+  
+  // TokenManager 정리
+  tokenManager.clearTokens();
+  
+  // 백엔드 세션 삭제
+  authAPI.deleteSession().catch(() => {
+    // 세션 삭제 실패는 무시
+  });
+  
+  // localStorage 정리 (하위 호환성)
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('auth_token_timestamp');
+}
+

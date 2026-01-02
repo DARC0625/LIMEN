@@ -1,0 +1,112 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/package.json'
+      - 'backend/**/version.py'
+      - '.github/workflows/auto-release.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  detect-version:
+    name: Detect Version Change
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Get frontend version
+        id: frontend-version
+        working-directory: ./frontend
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Frontend version: $VERSION"
+      
+      - name: Check if version changed
+        id: version-check
+        run: |
+          PREV_VERSION=$(git log -1 --pretty=format:"%s" | grep -oP 'v\d+\.\d+\.\d+' || echo "")
+          CURRENT_VERSION="${{ steps.frontend-version.outputs.version }}"
+          
+          if [ "$PREV_VERSION" != "v$CURRENT_VERSION" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Version changed: $PREV_VERSION -> v$CURRENT_VERSION"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "Version unchanged"
+          fi
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: detect-version
+    if: needs.detect-version.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=$(node -p "require('./frontend/package.json').version")
+            VERSION="v$VERSION"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
+      
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -z "$PREV_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+          
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Create release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          release_name: Release ${{ steps.version.outputs.version }}
+          body: |
+            ## 🚀 Release ${{ steps.version.outputs.version }}
+            
+            ### 변경사항:
+            ${{ steps.changelog.outputs.changelog }}
+            
+            ### 자동 생성:
+            - 이 릴리스는 자동으로 생성되었습니다.
+            - 자세한 내용은 커밋 히스토리를 확인하세요.
+          draft: false
+          prerelease: false
+      
+      - name: Notify release
+        run: |
+          echo "🎉 Release ${{ steps.version.outputs.version }} created!"
+          echo "Changelog:"
+          echo "${{ steps.changelog.outputs.changelog }}"
+          # 여기에 Slack, Discord 등 알림 추가 가능
+

@@ -1,0 +1,110 @@
+name: Auto Dependency Update
+
+on:
+  schedule:
+    # 매주 월요일 오전 9시 (UTC)에 실행
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      package_type:
+        description: 'Package type to update'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - frontend
+          - backend
+
+jobs:
+  check-frontend-updates:
+    name: Check Frontend Dependencies
+    runs-on: ubuntu-latest
+    if: github.event.inputs.package_type == 'all' || github.event.inputs.package_type == 'frontend' || github.event_name == 'schedule'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+      
+      - name: Check for outdated packages
+        working-directory: ./frontend
+        run: |
+          npm outdated --json > outdated.json || true
+          cat outdated.json
+      
+      - name: Create update PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: frontend
+          commit-message: 'chore(frontend): Auto-update dependencies'
+          title: '🤖 Auto: Update frontend dependencies'
+          body: |
+            ## 🔄 자동 의존성 업데이트
+            
+            이 PR은 자동으로 생성되었습니다.
+            
+            ### 업데이트된 패키지:
+            - 자세한 내용은 체크리스트를 확인하세요.
+            
+            ### 테스트:
+            - [ ] 로컬에서 빌드 확인
+            - [ ] 테스트 실행
+            - [ ] 수동 검증
+            
+            ### 주의사항:
+            - 주요 버전 업데이트는 수동 검토가 필요할 수 있습니다.
+            - Breaking changes가 있는지 확인하세요.
+          branch: auto-update/frontend-deps
+          delete-branch: true
+
+  check-backend-updates:
+    name: Check Backend Dependencies
+    runs-on: ubuntu-latest
+    if: github.event.inputs.package_type == 'all' || github.event.inputs.package_type == 'backend' || github.event_name == 'schedule'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Check for outdated packages
+        working-directory: ./backend
+        run: |
+          pip install pip-review || true
+          pip-review --local --auto || true
+          # 또는 pip list --outdated
+      
+      - name: Create update PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: backend
+          commit-message: 'chore(backend): Auto-update dependencies'
+          title: '🤖 Auto: Update backend dependencies'
+          body: |
+            ## 🔄 자동 의존성 업데이트
+            
+            이 PR은 자동으로 생성되었습니다.
+            
+            ### 업데이트된 패키지:
+            - 자세한 내용은 체크리스트를 확인하세요.
+            
+            ### 테스트:
+            - [ ] 로컬에서 빌드 확인
+            - [ ] 테스트 실행
+            - [ ] 수동 검증
+
