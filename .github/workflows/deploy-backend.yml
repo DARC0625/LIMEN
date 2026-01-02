@@ -57,7 +57,7 @@ jobs:
             git clean -fd || {
               echo "⚠️  git clean 실패, 계속 진행..."
             }
-            echo "✅ 백엔드 서버가 최신 상태로 업데이트됨"
+            echo "✅ 백엔드 서버가 최신 상태로 업데이트됨 (백엔드 우선순위)"
             
             # RAG 인덱싱 실행
             if [ -f "scripts/rag-index.sh" ]; then
