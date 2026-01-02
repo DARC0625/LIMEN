@@ -62,7 +62,7 @@ generate_commit_message() {
     local has_config=false
     
     for file in $(get_changed_files); do
-        if [[ "$file" == docs/* ]] || [[ "$file" == *.md ]]; then
+        if [[ "$file" == RAG/* ]] || [[ "$file" == *.md ]]; then
             has_docs=true
         elif [[ "$file" == backend/* ]] || [[ "$file" == frontend/* ]]; then
             has_code=true

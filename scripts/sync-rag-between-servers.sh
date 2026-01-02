@@ -126,8 +126,8 @@ git checkout origin/main -- RAG/
 ## 📚 사용 방법
 
 자세한 내용은 각 서버의 RAG 설정 가이드를 참조하세요:
-- 프론트엔드: `docs/04-operations/frontend-rag-setup.md`
-- 백엔드: `docs/04-operations/backend-rag-setup.md`
+- 프론트엔드: `RAG/04-operations/frontend-rag-setup.md`
+- 백엔드: `RAG/04-operations/backend-rag-setup.md`
 
 ---
 

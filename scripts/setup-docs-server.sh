@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 문서 서버 (RAG) 초기 설정 스크립트
-# 이 스크립트는 문서 서버에서 실행하여 docs/만 체크아웃합니다.
+# 이 스크립트는 문서 서버에서 실행하여 RAG/만 체크아웃합니다.
 
 set -e
 
@@ -30,7 +30,7 @@ git sparse-checkout init --cone
 
 # 문서만 추가
 echo "3️⃣ 문서 디렉토리 추가 중..."
-git sparse-checkout set docs/
+git sparse-checkout set RAG/
 
 # 체크아웃
 echo "4️⃣ 파일 체크아웃 중..."
@@ -39,7 +39,7 @@ git checkout main
 # 검증
 echo ""
 echo "5️⃣ 검증 중..."
-if [ -d "docs" ]; then
+if [ -d "RAG" ]; then
   if [ ! -d "frontend" ] && [ ! -d "backend" ]; then
     echo "✅ 문서 서버 설정 완료!"
     echo ""
@@ -54,7 +54,7 @@ if [ -d "docs" ]; then
     exit 1
   fi
 else
-  echo "❌ 오류: docs 디렉토리가 없습니다!"
+  echo "❌ 오류: RAG 디렉토리가 없습니다!"
   exit 1
 fi
 

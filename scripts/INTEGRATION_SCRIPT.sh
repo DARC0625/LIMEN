@@ -23,29 +23,28 @@ else
     git remote set-url origin https://github.com/darc0625/limen.git
 fi
 
-# 3. 문서 디렉토리 구조 생성
-echo "📁 문서 디렉토리 구조 생성..."
-mkdir -p docs/architecture
-mkdir -p docs/api
-mkdir -p docs/development
-mkdir -p docs/components
-mkdir -p docs/deployment
+# 3. 문서 디렉토리 구조 생성 (RAG 폴더 사용)
+echo "📁 문서 디렉토리 구조 생성 (RAG 폴더)..."
+mkdir -p RAG/01-architecture
+mkdir -p RAG/02-development
+mkdir -p RAG/03-deployment
+mkdir -p RAG/04-operations
 
-# 4. 프론트엔드 문서 이동
-echo "📝 프론트엔드 문서 통합..."
+# 4. 프론트엔드 문서 이동 (RAG 폴더로)
+echo "📝 프론트엔드 문서 통합 (RAG 폴더)..."
 if [ -f "frontend/DEVELOPMENT.md" ]; then
-    cp frontend/DEVELOPMENT.md docs/development/FRONTEND_DEVELOPMENT.md
-    echo "✅ DEVELOPMENT.md 이동 완료"
+    cp frontend/DEVELOPMENT.md RAG/02-development/frontend-development.md
+    echo "✅ DEVELOPMENT.md 이동 완료 (RAG/02-development/)"
 fi
 
 if [ -f "frontend/docs/COMPONENTS.md" ]; then
-    cp frontend/docs/COMPONENTS.md docs/components/FRONTEND_COMPONENTS.md
-    echo "✅ COMPONENTS.md 이동 완료"
+    cp frontend/docs/COMPONENTS.md RAG/02-development/frontend-components.md
+    echo "✅ COMPONENTS.md 이동 완료 (RAG/02-development/)"
 fi
 
 if [ -f "frontend/UPGRADE_SUMMARY.md" ]; then
-    cp frontend/UPGRADE_SUMMARY.md docs/development/UPGRADE_SUMMARY.md
-    echo "✅ UPGRADE_SUMMARY.md 이동 완료"
+    cp frontend/UPGRADE_SUMMARY.md RAG/02-development/frontend-upgrade-summary.md
+    echo "✅ UPGRADE_SUMMARY.md 이동 완료 (RAG/02-development/)"
 fi
 
 # 5. .gitignore 확인

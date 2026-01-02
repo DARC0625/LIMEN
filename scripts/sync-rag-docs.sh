@@ -1,6 +1,6 @@
 #!/bin/bash
 # LIMEN RAG 문서 동기화 스크립트
-# docs/ 폴더의 문서를 RAG/docs/로 동기화
+# 모든 문서는 RAG/ 폴더에서 통합 관리됩니다
 
 set -e
 

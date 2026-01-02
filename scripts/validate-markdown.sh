@@ -5,7 +5,7 @@
 set -e
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DOCS_DIR="$PROJECT_ROOT/docs"
+RAG_DIR="$PROJECT_ROOT/RAG"
 ERRORS=0
 WARNINGS=0
 
@@ -41,9 +41,8 @@ echo "----------------------------------------"
 # 허용되는 위치
 ALLOWED_PATHS=(
     "$PROJECT_ROOT/README.md"
-    "$PROJECT_ROOT/docs"
+    "$PROJECT_ROOT/RAG"
     "$PROJECT_ROOT/backend/README.md"
-    "$PROJECT_ROOT/backend/docs"
     "$PROJECT_ROOT/scripts/README.md"
     "$PROJECT_ROOT/infra/README.md"
     "$PROJECT_ROOT/backend/tests/README.md"
@@ -54,17 +53,17 @@ ROOT_MD_FILES=$(find "$PROJECT_ROOT" -maxdepth 1 -name "*.md" -type f 2>/dev/nul
 
 if [ -n "$ROOT_MD_FILES" ]; then
     while IFS= read -r file; do
-        log_error "루트에 MD 파일 발견: $file (docs/ 폴더로 이동 필요)"
+        log_error "루트에 MD 파일 발견: $file (RAG/ 폴더로 이동 필요)"
     done <<< "$ROOT_MD_FILES"
 fi
 
 # backend, scripts, config 등에 MD 파일이 있는지 확인 (README.md 제외)
 for dir in backend scripts config infra; do
     if [ -d "$PROJECT_ROOT/$dir" ]; then
-        MD_FILES=$(find "$PROJECT_ROOT/$dir" -name "*.md" -type f 2>/dev/null | grep -v "README.md" | grep -v "/docs/" || true)
+        MD_FILES=$(find "$PROJECT_ROOT/$dir" -name "*.md" -type f 2>/dev/null | grep -v "README.md" | grep -v "/RAG/" || true)
         if [ -n "$MD_FILES" ]; then
             while IFS= read -r file; do
-                log_warning "코드 폴더에 MD 파일 발견: $file (docs/ 폴더로 이동 권장)"
+                log_warning "코드 폴더에 MD 파일 발견: $file (RAG/ 폴더로 이동 권장)"
             done <<< "$MD_FILES"
         fi
     fi
@@ -80,9 +79,9 @@ echo ""
 echo "2. 파일명 규칙 검증..."
 echo "----------------------------------------"
 
-# docs 폴더 내의 모든 MD 파일 검증
-if [ -d "$DOCS_DIR" ]; then
-    INVALID_NAMES=$(find "$DOCS_DIR" -name "*.md" -type f | grep -E "[A-Z]|_" || true)
+# RAG 폴더 내의 모든 MD 파일 검증
+if [ -d "$RAG_DIR" ]; then
+    INVALID_NAMES=$(find "$RAG_DIR" -name "*.md" -type f ! -path "*/vectors/*" ! -path "*/index/*" ! -path "*/embeddings/*" | grep -E "[A-Z]|_" || true)
     
     if [ -n "$INVALID_NAMES" ]; then
         while IFS= read -r file; do
@@ -105,8 +104,8 @@ echo ""
 echo "3. 한글 작성 여부 검증 (샘플링)..."
 echo "----------------------------------------"
 
-# docs 폴더의 주요 문서들 샘플링
-SAMPLE_FILES=$(find "$DOCS_DIR" -name "*.md" -type f | head -10)
+# RAG 폴더의 주요 문서들 샘플링
+SAMPLE_FILES=$(find "$RAG_DIR" -name "*.md" -type f ! -path "*/vectors/*" ! -path "*/index/*" ! -path "*/embeddings/*" | head -10)
 
 if [ -n "$SAMPLE_FILES" ]; then
     KOREAN_COUNT=0
@@ -137,18 +136,18 @@ echo ""
 echo "4. 문서 구조 검증..."
 echo "----------------------------------------"
 
-# docs/README.md 존재 확인
-if [ ! -f "$DOCS_DIR/README.md" ]; then
-    log_error "docs/README.md 파일이 없습니다"
+# RAG/README.md 존재 확인
+if [ ! -f "$RAG_DIR/README.md" ]; then
+    log_error "RAG/README.md 파일이 없습니다"
 else
-    log_success "docs/README.md 존재"
+    log_success "RAG/README.md 존재"
 fi
 
-# MARKDOWN_GUIDE.md 존재 확인
-if [ ! -f "$DOCS_DIR/MARKDOWN_GUIDE.md" ]; then
-    log_warning "docs/MARKDOWN_GUIDE.md 파일이 없습니다 (가이드 생성 권장)"
+# MARKDOWN_GUIDE.md 존재 확인 (선택적)
+if [ ! -f "$RAG_DIR/02-development/coding-standards.md" ]; then
+    log_warning "RAG/02-development/coding-standards.md 파일이 없습니다 (가이드 생성 권장)"
 else
-    log_success "docs/MARKDOWN_GUIDE.md 존재"
+    log_success "RAG/02-development/coding-standards.md 존재"
 fi
 
 echo ""

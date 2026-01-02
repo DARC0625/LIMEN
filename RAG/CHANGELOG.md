@@ -1,3 +1,75 @@
+## 2026-01-02 23:09:20 - operations
+
+**파일**: `scripts/validate-md-files.js`
+
+**변경 내용**:
+파일 변경: `scripts/validate-md-files.js`
+
+---
+
+## 2026-01-02 23:09:20 - operations
+
+**파일**: `scripts/validate-markdown.sh`
+
+**변경 내용**:
+파일 변경: `scripts/validate-markdown.sh`
+
+---
+
+## 2026-01-02 23:09:20 - operations
+
+**파일**: `scripts/sync-rag-docs.sh`
+
+**변경 내용**:
+파일 변경: `scripts/sync-rag-docs.sh`
+
+---
+
+## 2026-01-02 23:09:20 - operations
+
+**파일**: `scripts/sync-rag-between-servers.sh`
+
+**변경 내용**:
+파일 변경: `scripts/sync-rag-between-servers.sh`
+
+---
+
+## 2026-01-02 23:09:20 - operations
+
+**파일**: `scripts/setup-docs-server.sh`
+
+**변경 내용**:
+파일 변경: `scripts/setup-docs-server.sh`
+
+---
+
+## 2026-01-02 23:09:20 - operations
+
+**파일**: `scripts/setup-backend-server.sh`
+
+**변경 내용**:
+파일 변경: `scripts/setup-backend-server.sh`
+
+---
+
+## 2026-01-02 23:09:20 - operations
+
+**파일**: `scripts/auto-commit-push.sh`
+
+**변경 내용**:
+파일 변경: `scripts/auto-commit-push.sh`
+
+---
+
+## 2026-01-02 23:09:20 - operations
+
+**파일**: `scripts/INTEGRATION_SCRIPT.sh`
+
+**변경 내용**:
+파일 변경: `scripts/INTEGRATION_SCRIPT.sh`
+
+---
+
 ## 2026-01-02 23:04:55 - development
 
 **파일**: `backend/internal/vm/service.go`

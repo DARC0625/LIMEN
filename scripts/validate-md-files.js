@@ -11,7 +11,7 @@ const path = require('path');
 
 // 허용된 MD 파일 위치
 const ALLOWED_LOCATIONS = [
-  'docs/',
+  'RAG/',
   '.github/',
 ];
 
@@ -119,7 +119,7 @@ function validateMdFile(filePath) {
     errors.push({
       file: relativePath,
       type: 'location',
-      message: `MD 파일이 허용되지 않은 위치에 있습니다: ${relativePath}\n  → docs/ 디렉토리로 이동하세요.`,
+      message: `MD 파일이 허용되지 않은 위치에 있습니다: ${relativePath}\n  → RAG/ 디렉토리로 이동하세요.`,
     });
     hasErrors = true;
     return;
