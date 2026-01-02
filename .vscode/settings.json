@@ -1,0 +1,20 @@
+{
+  // 파일 미리보기 비활성화 - 파일을 열어도 탭이 고정되지 않고 자동으로 닫힘 방지
+  "workbench.editor.enablePreview": false,
+  
+  // 이미 열린 파일로 자동 이동 비활성화
+  "workbench.editor.revealIfOpen": false,
+  
+  // 파일 변경 시 자동으로 열린 파일로 이동하지 않음
+  "workbench.editor.focusRecentEditorAfterClose": false,
+  
+  // AI가 파일을 수정할 때 자동으로 파일을 열지 않음
+  "cursor.ai.autoOpenFiles": false,
+  
+  // 파일 탐색기에서 파일 선택 시 미리보기 비활성화
+  "workbench.editor.enablePreviewFromQuickOpen": false,
+  
+  // 파일 탐색기에서 파일 선택 시 미리보기 비활성화
+  "workbench.editor.enablePreviewFromCodeNavigation": false
+}
+
