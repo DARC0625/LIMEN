@@ -84,10 +84,14 @@ coverage/
 *.backup
 *_backup/
 
-# 프론트엔드 폴더 (백엔드 서버에는 포함하지 않음 - 보안)
-frontend/
-**/frontend/
-*frontend*
+# 프론트엔드 빌드 아티팩트만 제외 (소스 코드는 포함)
+frontend/.next/
+frontend/out/
+frontend/dist/
+frontend/build/
+frontend/node_modules/
+frontend/.env*
+frontend/coverage/
 
 # 배포 디렉토리 (로컬 배포용, Git에 포함하지 않음)
 deploy-backend/
