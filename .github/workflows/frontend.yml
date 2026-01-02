@@ -12,7 +12,7 @@ on:
       - 'frontend/**'
 
 jobs:
-  lint:
+  test:
     runs-on: ubuntu-latest
     
     steps:
@@ -29,17 +29,24 @@ jobs:
         working-directory: ./frontend
         run: npm ci
       
-      - name: Run ESLint
+      - name: Run tests
         working-directory: ./frontend
-        run: npm run lint
+        run: |
+          # Add your test command here
+          # npm test
+          echo "Tests would run here"
       
-      - name: Check formatting
+      - name: Lint
         working-directory: ./frontend
-        run: npm run format:check
+        run: |
+          # Add your lint command here
+          npm run lint
+          echo "Linting completed"
 
   build:
-    needs: lint
+    needs: test
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     
     steps:
       - uses: actions/checkout@v4
@@ -55,39 +62,14 @@ jobs:
         working-directory: ./frontend
         run: npm ci
       
-      - name: Build
+      - name: Build frontend
         working-directory: ./frontend
         run: npm run build
         env:
           NODE_ENV: production
       
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-build
-          path: frontend/.next
-          retention-days: 7
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    environment:
-      name: production
-      url: ${{ secrets.DEPLOYMENT_URL || 'https://limen.local' }}
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-build
-          path: frontend/.next
-      
-      - name: Auto Deploy
+      - name: Deploy
         run: |
-          echo "🚀 Auto deployment triggered"
-          echo "This will be handled by frontend-auto-deploy.yml workflow"
-          # 실제 배포는 frontend-auto-deploy.yml에서 처리
+          # Add your deployment command here
+          echo "Deployment would run here"
 

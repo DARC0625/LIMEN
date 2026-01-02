@@ -49,14 +49,6 @@ jobs:
           npm run format:check || (echo "Code is not formatted. Run 'npm run format' in frontend directory" && exit 1)
         continue-on-error: false
       
-      - name: Push auto-fixes
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          if [ -n "$(git status --porcelain)" ]; then
-            git push origin main || true
-          fi
-        continue-on-error: true
-      
       - name: TypeScript type check
         working-directory: ./frontend
         run: npx tsc --noEmit
