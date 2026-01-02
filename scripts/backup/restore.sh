@@ -173,7 +173,7 @@ restore_config() {
     local backup_file="$1"
     local decrypt_key="${2:-}"
     local temp_file="${backup_file}.tmp"
-    local target_dir="${CONFIG_DIR:-/home/darc0/projects/LIMEN}"
+    local target_dir="${CONFIG_DIR:-/home/darc0/LIMEN}"
     
     log "Restoring configuration from: $backup_file"
     log "Target directory: $target_dir"

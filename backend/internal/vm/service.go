@@ -101,7 +101,7 @@ func (s *VMService) EnsureISO(osType string) (string, error) {
 	return "", fmt.Errorf("iso file not found at %s. please upload it manually", imagePath)
 }
 
-func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string, vmUUID string) error {
+func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string, vmUUID string, graphicsType string, vncEnabled bool) error {
 	// 0. Cleanup existing resources (Libvirt domain and Disk)
 	// Check if domain exists in libvirt and cleanup
 	if dom, err := s.conn.LookupDomainByName(name); err == nil {
@@ -130,7 +130,54 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
 		return fmt.Errorf("failed to ensure iso: %w", err)
 	}
 
-	// 3. Define VM with CDROM boot enabled
+	// 3. Determine VNC graphics settings
+	// GUI OS types that should have VNC enabled by default
+	guiOSTypes := []string{"ubuntu-desktop", "kali", "windows", "windows10", "windows11"}
+	isGUIOs := false
+	for _, guiType := range guiOSTypes {
+		if strings.Contains(strings.ToLower(osType), strings.ToLower(guiType)) {
+			isGUIOs = true
+			break
+		}
+	}
+
+	// Determine if VNC should be enabled
+	enableVNC := vncEnabled
+	if !vncEnabled && isGUIOs {
+		// Auto-enable VNC for GUI OS if not explicitly disabled
+		enableVNC = true
+		logger.Log.Info("Auto-enabling VNC for GUI OS", zap.String("os_type", osType), zap.String("vm_name", name))
+	}
+
+	// Determine graphics type
+	graphicsTypeToUse := graphicsType
+	if graphicsTypeToUse == "" {
+		if enableVNC {
+			graphicsTypeToUse = "vnc"
+		} else {
+			graphicsTypeToUse = "none"
+		}
+	}
+
+	// 4. Define VM with CDROM boot enabled
+	// Build graphics XML based on settings
+	graphicsXML := ""
+	if enableVNC && graphicsTypeToUse == "vnc" {
+		graphicsXML = `    <graphics type='vnc' port='-1' autoport='yes' listen='0.0.0.0'>
+      <listen type='address' address='0.0.0.0'/>
+    </graphics>
+`
+		logger.Log.Info("VNC graphics enabled for VM", zap.String("vm_name", name), zap.String("os_type", osType))
+	} else if graphicsTypeToUse == "spice" {
+		graphicsXML = `    <graphics type='spice' port='-1' autoport='yes' listen='0.0.0.0'>
+      <listen type='address' address='0.0.0.0'/>
+    </graphics>
+`
+		logger.Log.Info("SPICE graphics enabled for VM", zap.String("vm_name", name))
+	} else {
+		logger.Log.Info("No graphics configured for VM", zap.String("vm_name", name), zap.String("graphics_type", graphicsTypeToUse))
+	}
+
 	vmXML := fmt.Sprintf(`
 <domain type='kvm'>
   <name>%s</name>
@@ -224,10 +271,7 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
     <input type='mouse' bus='ps2'/>
     <input type='keyboard' bus='ps2'/>
     <input type='tablet' bus='usb'/>
-    <graphics type='vnc' port='-1' autoport='yes' listen='0.0.0.0'>
-      <listen type='address' address='0.0.0.0'/>
-    </graphics>
-    <video>
+%s    <video>
       <model type='virtio' heads='1' primary='yes'/>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x0'/>
     </video>
@@ -236,7 +280,7 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
     </memballoon>
   </devices>
 </domain>
-`, name, memoryMB*1024, vcpu, vmDiskPath, isoPath)
+`, name, memoryMB*1024, vcpu, vmDiskPath, isoPath, graphicsXML)
 
 	dom, err := s.conn.DomainDefineXML(vmXML)
 	if err != nil {

@@ -1,54 +1,54 @@
-# 인프라 및 배포 파일
+# LIMEN 인프라 설정
 
-이 디렉토리는 프로젝트의 인프라 및 배포 관련 파일들을 포함합니다.
+이 폴더는 LIMEN 프로젝트의 인프라 및 배포 관련 설정을 관리합니다.
 
-## 📁 파일 구조
+## 폴더 구조
 
-### 루트 디렉토리
-- `Makefile` - 전체 프로젝트 빌드 및 실행 관리
-  - `make build-all` - 모든 컴포넌트 빌드
-  - `make dev-backend` - 백엔드 개발 모드 실행
-  - `make dev-frontend` - 프론트엔드 개발 모드 실행
-  - `make setup` - 초기 설정 (의존성 설치)
-  - `make clean` - 빌드 아티팩트 정리
-
-### infra/ 디렉토리
-- `docker-compose.yaml` - Docker Compose 설정 파일
-  - Envoy 프록시 서비스 설정
-- `.dockerignore` - Docker 빌드 시 제외할 파일 목록
-
-### backend/ 디렉토리
-- `Makefile` - 백엔드 전용 빌드 및 테스트 명령어
-  - `make test` - 모든 테스트 실행
-  - `make test-cover` - 커버리지 리포트 생성
-  - `make build` - 서버 빌드
-  - `make run` - 서버 실행
-
-## 🚀 사용 방법
-
-### 전체 프로젝트 빌드
-```bash
-make build-all
+```
+infra/
+├── docker/              # Docker 관련 설정
+│   ├── docker-compose.yml      # 프로덕션 Docker Compose
+│   ├── docker-compose.dev.yml  # 개발용 Docker Compose
+│   └── .dockerignore           # Docker 빌드 제외 파일
+└── README.md            # 이 파일
 ```
 
-### 개발 환경 실행
-```bash
-# 백엔드
-make dev-backend
+## Docker 설정
 
-# 프론트엔드 (별도 터미널)
-make dev-frontend
-```
-
-### Docker Compose 실행
+### 프로덕션 배포
 ```bash
-cd infra
+cd infra/docker
 docker-compose up -d
 ```
 
-## 📝 참고사항
+### 개발 환경
+```bash
+cd infra/docker
+docker-compose -f docker-compose.dev.yml up -d
+```
 
-- 루트의 `Makefile`은 전체 프로젝트를 관리하는 메인 Makefile입니다.
-- `backend/Makefile`은 백엔드 전용 명령어를 제공합니다.
-- Docker 관련 파일들은 `infra/` 디렉토리에 있습니다.
+## 파일 설명
 
+### docker-compose.yml
+프로덕션 환경용 Docker Compose 설정:
+- PostgreSQL 데이터베이스
+- LIMEN 백엔드 서비스
+- LIMEN 에이전트
+
+### docker-compose.dev.yml
+개발 환경용 Docker Compose 설정:
+- 개발 모드 설정
+- 디버깅 옵션
+- 핫 리로드
+
+### .dockerignore
+Docker 빌드 시 제외할 파일 목록:
+- Git 파일
+- 로그 파일
+- 빌드 아티팩트
+- 불필요한 의존성
+
+## 관련 문서
+
+- [배포 가이드](../RAG/04-operations/deployment-guide.md)
+- [Docker 배포](../RAG/03-deployment/docker/deployment.md)

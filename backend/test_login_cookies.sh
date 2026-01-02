@@ -26,3 +26,4 @@ echo "  2. 브라우저 개발자 도구 → Network → Response Headers에서 
 echo "  3. Application → Cookies에서 refresh_token, csrf_token 확인"
 
 
+

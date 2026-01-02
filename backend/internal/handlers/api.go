@@ -90,10 +90,12 @@ func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 type CreateVMRequest struct {
-	Name   string `json:"name" example:"my-vm" binding:"required"` // VM name (unique)
-	CPU    int    `json:"cpu" example:"4" binding:"required,min=1,max=32"` // Number of CPU cores (1-32)
-	Memory int    `json:"memory" example:"4096" binding:"required,min=512"` // Memory in MB (minimum 512MB)
-	OSType string `json:"os_type" example:"ubuntu" binding:"required"` // OS type (must exist in VMImage table)
+	Name         string `json:"name" example:"my-vm" binding:"required"` // VM name (unique)
+	CPU          int    `json:"cpu" example:"4" binding:"required,min=1,max=32"` // Number of CPU cores (1-32)
+	Memory       int    `json:"memory" example:"4096" binding:"required,min=512"` // Memory in MB (minimum 512MB)
+	OSType       string `json:"os_type" example:"ubuntu" binding:"required"` // OS type (must exist in VMImage table)
+	GraphicsType string `json:"graphics_type,omitempty" example:"vnc"` // Graphics type (vnc, spice, none). Auto-enabled for GUI OS if not specified.
+	VNCEnabled   *bool  `json:"vnc_enabled,omitempty" example:"true"` // Enable VNC graphics. Auto-enabled for GUI OS if not specified.
 }
 
 // HandleVMs handles VM list and creation
@@ -239,7 +241,38 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 			return
 		}
 
-		if err := h.VMService.CreateVM(req.Name, req.Memory, req.CPU, req.OSType, newVM.UUID); err != nil {
+		// Determine VNC graphics settings
+		// GUI OS types that should have VNC enabled by default
+		guiOSTypes := []string{"ubuntu-desktop", "kali", "windows", "windows10", "windows11"}
+		isGUIOs := false
+		for _, guiType := range guiOSTypes {
+			if strings.Contains(strings.ToLower(req.OSType), strings.ToLower(guiType)) {
+				isGUIOs = true
+				break
+			}
+		}
+
+		// Determine if VNC should be enabled
+		enableVNC := false
+		if req.VNCEnabled != nil {
+			enableVNC = *req.VNCEnabled
+		} else if isGUIOs {
+			// Auto-enable VNC for GUI OS if not explicitly set
+			enableVNC = true
+			logger.Log.Info("Auto-enabling VNC for GUI OS", zap.String("os_type", req.OSType), zap.String("vm_name", req.Name))
+		}
+
+		// Determine graphics type
+		graphicsType := req.GraphicsType
+		if graphicsType == "" {
+			if enableVNC {
+				graphicsType = "vnc"
+			} else {
+				graphicsType = "none"
+			}
+		}
+
+		if err := h.VMService.CreateVM(req.Name, req.Memory, req.CPU, req.OSType, newVM.UUID, graphicsType, enableVNC); err != nil {
 			tx.Rollback()
 			logger.Log.Error("Failed to create VM in libvirt", zap.Error(err), zap.String("vm_name", req.Name), zap.String("uuid", newVM.UUID))
 			errors.WriteInternalError(w, err, cfg.Env == "development")

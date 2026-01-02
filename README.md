@@ -243,7 +243,7 @@ WebSocket 연결을 효율적으로 관리하여 메모리 사용량 최적화
 
 ```
 LIMEN/
-├── frontend/              # Next.js 프론트엔드
+├── [frontend/ 제외]       # 프론트엔드는 별도 서버에 배포 (보안)
 │   ├── src/
 │   │   ├── app/          # App Router 페이지
 │   │   ├── components/   # React 컴포넌트
@@ -264,10 +264,14 @@ LIMEN/
 ├── database/             # 데이터베이스 관련
 │   ├── iso/             # ISO 이미지 저장
 │   └── vms/             # VM 디스크 이미지
-├── docs/                 # 프로젝트 문서
+├── RAG/                  # 모든 문서 및 RAG 데이터 (프론트엔드/백엔드 공유)
+├── config/               # 설정 파일 (배포, 린트, 에디터 등)
+├── infra/                # 인프라 설정 (Docker 등)
 ├── infra/                # 인프라 및 배포
-│   ├── docker-compose.yaml
-│   └── .dockerignore
+│   └── docker/           # Docker 설정
+│       ├── docker-compose.yml
+│       ├── docker-compose.dev.yml
+│       └── .dockerignore
 └── .github/              # GitHub Actions CI/CD
     └── workflows/
 ```
@@ -322,8 +326,7 @@ LIMEN/
    # Backend
    make dev-backend
 
-   # Frontend (별도 터미널)
-   make dev-frontend
+   # Frontend는 별도 서버에서 실행 (백엔드 서버에는 없음)
    ```
 
 ## 📝 사용 가능한 명령어
@@ -331,13 +334,13 @@ LIMEN/
 ```bash
 make help              # 도움말
 make build-backend      # 백엔드 빌드
-make build-frontend     # 프론트엔드 빌드
+# make build-frontend  # 프론트엔드는 별도 서버에서 빌드 (백엔드 서버에는 없음)
 make build-agent        # 에이전트 빌드
 make build-all          # 전체 빌드
 make clean              # 빌드 아티팩트 정리
 make clean-logs         # 로그 파일 정리
 make dev-backend        # 백엔드 개발 모드
-make dev-frontend       # 프론트엔드 개발 모드
+# make dev-frontend    # 프론트엔드는 별도 서버에서 실행 (백엔드 서버에는 없음)
 make setup              # 초기 설정
 make check-env          # 환경 변수 확인
 ```
@@ -357,7 +360,7 @@ make check-env          # 환경 변수 확인
 
 ### Frontend 환경 변수
 
-`frontend/.env.example`을 참조하여 `frontend/.env.local` 파일을 생성하세요.
+Frontend는 별도 서버에서 설정합니다. 백엔드 서버에는 frontend 폴더가 없습니다.
 
 **주요 설정:**
 - `NEXT_PUBLIC_API_URL`: 백엔드 API URL
@@ -403,17 +406,21 @@ docker-compose up -d
 
 ## 📚 문서
 
-모든 문서는 [`docs/`](./docs/) 폴더에 정리되어 있습니다.
+모든 문서는 [`RAG/`](./RAG/) 폴더에 직접 저장되어 있으며, 프론트엔드와 백엔드가 공통으로 사용합니다.
+`docs/` 폴더는 더 이상 존재하지 않으며, 모든 문서는 `RAG/` 폴더에서 관리됩니다.
 
-### 📖 시작하기
-- [문서 인덱스](./docs/INDEX.md) ⭐ - 모든 문서의 목차
-- [프로젝트 구조](./docs/PROJECT_STRUCTURE.md) - 프로젝트 디렉토리 구조
+### 📖 주요 문서
+- [문서 인덱스](./RAG/README.md) ⭐ - 모든 문서의 목차 및 빠른 탐색
+- [마크다운 작성 가이드](./RAG/markdown-guide.md) - 문서 작성 규칙 및 가이드
+- [서비스 가이드](./RAG/04-operations/service.md) - 정식 서비스 실행 가이드
+- [운영 가이드](./RAG/04-operations/operations-guide.md) - 일상 운영 가이드
 
 ### 🔧 개발 가이드
-- [API 문서](./backend/docs/API_DOCUMENTATION.md) - Backend API 상세 문서
-- [테스트 가이드](./backend/docs/TESTING.md) - 테스트 실행 방법
+- [시작하기](./RAG/02-development/getting-started.md) - 개발 환경 설정
+- [API 문서](./RAG/02-development/api-documentation.md) - Backend API 상세 문서
+- [기여 가이드](./RAG/02-development/contributing.md) - 기여 방법
 
-**전체 문서 목록**: [docs/README.md](./docs/README.md) 또는 [docs/INDEX.md](./docs/INDEX.md) 참조
+**전체 문서 목록**: [RAG/README.md](./RAG/README.md) 참조
 
 ## 🐛 문제 해결
 
@@ -446,7 +453,7 @@ PostgreSQL이 실행 중인지 확인하고 연결 정보를 확인하세요.
 ## 🔗 링크
 
 - **GitHub**: https://github.com/DARC0625/LIMEN
-- **문서**: [docs/](./docs/)
+- **문서**: [RAG/](./RAG/)
 - **이슈**: [Issues](https://github.com/DARC0625/LIMEN/issues)
 - **Pull Requests**: [Pull Requests](https://github.com/DARC0625/LIMEN/pulls)
 

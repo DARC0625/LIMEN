@@ -5,7 +5,7 @@ set -e
 
 SERVICE_NAME="limen-backend"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-BACKEND_DIR="/home/darc0/projects/LIMEN/backend"
+BACKEND_DIR="/home/darc0/LIMEN/backend"
 SERVER_BINARY="${BACKEND_DIR}/server"
 ENV_FILE="${BACKEND_DIR}/.env"
 

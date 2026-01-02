@@ -5,7 +5,7 @@ set -e
 
 SERVICE_NAME="limen"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-SOURCE_FILE="/home/darc0/projects/LIMEN/${SERVICE_NAME}.service"
+SOURCE_FILE="/home/darc0/LIMEN/scripts/${SERVICE_NAME}.service"
 
 echo "🔧 LIMEN 통합 systemd 서비스 설치 중..."
 

@@ -1,0 +1,158 @@
+package handlers
+
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"time"
+
+	"github.com/gorilla/mux"
+)
+
+// DocsSyncRequest 문서 동기화 요청
+type DocsSyncRequest struct {
+	Source string `json:"source"` // "git" or "manual"
+	Branch string `json:"branch"` // Git 브랜치명
+}
+
+// SyncDocsHandler 문서 동기화 핸들러
+// POST /api/docs/sync
+func SyncDocsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req DocsSyncRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// 문서 디렉토리 경로
+	docsDir := os.Getenv("DOCS_DIR")
+	if docsDir == "" {
+		docsDir = "/home/darc0/LIMEN/docs"
+	}
+
+	// Git에서 문서 동기화
+	if req.Source == "git" {
+		if err := syncDocsFromGit(docsDir, req.Branch); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// 수동 동기화 (로컬 파일 시스템에서)
+		if err := syncDocsFromLocal(docsDir); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// RAG 인덱싱 트리거
+	go triggerRAGIndexing(docsDir)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"message": "Documents synced successfully",
+		"time":    time.Now().Unix(),
+	})
+}
+
+// syncDocsFromGit Git에서 문서 동기화
+func syncDocsFromGit(docsDir, branch string) error {
+	// Git 저장소 경로
+	repoPath := os.Getenv("GIT_REPO_PATH")
+	if repoPath == "" {
+		repoPath = "/home/darc0/LIMEN"
+	}
+
+	// Git pull 실행
+	cmd := exec.Command("git", "-C", repoPath, "pull", "origin", branch)
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	// 문서 디렉토리 동기화 (rsync 또는 복사)
+	// 실제 구현은 환경에 따라 다를 수 있음
+	return syncDocsDirectory(filepath.Join(repoPath, "docs"), docsDir)
+}
+
+// syncDocsFromLocal 로컬 파일 시스템에서 문서 동기화
+func syncDocsFromLocal(docsDir string) error {
+	sourceDir := os.Getenv("DOCS_SOURCE_DIR")
+	if sourceDir == "" {
+		sourceDir = "/home/darc0/LIMEN/docs"
+	}
+
+	return syncDocsDirectory(sourceDir, docsDir)
+}
+
+// syncDocsDirectory 문서 디렉토리 동기화
+func syncDocsDirectory(source, dest string) error {
+	// rsync를 사용한 동기화 (권장)
+	cmd := exec.Command("rsync", "-av", "--delete", source+"/", dest+"/")
+	return cmd.Run()
+
+	// 또는 Go의 filepath.Walk를 사용한 직접 복사
+	// (rsync가 없는 경우)
+}
+
+// triggerRAGIndexing RAG 인덱싱 트리거
+func triggerRAGIndexing(docsDir string) {
+	ragScript := os.Getenv("RAG_INDEX_SCRIPT")
+	if ragScript == "" {
+		ragScript = "/home/darc0/LIMEN/scripts/rag-index.sh"
+	}
+
+	cmd := exec.Command(ragScript, "--auto")
+	cmd.Dir = filepath.Dir(ragScript)
+	cmd.Run() // 백그라운드 실행, 에러 무시
+}
+
+// GetDocsStatusHandler 문서 상태 조회
+// GET /api/docs/status
+func GetDocsStatusHandler(w http.ResponseWriter, r *http.Request) {
+	docsDir := os.Getenv("DOCS_DIR")
+	if docsDir == "" {
+		docsDir = "/home/darc0/LIMEN/docs"
+	}
+
+	// 문서 개수 계산
+	docCount := 0
+	filepath.Walk(docsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() && filepath.Ext(path) == ".md" {
+			docCount++
+		}
+		return nil
+	})
+
+	// 마지막 업데이트 시간
+	var lastModified time.Time
+	filepath.Walk(docsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() && filepath.Ext(path) == ".md" {
+			if info.ModTime().After(lastModified) {
+				lastModified = info.ModTime()
+			}
+		}
+		return nil
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"doc_count":     docCount,
+		"last_modified": lastModified.Unix(),
+		"docs_dir":      docsDir,
+	})
+}
+

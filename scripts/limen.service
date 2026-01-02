@@ -1,19 +1,22 @@
 [Unit]
 Description=LIMEN Stack (Backend + Agent)
-After=network.target
+After=network.target postgresql.service libvirtd.service
 Wants=network.target
+Requires=postgresql.service libvirtd.service
 
 [Service]
 Type=simple
-WorkingDirectory=/home/darc0/projects/LIMEN
-ExecStart=/home/darc0/projects/LIMEN/scripts/start-limen.sh start
-ExecStop=/home/darc0/projects/LIMEN/scripts/start-limen.sh stop
+WorkingDirectory=/home/darc0/LIMEN
+ExecStart=/home/darc0/LIMEN/scripts/start-LIMEN.sh start
+ExecStop=/home/darc0/LIMEN/scripts/start-LIMEN.sh stop
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=limen
 Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+User=darc0
+Group=darc0
 
 [Install]
 WantedBy=multi-user.target

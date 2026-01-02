@@ -6,7 +6,7 @@ set -euo pipefail
 
 # Configuration
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/limen/config}"
-CONFIG_DIR="${CONFIG_DIR:-/home/darc0/projects/LIMEN}"
+CONFIG_DIR="${CONFIG_DIR:-/home/darc0/LIMEN}"
 RETENTION_DAYS="${RETENTION_DAYS:-90}"  # Keep config backups longer
 ENCRYPTION_KEY="${ENCRYPTION_KEY:-}"  # Set via environment variable
 

@@ -236,3 +236,4 @@ tail -f /tmp/limen-server.log | grep -E "(VNC|vnc|WebSocket)"
 - [API 문서](./API_DOCUMENTATION.md#vnc-콘솔)
 - [인증 시스템 문서](./AUTHENTICATION.md#vnc-websocket-인증)
 
+

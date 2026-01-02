@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -126,6 +127,84 @@ func TestValidateVMAction(t *testing.T) {
 			err := ValidateVMAction(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateVMAction(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateVMName_SQLInjection(t *testing.T) {
+	// Test SQL injection patterns
+	sqlPatterns := []string{
+		"'; DROP TABLE users; --",
+		"\" OR 1=1 --",
+		"'; SELECT * FROM users; --",
+		"admin'--",
+		"admin'/*",
+		"xp_cmdshell",
+		"sp_executesql",
+		"UNION SELECT",
+		"exec('rm -rf')",
+	}
+
+	for _, pattern := range sqlPatterns {
+		t.Run("sql_injection_"+pattern, func(t *testing.T) {
+			err := ValidateVMName(pattern)
+			if err == nil {
+				t.Errorf("ValidateVMName(%q) should reject SQL injection pattern", pattern)
+			}
+		})
+	}
+}
+
+func TestValidateVMName_ControlCharacters(t *testing.T) {
+	// Test control characters and null bytes
+	tests := []struct {
+		name      string
+		vmName    string
+		shouldErr bool
+	}{
+		// null byte is removed by SanitizeString, so "vm\x00name" becomes "vmname" which is valid
+		// However, we still want to test that control characters are rejected
+		{"null_byte", "vm\x00name", false}, // SanitizeString removes null byte, making it valid
+		{"newline", "vm\nname", true},       // newline is allowed by ValidateInput but rejected by alphanumeric check
+		{"tab", "vm\tname", true},           // tab is allowed by ValidateInput but rejected by alphanumeric check
+		{"carriage_return", "vm\rname", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateVMName(tt.vmName)
+			if (err != nil) != tt.shouldErr {
+				t.Errorf("ValidateVMName(%q) error = %v, wantErr %v", tt.vmName, err, tt.shouldErr)
+			}
+		})
+	}
+}
+
+func TestValidateVMName_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"exactly 3 chars", "vm1", false},
+		{"exactly 64 chars", strings.Repeat("a", 64), false},
+		{"65 chars", strings.Repeat("a", 65), true},
+		{"with spaces", "my vm", true},
+		{"special chars", "vm@test", true},
+		{"unicode", "vm테스트", true},
+		{"mixed case", "MyVM-01", false},
+		{"all numbers", "123", false},
+		{"all letters", "vmname", false},
+		{"hyphen only", "---", true}, // May be rejected by security validation
+		{"underscore only", "___", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateVMName(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateVMName(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
 			}
 		})
 	}

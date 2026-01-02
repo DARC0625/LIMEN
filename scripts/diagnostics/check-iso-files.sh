@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 # 1. ISO 파일 디렉토리 확인
 echo "1. ISO 파일 디렉토리 확인"
 echo "----------------------------------------"
-ISO_DIR="${ISO_DIR:-/home/darc0/projects/LIMEN/isos}"
+ISO_DIR="${ISO_DIR:-/home/darc0/LIMEN/database/iso}"
 if [ -d "$ISO_DIR" ]; then
     echo -e "${GREEN}✓ ISO 디렉토리 존재: $ISO_DIR${NC}"
     ISO_COUNT=$(find "$ISO_DIR" -name "*.iso" -type f 2>/dev/null | wc -l)

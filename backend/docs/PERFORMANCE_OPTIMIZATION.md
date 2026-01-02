@@ -260,3 +260,4 @@ go test -bench=. -benchmem ./internal/handlers/...
 3. **메모리 프로파일링**: 메모리 사용 패턴 분석
 4. **추가 벤치마크**: 성능 회귀 방지
 
+

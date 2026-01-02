@@ -1,0 +1,161 @@
+package rag
+
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// RAGClient RAG 클라이언트
+type RAGClient struct {
+	RAGPath    string
+	DocsPath   string
+	VectorsPath string
+	IndexPath  string
+}
+
+// NewRAGClient RAG 클라이언트 생성
+func NewRAGClient() *RAGClient {
+	ragPath := os.Getenv("RAG_PATH")
+	if ragPath == "" {
+		ragPath = "/home/darc0/LIMEN/RAG"
+	}
+
+	return &RAGClient{
+		RAGPath:     ragPath,
+		DocsPath:    filepath.Join(ragPath, "docs"),
+		VectorsPath: filepath.Join(ragPath, "vectors"),
+		IndexPath:   filepath.Join(ragPath, "index"),
+	}
+}
+
+// SearchDocuments 문서 검색
+func (c *RAGClient) SearchDocuments(query string, limit int) ([]Document, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+
+	var results []Document
+
+	// 문서 디렉토리에서 검색
+	err := filepath.Walk(c.DocsPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if !info.IsDir() && strings.HasSuffix(path, ".md") {
+			content, err := ioutil.ReadFile(path)
+			if err != nil {
+				return nil
+			}
+
+			// 간단한 텍스트 검색 (향후 벡터 검색으로 업그레이드)
+			if strings.Contains(strings.ToLower(string(content)), strings.ToLower(query)) {
+				relativePath, _ := filepath.Rel(c.DocsPath, path)
+				results = append(results, Document{
+					Path:    relativePath,
+					Title:   extractTitle(content),
+					Content: string(content),
+				})
+
+				if len(results) >= limit {
+					return fmt.Errorf("limit reached")
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil && err.Error() != "limit reached" {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+// GetDocument 문서 가져오기
+func (c *RAGClient) GetDocument(path string) (*Document, error) {
+	fullPath := filepath.Join(c.DocsPath, path)
+	
+	content, err := ioutil.ReadFile(fullPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Document{
+		Path:    path,
+		Title:   extractTitle(content),
+		Content: string(content),
+	}, nil
+}
+
+// ListDocuments 문서 목록 가져오기
+func (c *RAGClient) ListDocuments(category string) ([]DocumentInfo, error) {
+	var documents []DocumentInfo
+
+	err := filepath.Walk(c.DocsPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if !info.IsDir() && strings.HasSuffix(path, ".md") {
+			relativePath, _ := filepath.Rel(c.DocsPath, path)
+			
+			// 카테고리 필터링
+			if category != "" && !strings.HasPrefix(relativePath, category) {
+				return nil
+			}
+
+			documents = append(documents, DocumentInfo{
+				Path:     relativePath,
+				Category: extractCategory(relativePath),
+				Size:     info.Size(),
+				Modified: info.ModTime(),
+			})
+		}
+
+		return nil
+	})
+
+	return documents, err
+}
+
+// Document 문서 구조
+type Document struct {
+	Path    string
+	Title   string
+	Content string
+}
+
+// DocumentInfo 문서 정보
+type DocumentInfo struct {
+	Path     string
+	Category string
+	Size     int64
+	Modified time.Time
+}
+
+// extractTitle 제목 추출
+func extractTitle(content []byte) string {
+	lines := strings.Split(string(content), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "# ") {
+			return strings.TrimPrefix(line, "# ")
+		}
+	}
+	return "Untitled"
+}
+
+// extractCategory 카테고리 추출
+func extractCategory(path string) string {
+	parts := strings.Split(path, "/")
+	if len(parts) > 0 {
+		return parts[0]
+	}
+	return "other"
+}
+

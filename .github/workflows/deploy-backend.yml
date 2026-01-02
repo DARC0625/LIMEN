@@ -1,0 +1,51 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'RAG/**'
+      - 'scripts/deploy-backend.sh'
+      - 'docker-compose.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Create Backend Deployment
+        run: |
+          chmod +x scripts/deploy-backend.sh
+          ./scripts/deploy-backend.sh --package
+      
+      - name: Security Verification
+        run: |
+          if [ -d deploy-backend/frontend ]; then
+            echo "❌ Security violation: Frontend code in backend deployment"
+            exit 1
+          fi
+          if find deploy-backend -name "package.json" | grep -q .; then
+            echo "❌ Security violation: Frontend files in backend deployment"
+            exit 1
+          fi
+          echo "✅ Security check passed"
+      
+      - name: Upload Deployment Package
+        uses: actions/upload-artifact@v3
+        with:
+          name: limen-backend-deployment
+          path: limen-backend-*.tar.gz
+          retention-days: 7
+      
+      - name: Deploy to Backend Server
+        # 실제 배포 로직은 여기에 추가
+        # 예: rsync, scp, 또는 배포 서비스 연동
+        run: |
+          echo "Deployment package ready: limen-backend-*.tar.gz"
+          # 실제 배포 명령어 추가
+

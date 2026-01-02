@@ -6,21 +6,21 @@ LIMEN 백엔드 및 에이전트를 관리하기 위한 통합 스크립트 모�
 
 ## 주요 스크립트
 
-### 1. `start-limen.sh` - 서비스 제어
+### 1. `start-LIMEN.sh` - 서비스 제어
 백엔드와 에이전트를 시작/중지/재시작하는 통합 스크립트입니다.
 
 ```bash
 # 시작
-./scripts/start-limen.sh start
+./scripts/start-LIMEN.sh start
 
 # 중지
-./scripts/start-limen.sh stop
+./scripts/start-LIMEN.sh stop
 
 # 재시작
-./scripts/start-limen.sh restart
+./scripts/start-LIMEN.sh restart
 
 # 상태 확인
-./scripts/start-limen.sh status
+./scripts/start-LIMEN.sh status
 ```
 
 **특징:**
@@ -64,21 +64,21 @@ WSL 부팅 시 자동으로 LIMEN 서비스를 시작하도록 설정합니다.
 1. Systemd 사용자 서비스 설정 (가능한 경우)
 2. `.bashrc`에 자동 시작 코드 추가 (백업)
 
-### 4. `limen-control.sh` - Systemd 서비스 제어
+### 4. `LIMEN-control.sh` - Systemd 서비스 제어
 Systemd를 통한 서비스 제어 스크립트입니다.
 
 ```bash
 # 시작
-./scripts/limen-control.sh start
+./scripts/LIMEN-control.sh start
 
 # 중지
-./scripts/limen-control.sh stop
+./scripts/LIMEN-control.sh stop
 
 # 재시작
-./scripts/limen-control.sh restart
+./scripts/LIMEN-control.sh restart
 
 # 상태 확인
-./scripts/limen-control.sh status
+./scripts/LIMEN-control.sh status
 ```
 
 ## 디렉토리 구조
@@ -95,10 +95,10 @@ LIMEN/
 │   ├── server         # 백엔드 바이너리
 │   └── ...
 ├── scripts/
-│   ├── start-limen.sh
+│   ├── start-LIMEN.sh
 │   ├── build-all.sh
 │   ├── setup-auto-start.sh
-│   ├── limen-control.sh
+│   ├── LIMEN-control.sh
 │   └── limen.service
 └── ...
 ```

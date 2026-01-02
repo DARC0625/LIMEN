@@ -60,10 +60,10 @@ setup_wsl_autostart() {
     log "Setting up WSL auto-start..."
     
     BASHRC="$HOME/.bashrc"
-    START_SCRIPT="$PROJECT_ROOT/scripts/start-limen.sh"
+    START_SCRIPT="$PROJECT_ROOT/scripts/start-LIMEN.sh"
     
     # 이미 설정되어 있는지 확인
-    if grep -q "start-limen.sh" "$BASHRC" 2>/dev/null; then
+    if grep -q "start-LIMEN.sh" "$BASHRC" 2>/dev/null; then
         warn "Auto-start already configured in .bashrc"
         return 0
     fi
@@ -72,9 +72,9 @@ setup_wsl_autostart() {
     cat >> "$BASHRC" << 'EOF'
 
 # LIMEN Auto-start (only if not already running)
-if [ -f "$HOME/projects/LIMEN/scripts/start-limen.sh" ]; then
+if [ -f "$HOME/LIMEN/scripts/start-LIMEN.sh" ]; then
     if ! pgrep -f "LIMEN.*backend.*server" > /dev/null; then
-        "$HOME/projects/LIMEN/scripts/start-limen.sh" start > /dev/null 2>&1 &
+        "$HOME/LIMEN/scripts/start-LIMEN.sh" start > /dev/null 2>&1 &
     fi
 fi
 EOF
@@ -139,7 +139,7 @@ case "${1:-setup}" in
             echo -e "${YELLOW}○${NC} Systemd user service: not enabled"
         fi
         
-        if grep -q "start-limen.sh" "$HOME/.bashrc" 2>/dev/null; then
+        if grep -q "start-LIMEN.sh" "$HOME/.bashrc" 2>/dev/null; then
             echo -e "${GREEN}✓${NC} WSL auto-start: configured in .bashrc"
         else
             echo -e "${YELLOW}○${NC} WSL auto-start: not configured"

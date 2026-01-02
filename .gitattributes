@@ -1,0 +1,8 @@
+# LIMEN 프로젝트 Git 속성 설정
+
+# 마크다운 파일은 항상 LF로 처리
+*.md text eol=lf
+
+# 문서 파일은 한글 인코딩으로 처리
+docs/**/*.md text encoding=utf-8
+
