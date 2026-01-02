@@ -45,9 +45,16 @@ jobs:
             
             # Git pull (최신 코드 가져오기)
             echo "⬇️  최신 코드 가져오는 중..."
-            git fetch origin
-            git reset --hard origin/main || git reset --hard origin/$CURRENT_BRANCH
-            git clean -fd
+            git fetch origin || {
+              echo "⚠️  git fetch 실패, 계속 진행..."
+            }
+            git reset --hard origin/main || git reset --hard origin/$CURRENT_BRANCH || {
+              echo "❌ git reset 실패"
+              exit 1
+            }
+            git clean -fd || {
+              echo "⚠️  git clean 실패, 계속 진행..."
+            }
             
             # RAG 인덱싱 실행
             if [ -f "scripts/rag-index.sh" ]; then
@@ -111,9 +118,16 @@ jobs:
             
             # Git pull (최신 코드 가져오기)
             echo "⬇️  최신 코드 가져오는 중..."
-            git fetch origin
-            git reset --hard origin/main || git reset --hard origin/$CURRENT_BRANCH
-            git clean -fd
+            git fetch origin || {
+              echo "⚠️  git fetch 실패, 계속 진행..."
+            }
+            git reset --hard origin/main || git reset --hard origin/$CURRENT_BRANCH || {
+              echo "❌ git reset 실패"
+              exit 1
+            }
+            git clean -fd || {
+              echo "⚠️  git clean 실패, 계속 진행..."
+            }
             
             # RAG 인덱싱 실행
             if [ -f "scripts/rag-index.sh" ]; then
