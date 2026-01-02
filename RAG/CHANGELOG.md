@@ -1,3 +1,21 @@
+## 2026-01-02 23:52:16 - operations
+
+**파일**: `.github/workflows/test-secrets.yml`
+
+**변경 내용**:
+GitHub Secrets 테스트 워크플로우 추가
+
+---
+
+## 2026-01-02 23:49:55 - operations
+
+**파일**: `RAG/04-operations/github-secrets-setup.md`
+
+**변경 내용**:
+GitHub Secrets 설정 가이드 문서 추가
+
+---
+
 ## 2026-01-02 23:47:04 - development
 
 **파일**: `RAG/02-development/automation-analysis.md`
