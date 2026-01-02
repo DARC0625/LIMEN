@@ -1,0 +1,131 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: limen-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-limen}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - limen-network
+    restart: unless-stopped
+
+  # LIMEN Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: limen-backend
+    environment:
+      # Database
+      DATABASE_URL: postgres://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-limen}?sslmode=disable
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-limen}
+      DB_SSL_MODE: disable
+      
+      # Server
+      PORT: ${PORT:-18443}
+      BIND_ADDRESS: ${BIND_ADDRESS:-0.0.0.0}
+      
+      # Libvirt
+      LIBVIRT_URI: ${LIBVIRT_URI:-qemu:///system}
+      
+      # Security
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      
+      # Paths
+      ISO_DIR: /data/iso
+      VM_DIR: /data/vms
+      
+      # Admin
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ENV: ${ENV:-production}
+      
+      # Rate Limiting
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-10}
+      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-20}
+    volumes:
+      # VM images and ISO files
+      - ./database/vms:/data/vms:rw
+      - ./database/iso:/data/iso:ro
+      # Libvirt socket (requires host libvirt)
+      - /var/run/libvirt/libvirt-sock:/var/run/libvirt/libvirt-sock:ro
+      - /var/lib/libvirt:/var/lib/libvirt:ro
+    ports:
+      - "${PORT:-18443}:18443"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - limen-network
+    # Use host network for libvirt access (alternative to volume mounting)
+    # network_mode: host
+    restart: unless-stopped
+    # Privileged mode may be required for libvirt access
+    # privileged: true
+    # Or use specific capabilities
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+
+  # LIMEN Agent
+  agent:
+    build:
+      context: ./backend/agent
+      dockerfile: Dockerfile
+    container_name: limen-agent
+    environment:
+      PORT: ${AGENT_PORT:-9000}
+      BIND_ADDRESS: ${AGENT_BIND_ADDRESS:-0.0.0.0}
+    ports:
+      - "${AGENT_PORT:-9000}:9000"
+    networks:
+      - limen-network
+    restart: unless-stopped
+    # Agent doesn't need libvirt access
+    # It only collects system metrics
+
+networks:
+  limen-network:
+    driver: bridge
+    name: limen-network
+
+volumes:
+  postgres_data:
+    name: limen-postgres-data
+
+
+
+
+
+
+
+
+
+
+
+
+

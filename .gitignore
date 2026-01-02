@@ -1,85 +1,206 @@
-# Dependencies
-node_modules/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-ENV/
-.venv
-
-# Build outputs
-.next/
-out/
-build/
-dist/
-*.egg-info/
-*.egg
-
-# Environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# IDE
+# Global
+.DS_Store
 .vscode/
 .idea/
 *.swp
-*.swo
-*~
-.DS_Store
-
-# Logs
 *.log
+*.log.*
+*.tmp
+*.temp
+Thumbs.db
+
+# Project structure
+deploy/
+*.tar.gz
+
+# Environment Variables (민감 정보)
+.env
+.env.*
+.env.local
+.env.*.local
+!.env.example
+config/.env
+config/.env.*
+!config/.env.example
+
+# Node.js / Next.js (Frontend)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/dist/
+frontend/.vercel/
+frontend/.turbo/
+frontend/*.log
+frontend/.next/
+frontend/next-env.d.ts
+
+# Go (Backend)
+backend/bin/
+backend/dist/
+backend/vendor/
+backend/coverage.txt
+backend/coverage.out
+backend/profile.out
+backend/*.test
+backend/server
+backend/backend
+backend/limen-server
+backend/*.exe
+backend/*.dll
+backend/*.so
+backend/*.dylib
+
+# Rust (Agent)
+backend/agent/target/
+backend/agent/**/*.rs.bk
+backend/agent/Cargo.lock
+backend/agent/*.log
+
+# Database (민감 정보)
+database/*.db
+database/*.sqlite
+database/*.sqlite3
+database/backups/
+database/dumps/
+database/vms/*.qcow2
+database/vms/*.img
+database/vms/*.raw
+database/iso/*.iso
+database/iso/*.ISO
+
+# VM Images (민감 정보 - VM 디스크 이미지)
+*.qcow2
+*.qcow
+*.img
+*.raw
+*.vdi
+*.vmdk
+*.vhd
+
+# ISO Images (대용량 파일)
+*.iso
+*.ISO
+
+# Logs (민감 정보 - 로그에 개인정보 포함 가능)
 logs/
+*.log
+*.log.*
+*.log.gz
+*.log.bz2
+*.log.xz
+/var/log/limen/
+/var/log/limen/**
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pm2.log
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build Artifacts & Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/temp_*/
+*.tar.gz
+*.zip
+*.tar
+limen-release.tar.gz
+
+# Docker
+.docker/
+docker-compose.override.yaml
+
+# IDE
+*.iml
+*.ipr
+*.iws
+.idea/
+.vscode/
+*.code-workspace
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
 
 # Testing
 coverage/
 .nyc_output/
 *.lcov
+.jest/
 
 # Temporary files
+tmp/
+temp/
 *.tmp
 *.temp
-.cache/
-.turbo/
+*.bak
+*.backup
+*~
 
-# OS
-Thumbs.db
-.DS_Store
-
-# TypeScript
-*.tsbuildinfo
-next-env.d.ts
-
-# Python
-*.py[cod]
-__pycache__/
-*.so
-.pytest_cache/
-.mypy_cache/
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# PM2
-.pm2/
-
-# Husky
-.husky/_
-
-# Misc
+# Keys & Secrets (민감 정보)
 *.pem
 *.key
+*.crt
 *.cert
+*.pfx
+*.p12
+secrets/
+*.secret
+.env.secret
+*.jwt
+*.token
+*.password
+*.passwd
+*.credential
+*.credentials
 
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Python (if any)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Misc
+*.swp
+*.swo
+*~
+.cache/
+
+# 민감한 데이터 백업 파일
+*.backup
+*.dump
+*.sql
+!schema.sql
+!migrations/*.sql
+
+# 개인정보가 포함될 수 있는 파일
+*.csv
+!docs/**/*.csv
+*.xlsx
+*.xls
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!*.config.json
+!docs/**/*.json
+
+# 시스템 파일
+*.pid
+*.lock
+*.sock

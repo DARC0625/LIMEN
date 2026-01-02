@@ -1,0 +1,19 @@
+[Unit]
+Description=LIMEN Stack (Backend + Agent)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/darc0/projects/LIMEN
+ExecStart=/home/darc0/projects/LIMEN/scripts/start-limen.sh start
+ExecStop=/home/darc0/projects/LIMEN/scripts/start-limen.sh stop
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=limen
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+[Install]
+WantedBy=multi-user.target
