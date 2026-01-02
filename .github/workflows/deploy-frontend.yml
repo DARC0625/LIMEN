@@ -1,59 +1,59 @@
-name: Deploy to Backend Server
+name: Deploy to Frontend Server
 
 on:
   push:
     branches:
       - main
     paths:
-      - 'backend/**'
+      - 'frontend/**'
       - 'RAG/**'
       - 'scripts/**'
       - 'config/**'
       - 'infra/**'
-      - '.github/workflows/deploy-backend.yml'
+      - '.github/workflows/deploy-frontend.yml'
   workflow_dispatch:
 
 jobs:
-  deploy-backend:
-    name: Deploy to Backend Server
+  deploy-frontend:
+    name: Deploy to Frontend Server
     runs-on: ubuntu-latest
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Deploy to Backend Server
+      - name: Deploy to Frontend Server
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.BACKEND_HOST }}
-          username: ${{ secrets.BACKEND_USER }}
-          key: ${{ secrets.BACKEND_SSH_KEY }}
-          port: ${{ secrets.BACKEND_SSH_PORT || 22 }}
+          host: ${{ secrets.FRONTEND_HOST }}
+          username: ${{ secrets.FRONTEND_USER }}
+          key: ${{ secrets.FRONTEND_SSH_KEY }}
+          port: ${{ secrets.FRONTEND_SSH_PORT || 22 }}
           script: |
             set -e
-            echo "🔄 백엔드 서버 배포 시작..."
+            echo "🔄 프론트엔드 서버 배포 시작..."
             
             # LIMEN 디렉토리 확인 및 이동
-            if [ ! -d "/home/darc0/LIMEN" ]; then
-              echo "❌ 오류: /home/darc0/LIMEN 디렉토리가 존재하지 않습니다"
+            if [ ! -d "/home/darc/LIMEN" ]; then
+              echo "❌ 오류: /home/darc/LIMEN 디렉토리가 존재하지 않습니다"
               exit 1
             fi
-            cd /home/darc0/LIMEN || exit 1
+            cd /home/darc/LIMEN || exit 1
             
             # 현재 브랜치 확인
             CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
             echo "📋 현재 브랜치: $CURRENT_BRANCH"
             
-            # Git pull (최신 코드 가져오기) - 백엔드 우선
-            echo "⬇️  최신 코드 가져오는 중 (백엔드 우선)..."
+            # Git pull (최신 코드 가져오기) - 프론트엔드 우선
+            echo "⬇️  최신 코드 가져오는 중 (프론트엔드 우선)..."
             git fetch origin || {
               echo "⚠️  git fetch 실패, 계속 진행..."
             }
             
-            # 백엔드 코드 우선 동기화
-            echo "📦 백엔드 코드 동기화 중..."
-            git checkout origin/main -- backend/ || {
-              echo "⚠️  backend/ 체크아웃 실패, 전체 동기화 시도..."
+            # 프론트엔드 코드 우선 동기화
+            echo "📦 프론트엔드 코드 동기화 중..."
+            git checkout origin/main -- frontend/ || {
+              echo "⚠️  frontend/ 체크아웃 실패, 전체 동기화 시도..."
               git reset --hard origin/main || git reset --hard origin/$CURRENT_BRANCH || {
                 echo "❌ git reset 실패"
                 exit 1
@@ -67,7 +67,7 @@ jobs:
             }
             
             # 나머지 필수 파일들 동기화
-            git checkout origin/main -- scripts/ config/ infra/ .github/workflows/deploy-backend.yml || true
+            git checkout origin/main -- scripts/ config/ infra/ .github/workflows/deploy-frontend.yml || true
             
             git clean -fd || {
               echo "⚠️  git clean 실패, 계속 진행..."
@@ -80,25 +80,25 @@ jobs:
               ./scripts/rag-index.sh --auto || true
             fi
             
-            # 백엔드 서비스 재시작 (선택적)
+            # 프론트엔드 서비스 재시작 (선택적)
             if command -v pm2 &> /dev/null; then
-              echo "🔄 백엔드 서비스 재시작 중..."
-              cd /home/darc0/LIMEN/backend
-              pm2 restart limen --update-env || true
+              echo "🔄 프론트엔드 서비스 재시작 중..."
+              cd /home/darc/LIMEN/frontend
+              pm2 restart limen-frontend --update-env || true
             fi
             
-            echo "✅ 백엔드 서버 배포 완료"
+            echo "✅ 프론트엔드 서버 배포 완료"
       
-      - name: Notify Backend Deploy Status
+      - name: Notify Frontend Deploy Status
         if: always()
         run: |
           if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ 백엔드 서버 배포 성공"
+            echo "✅ 프론트엔드 서버 배포 성공"
           else
-            echo "❌ 백엔드 서버 배포 실패"
+            echo "❌ 프론트엔드 서버 배포 실패"
             echo "📋 오류 분석:"
-            echo "   - GitHub Secrets 확인 필요 (BACKEND_HOST, BACKEND_USER, BACKEND_SSH_KEY)"
-            echo "   - 서버 경로 확인: /home/darc0/LIMEN"
+            echo "   - GitHub Secrets 확인 필요 (FRONTEND_HOST, FRONTEND_USER, FRONTEND_SSH_KEY)"
+            echo "   - 서버 경로 확인: /home/darc/LIMEN"
             echo "   - SSH 연결 확인 필요"
-            echo "   - 백엔드 코드 변경사항 확인 필요"
+            echo "   - 프론트엔드 코드 변경사항 확인 필요"
           fi
