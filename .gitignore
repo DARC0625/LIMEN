@@ -10,6 +10,10 @@ RAG/embeddings/
 # 기존 .rag 폴더 (레거시)
 .rag/
 
+# docs 폴더는 사용하지 않음 - 모든 문서는 RAG/ 폴더에 저장
+docs/
+**/docs/
+
 # 빌드 아티팩트
 *.exe
 *.exe~
