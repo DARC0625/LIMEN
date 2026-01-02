@@ -13,8 +13,12 @@ const path = require('path');
 const ALLOWED_LOCATIONS = [
   'docs/',
   '.github/',
+];
+
+// 허용된 README 파일 위치
+const ALLOWED_README_LOCATIONS = [
   'README.md', // 루트 README만 허용
-  'frontend/README.md', // 각 프로젝트의 README만 허용
+  'frontend/README.md',
   'backend/README.md',
   'scripts/README.md',
   'infra/README.md',
@@ -74,9 +78,11 @@ function isAllowedLocation(filePath) {
   // README 파일은 특정 위치에서만 허용
   const fileName = path.basename(filePath);
   if (fileName === 'README.md') {
-    const dirName = path.dirname(relativePath);
-    if (dirName === '.' || dirName === 'frontend' || dirName === 'backend' || dirName === 'scripts' || dirName === 'infra') {
-      return { allowed: true, reason: 'readme' };
+    // 허용된 README 위치 확인
+    for (const allowedReadme of ALLOWED_README_LOCATIONS) {
+      if (relativePath === allowedReadme || relativePath.endsWith('/' + allowedReadme)) {
+        return { allowed: true, reason: 'readme' };
+      }
     }
   }
   

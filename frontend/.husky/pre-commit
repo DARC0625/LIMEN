@@ -1,4 +1,7 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
+# MD 파일 검증 (루트에서 실행)
+cd "$(git rev-parse --show-toplevel)" && node scripts/validate-md-files.js
+
 npx lint-staged
