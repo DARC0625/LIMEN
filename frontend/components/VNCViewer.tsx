@@ -1115,6 +1115,10 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
               ← Back
             </button>
             <span className="text-gray-400 dark:text-gray-400 text-sm font-mono">Status: {status}</span>
+            {/* 세션 제한 안내 */}
+            <div className="hidden md:flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
+              <span>💡 유휴 시 자동 종료 (10분) | 최대 사용 시간 제한</span>
+            </div>
           </div>
           <div className="flex items-center gap-2 relative">
             {/* Restart Button */}

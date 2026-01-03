@@ -7,6 +7,7 @@ import { ThemeProvider } from '../components/ThemeProvider';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import WebVitalsClient from '../components/WebVitalsClient';
 import PWARegister from '../components/PWARegister';
+import { VersionInfo } from '../components/VersionInfo';
 
 export const metadata: Metadata = {
   title: "LIMEN - VM Management Platform",
@@ -332,6 +333,7 @@ export default function RootLayout({
                 <WebVitalsClient />
                 <PWARegister />
                 {children}
+                <VersionInfo />
               </ToastProvider>
             </QueryProvider>
           </ThemeProvider>

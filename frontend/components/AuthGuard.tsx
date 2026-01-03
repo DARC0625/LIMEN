@@ -6,7 +6,7 @@ import {
   forceLogout, 
   checkAndUnblockAccount
 } from '../lib/security';
-import { checkAuth } from '../lib/auth';
+import { checkAuth, isUserApproved } from '../lib/auth';
 import { logger } from '../lib/utils/logger';
 
 const AuthContext = createContext<{ isAuthenticated: boolean | null }>({ isAuthenticated: null });
