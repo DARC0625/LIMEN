@@ -78,7 +78,9 @@ export async function checkAuth(): Promise<AuthCheckResult> {
 // React Error #321 해결: checkBackendSession 호출을 debounce하기 위한 플래그
 let sessionCheckInProgress = false;
 let lastSessionCheckTime = 0;
+let lastSessionCheckResult: AuthCheckResult | null = null;
 const SESSION_CHECK_DEBOUNCE_MS = 1000; // 1초 debounce
+const SESSION_CHECK_CACHE_MS = 5000; // 5초간 결과 캐시
 
 async function checkBackendSession(): Promise<AuthCheckResult> {
   // 중요: 로그인 페이지에서는 세션 확인 요청을 보내지 않음
@@ -88,8 +90,18 @@ async function checkBackendSession(): Promise<AuthCheckResult> {
   
   // React Error #321 해결: debounce 적용 - 너무 자주 호출되는 것 방지
   const now = Date.now();
+  
+  // 최근에 성공한 세션 확인 결과가 있으면 캐시된 결과 반환 (페이지 이동 시 세션 유지)
+  if (lastSessionCheckResult?.valid && (now - lastSessionCheckTime < SESSION_CHECK_CACHE_MS)) {
+    logger.log('[checkBackendSession] Using cached session check result');
+    return lastSessionCheckResult;
+  }
+  
   if (sessionCheckInProgress || (now - lastSessionCheckTime < SESSION_CHECK_DEBOUNCE_MS)) {
-    // 이미 체크 중이거나 최근에 체크했으면 이전 결과 반환
+    // 이미 체크 중이거나 최근에 체크했으면 캐시된 결과 또는 대기 중 반환
+    if (lastSessionCheckResult) {
+      return lastSessionCheckResult;
+    }
     return { valid: false, reason: '세션 확인 중입니다.' };
   }
   
@@ -146,20 +158,28 @@ async function checkBackendSession(): Promise<AuthCheckResult> {
       
       if (data.valid === true) {
         logger.log('[checkBackendSession] Session is valid');
-        return { valid: true };
+        const result = { valid: true };
+        lastSessionCheckResult = result; // 성공한 결과 캐시
+        return result;
       } else {
         logger.log('[checkBackendSession] Session is invalid:', data.reason);
-        return { valid: false, reason: data.reason || '세션이 유효하지 않습니다.' };
+        const result = { valid: false, reason: data.reason || '세션이 유효하지 않습니다.' };
+        lastSessionCheckResult = result; // 실패한 결과도 캐시 (빠른 실패)
+        return result;
       }
     } else if (response.status === 401) {
       // 401은 세션이 없거나 만료됨
       logger.log('[checkBackendSession] Session expired or not found (401)');
-      return { valid: false, reason: '인증이 필요합니다.' };
+      const result = { valid: false, reason: '인증이 필요합니다.' };
+      lastSessionCheckResult = result; // 실패 결과 캐시
+      return result;
     } else if (response.status === 403) {
       // 403은 권한 문제 (백엔드 변경으로 GET 요청에서는 이제 발생하지 않아야 함)
       // 하지만 혹시 모를 경우를 대비해 처리
       logger.warn('[checkBackendSession] Forbidden (403) - unexpected for GET request');
-      return { valid: false, reason: '권한이 없습니다.' };
+      const result = { valid: false, reason: '권한이 없습니다.' };
+      lastSessionCheckResult = result; // 실패 결과 캐시
+      return result;
     } else {
       // 기타 오류는 네트워크 문제로 간주하고 예외 발생
       logger.error(new Error(`[checkBackendSession] Unexpected status: ${response.status}`), {

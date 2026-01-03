@@ -376,7 +376,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         authChannel.close();
       }
     };
-  }, []); // 보호된 경로에서만 사용되므로 의존성 단순화
+  }, []); // 보호된 경로에서만 사용되므로 의존성 단순화 - pathname 변경 시 재인증하지 않음 (세션 유지)
 
   // 인증되지 않았으면 /login으로 리다이렉트
   useEffect(() => {
