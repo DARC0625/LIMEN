@@ -39,11 +39,11 @@ export default function UserManagementPage() {
     isAdmin().then((admin) => {
       if (!admin) {
         toast.error('Admin access required');
-        router.push('/');
+        router.push('/dashboard');
       }
     }).catch(() => {
       toast.error('Admin access required');
-      router.push('/');
+      router.push('/dashboard');
     });
   }, [toast, router]);
 
