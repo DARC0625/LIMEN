@@ -30,9 +30,9 @@ export default function Home() {
     setErrorMessage('');
 
     try {
-      // TODO: 백엔드 API 연동 (현재는 시뮬레이션)
+      // Public waitlist API 사용
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
-      const response = await fetch(`${apiUrl}/waitlist`, {
+      const response = await fetch(`${apiUrl}/public/waitlist`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

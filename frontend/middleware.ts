@@ -397,7 +397,16 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  // 모든 응답에 보안 헤더 추가 (darc.kr 포함)
+  const response = NextResponse.next();
+  
+  // 보안 헤더 추가
+  response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('X-Frame-Options', 'DENY');
+  
+  return response;
 }
 
 export const config = {
