@@ -1,3 +1,12 @@
+## 2026-01-03 12:26:15 - frontend
+
+**파일**: `frontend/components/VNCViewer.tsx,frontend/lib/auth/index.ts,frontend/components/AuthGuard.tsx`
+
+**변경 내용**:
+VNC Back 버튼 세션 유지 개선: Next.js router 사용 및 세션 캐시 시간 연장
+
+---
+
 ## 2026-01-03 12:21:25 - frontend
 
 **파일**: `frontend/components/__tests__/ErrorBoundary.test.tsx,frontend/lib/__tests__/errorTracking.test.ts,frontend/lib/utils/__tests__/logger.test.ts,frontend/hooks/__tests__/useOptimisticUpdate.test.tsx,frontend/lib/api/__tests__/auth.test.ts,frontend/lib/auth/__tests__/index.test.ts`

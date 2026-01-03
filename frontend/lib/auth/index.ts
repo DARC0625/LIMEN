@@ -80,7 +80,7 @@ let sessionCheckInProgress = false;
 let lastSessionCheckTime = 0;
 let lastSessionCheckResult: AuthCheckResult | null = null;
 const SESSION_CHECK_DEBOUNCE_MS = 1000; // 1초 debounce
-const SESSION_CHECK_CACHE_MS = 5000; // 5초간 결과 캐시
+const SESSION_CHECK_CACHE_MS = 30000; // 30초간 결과 캐시 (페이지 이동 시 세션 유지)
 
 async function checkBackendSession(): Promise<AuthCheckResult> {
   // 중요: 로그인 페이지에서는 세션 확인 요청을 보내지 않음

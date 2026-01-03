@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { handleError } from '../lib/utils/error';
 import { vmAPI } from '../lib/api/index';
 import { logger } from '../lib/utils/logger';
@@ -48,6 +49,7 @@ interface VNCEvent {
 }
 
 export default function VNCViewer({ uuid }: { uuid: string }) {
+  const router = useRouter();
   const rfbRef = useRef<RFBInstance | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -1106,12 +1108,12 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
           }}
         >
           <div className="flex items-center gap-4">
-            <a 
-              href="/"
-              className="px-3 py-1.5 bg-gray-800 dark:bg-gray-800 border border-gray-700 dark:border-gray-700 rounded-md hover:bg-gray-700 dark:hover:bg-gray-700 text-gray-200 dark:text-gray-200 no-underline transition-colors text-sm font-medium"
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="px-3 py-1.5 bg-gray-800 dark:bg-gray-800 border border-gray-700 dark:border-gray-700 rounded-md hover:bg-gray-700 dark:hover:bg-gray-700 text-gray-200 dark:text-gray-200 transition-colors text-sm font-medium cursor-pointer"
             >
               ← Back
-            </a>
+            </button>
             <span className="text-gray-400 dark:text-gray-400 text-sm font-mono">Status: {status}</span>
           </div>
           <div className="flex items-center gap-2 relative">
