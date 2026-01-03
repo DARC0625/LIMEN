@@ -124,11 +124,11 @@ host_disk_usage_percent 11.770404615877
 host_memory_usage_percent 7.776926153383354
 ```
 
-**두 번째 측정** (2026-01-03 23:32:20):
+**두 번째 측정** (2026-01-03 23:33:30):
 ```
-host_cpu_usage_percent 0.15634771710500292
-host_disk_usage_percent 11.770404615877
-host_memory_usage_percent 7.776926153383354
+host_cpu_usage_percent 0.1562500001747935
+host_disk_usage_percent 11.770409006826961
+host_memory_usage_percent 7.768064689737144
 ```
 
 **비고**: 
