@@ -158,6 +158,10 @@ func main() {
 		defer vmService.Close() // Close libvirt connection on shutdown
 	}
 
+	// Start host metrics collection
+	metrics.StartHostMetricsCollection(logger.Log)
+	logger.Log.Info("Host metrics collection started")
+
 	// Create handlers
 	h := handlers.NewHandler(database.DB, vmService, cfg)
 
@@ -298,6 +302,13 @@ func main() {
 			return nil
 		})
 	}
+
+	// Register host metrics cleanup
+	shutdownMgr.RegisterCleanup(func(ctx context.Context) error {
+		logger.Log.Info("Stopping host metrics collection...")
+		metrics.StopHostMetricsCollection()
+		return nil
+	})
 
 	// Register WebSocket broadcaster cleanup
 	if h != nil && h.VMStatusBroadcaster != nil {
