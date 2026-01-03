@@ -1,3 +1,867 @@
+## 2026-01-03 12:18:33 - frontend
+
+**파일**: `frontend/tsconfig.json,frontend/jest.d.ts,frontend/__tests__/integration/snapshot-management.test.tsx,frontend/app/(protected)/vnc/[uuid]/__tests__/page.test.tsx,frontend/app/(protected)/dashboard/__tests__/page.test.tsx`
+
+**변경 내용**:
+TypeScript 타입 오류 수정: jest-dom 타입 정의 추가, 테스트 파일 타입 오류 수정
+
+---
+
+## 2026-01-03 12:14:43 - frontend
+
+**파일**: `frontend/lib/auth/index.ts`
+
+**변경 내용**:
+세션 확인 결과 캐싱 추가 - 페이지 이동 시 세션 유지 개선
+
+---
+
+## 2026-01-03 12:12:25 - operations
+
+**파일**: `scripts/setup-github-actions-ssh.sh`
+
+**변경 내용**:
+파일 변경: `scripts/setup-github-actions-ssh.sh`
+
+---
+
+## 2026-01-03 12:12:25 - config
+
+**파일**: `frontend/package.json`
+
+**변경 내용**:
+파일 변경: `frontend/package.json`
+
+---
+
+## 2026-01-03 12:12:25 - config
+
+**파일**: `frontend/package-lock.json`
+
+**변경 내용**:
+파일 변경: `frontend/package-lock.json`
+
+---
+
+## 2026-01-03 12:12:25 - config
+
+**파일**: `frontend/next.config.js`
+
+**변경 내용**:
+파일 변경: `frontend/next.config.js`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/webVitals.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/webVitals.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/utils/validation.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/utils/validation.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/utils/token.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/utils/token.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/utils/logger.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/utils/logger.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/utils/error.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/utils/error.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/utils/__tests__/validation.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/utils/__tests__/validation.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/utils/__tests__/token.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/utils/__tests__/token.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/utils/__tests__/logger.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/utils/__tests__/logger.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/utils/__tests__/index.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/utils/__tests__/index.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/utils/__tests__/format.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/utils/__tests__/format.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/utils/__tests__/errorHelpers.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/utils/__tests__/errorHelpers.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/utils/__tests__/error.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/utils/__tests__/error.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/types/__tests__/index.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/types/__tests__/index.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/types/__tests__/errors.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/types/__tests__/errors.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/security.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/security.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/constants/__tests__/index.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/constants/__tests__/index.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/auth/index.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/auth/index.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/auth/__tests__/index.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/auth/__tests__/index.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/api/__tests__/vm.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/api/__tests__/vm.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/api/__tests__/snapshot.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/api/__tests__/snapshot.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/api/__tests__/quota.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/api/__tests__/quota.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/api/__tests__/index.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/api/__tests__/index.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/api/__tests__/client.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/api/__tests__/client.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/api/__tests__/auth.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/api/__tests__/auth.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/api/__tests__/admin.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/api/__tests__/admin.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/__tests__/webVitals.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/__tests__/webVitals.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/__tests__/tokenManager.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/__tests__/tokenManager.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/__tests__/security.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/__tests__/security.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/__tests__/queryClient.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/__tests__/queryClient.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/__tests__/errorTracking.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/__tests__/errorTracking.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/lib/__tests__/analytics.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/lib/__tests__/analytics.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/jest.setup.js`
+
+**변경 내용**:
+파일 변경: `frontend/jest.setup.js`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/hooks/useOptimisticUpdate.ts`
+
+**변경 내용**:
+파일 변경: `frontend/hooks/useOptimisticUpdate.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/hooks/__tests__/useVMs.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/hooks/__tests__/useVMs.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/hooks/__tests__/useThrottle.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/hooks/__tests__/useThrottle.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/hooks/__tests__/useQuota.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/hooks/__tests__/useQuota.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/hooks/__tests__/useOptimisticUpdate.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/hooks/__tests__/useOptimisticUpdate.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/hooks/__tests__/useMounted.test.ts`
+
+**변경 내용**:
+파일 변경: `frontend/hooks/__tests__/useMounted.test.ts`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/hooks/__tests__/useAgentMetrics.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/hooks/__tests__/useAgentMetrics.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/hooks/__tests__/useAdminUsers.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/hooks/__tests__/useAdminUsers.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/WebVitalsClient.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/WebVitalsClient.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/VNCViewer.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/VNCViewer.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/VNCViewer.additional.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/VNCViewer.additional.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/VMListSection.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/VMListSection.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/VMListSection.additional.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/VMListSection.additional.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/ToastContainer.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/ToastContainer.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/Toast.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/Toast.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/ThemeToggle.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/ThemeToggle.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/ThemeProvider.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/ThemeProvider.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/StatusCard.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/StatusCard.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/SnapshotManager.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/SnapshotManager.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/Skeleton.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/Skeleton.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/RegisterForm.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/RegisterForm.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/QuotaDisplay.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/QuotaDisplay.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/QueryProvider.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/QueryProvider.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/PWARegister.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/PWARegister.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/LoginForm.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/LoginForm.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/Loading.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/Loading.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/Input.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/Input.test.tsx`
+
+---
+
+## 2026-01-03 12:12:25 - development
+
+**파일**: `frontend/components/__tests__/HealthStatus.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/HealthStatus.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/components/__tests__/ErrorBoundary.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/ErrorBoundary.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/components/__tests__/Button.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/Button.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/components/__tests__/AuthGuard.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/AuthGuard.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/components/__tests__/AuthGuard.additional.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/AuthGuard.additional.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/components/__tests__/AgentMetricsCard.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/__tests__/AgentMetricsCard.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/components/VNCViewer.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/VNCViewer.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/components/RegisterForm.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/RegisterForm.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/components/PWARegister.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/PWARegister.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/components/LoginForm.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/LoginForm.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/components/ErrorBoundary.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/components/ErrorBoundary.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/app/register/__tests__/page.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/app/register/__tests__/page.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/app/offline/__tests__/page.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/app/offline/__tests__/page.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/app/login/__tests__/page.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/app/login/__tests__/page.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/app/layout.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/app/layout.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/app/error.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/app/error.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/app/__tests__/page.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/app/__tests__/page.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/app/__tests__/error.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/app/__tests__/error.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/app/(protected)/vnc/[uuid]/__tests__/page.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/app/(protected)/vnc/[uuid]/__tests__/page.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/app/(protected)/dashboard/page.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/app/(protected)/dashboard/page.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/app/(protected)/dashboard/__tests__/page.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/app/(protected)/dashboard/__tests__/page.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/app/(protected)/admin/users/page.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/app/(protected)/admin/users/page.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/app/(protected)/admin/users/__tests__/page.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/app/(protected)/admin/users/__tests__/page.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/__tests__/integration/vm-management.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/__tests__/integration/vm-management.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/__tests__/integration/snapshot-management.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/__tests__/integration/snapshot-management.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/__tests__/integration/auth.test.tsx`
+
+**변경 내용**:
+파일 변경: `frontend/__tests__/integration/auth.test.tsx`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/TESTING.md`
+
+**변경 내용**:
+파일 변경: `frontend/TESTING.md`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/README.md`
+
+**변경 내용**:
+파일 변경: `frontend/README.md`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `frontend/FRONTEND_IMPROVEMENT_PLAN.md`
+
+**변경 내용**:
+파일 변경: `frontend/FRONTEND_IMPROVEMENT_PLAN.md`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `RAG/CHANGELOG.md`
+
+**변경 내용**:
+파일 변경: `RAG/CHANGELOG.md`
+
+---
+
+## 2026-01-03 12:12:24 - development
+
+**파일**: `RAG/05-frontend/03-components/components-documentation.md`
+
+**변경 내용**:
+파일 변경: `RAG/05-frontend/03-components/components-documentation.md`
+
+---
+
 ## 2026-01-03 12:10:01 - frontend
 
 **파일**: `frontend/docs/COMPONENTS.md`

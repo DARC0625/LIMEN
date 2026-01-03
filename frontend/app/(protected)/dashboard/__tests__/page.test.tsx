@@ -37,7 +37,7 @@ jest.mock('next/dynamic', () => ({
   __esModule: true,
   default: (loader: () => Promise<any>) => {
     const DynamicComponent = () => {
-      const [LoadedComponent, setLoadedComponent] = React.useState<any>(null)
+      const [LoadedComponent, setLoadedComponent] = React.useState(null as any)
       React.useEffect(() => {
         loader().then((mod) => setLoadedComponent(() => mod.default))
       }, [])
