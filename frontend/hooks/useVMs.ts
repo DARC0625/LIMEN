@@ -3,7 +3,7 @@
  * 통합된 API 클라이언트 사용
  */
 import { useQuery, useSuspenseQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { startTransition, useState, useEffect } from 'react';
+import { startTransition } from 'react';
 import { vmAPI } from '../lib/api/index';
 import type { VM, QuotaUsage } from '../lib/types';
 import { useToast } from '../components/ToastContainer';
@@ -12,18 +12,14 @@ import { QUERY_CONSTANTS } from '../lib/constants';
 import { decodeToken } from '../lib/utils/token';
 import { logger } from '../lib/utils/logger';
 import { handleAuthError } from '../lib/utils/errorHelpers';
+import { useMounted } from './useMounted';
 
 /**
  * VM 목록 조회 훅
  */
 export function useVMs() {
   const { isAuthenticated } = useAuth();
-  const [mounted, setMounted] = useState(false);
-  
-  // React Error #310 완전 해결: 클라이언트 마운트 확인 (hydration mismatch 방지)
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useMounted();
   
   // 서버와 클라이언트 초기 렌더링에서 동일한 값 반환 (false)
   // 마운트 후에만 인증 상태 확인

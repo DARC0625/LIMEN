@@ -40,6 +40,15 @@ func Connect(cfg *config.Config) error {
 
 	// Migrate the schema
 	err = DB.AutoMigrate(&models.User{}, &models.VM{}, &models.VMImage{}, &models.VMSnapshot{}, &models.ResourceQuota{})
+	if err != nil {
+		return err
+	}
+
+	// Create additional indexes for performance optimization
+	if err := CreateIndexes(DB); err != nil {
+		// Log error but don't fail - indexes might already exist
+		// This is a non-critical operation
+	}
 
 	// Ensure system-wide quota exists and MaxVMs equals MaxCPU
 	var quota models.ResourceQuota
@@ -48,9 +57,6 @@ func Connect(cfg *config.Config) error {
 			quota.MaxVMs = quota.MaxCPU
 			DB.Save(&quota)
 		}
-	}
-	if err != nil {
-		return err
 	}
 
 	return nil

@@ -116,12 +116,16 @@ export function initWebVitals() {
     const lcpObserver = new PerformanceObserver((list) => {
       try {
         const entries = list.getEntries();
-        const lastEntry = entries[entries.length - 1] as any;
+        const lastEntry = entries[entries.length - 1] as PerformanceEntry & {
+          id?: string;
+          renderTime?: number;
+          loadTime?: number;
+        };
         
         reportWebVitals({
           id: lastEntry.id || 'lcp',
           name: 'LCP',
-          value: lastEntry.renderTime || lastEntry.loadTime,
+          value: lastEntry.renderTime || lastEntry.loadTime || 0,
           rating: 'good',
           entries: entries as PerformanceEntry[],
         });
@@ -142,11 +146,12 @@ export function initWebVitals() {
       const fidObserver = new PerformanceObserver((list) => {
         try {
           const entries = list.getEntries();
-          entries.forEach((entry: any) => {
+          entries.forEach((entry) => {
+            const perfEntry = entry as PerformanceEventTiming;
             reportWebVitals({
-              id: entry.id || 'fid',
+              id: perfEntry.id || 'fid',
               name: 'FID',
-              value: entry.processingStart - entry.startTime,
+              value: perfEntry.processingStart - perfEntry.startTime,
               rating: 'good',
               entries: [entry],
             });
@@ -174,7 +179,7 @@ export function initWebVitals() {
       const paintObserver = new PerformanceObserver((list) => {
         try {
           const entries = list.getEntries();
-          entries.forEach((entry: any) => {
+          entries.forEach((entry) => {
             if (entry.name === 'first-contentful-paint') {
               reportWebVitals({
                 id: 'fcp',

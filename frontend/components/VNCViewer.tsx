@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { handleError } from '../lib/utils/error';
 import { vmAPI } from '../lib/api/index';
 import { logger } from '../lib/utils/logger';
+import { getErrorMessage } from '../lib/types/errors';
 
 // RFB type from @novnc/novnc (simplified interface)
 interface RFBInstance {
@@ -14,6 +15,33 @@ interface RFBInstance {
   sendPointerEvent: (x: number, y: number, buttonMask: number) => void;
   addEventListener: (event: string, handler: (e: unknown) => void) => void;
   removeEventListener: (event: string, handler: (e: unknown) => void) => void;
+  _clickCleanup?: () => void;
+  _resizeCleanup?: () => void;
+}
+
+// Fullscreen API 타입 확장 (브라우저별 접두사 지원)
+interface FullscreenElement extends Element {
+  webkitRequestFullscreen?: () => Promise<void>;
+  mozRequestFullScreen?: () => Promise<void>;
+  msRequestFullscreen?: () => Promise<void>;
+}
+
+interface FullscreenDocument extends Document {
+  webkitExitFullscreen?: () => Promise<void>;
+  mozCancelFullScreen?: () => Promise<void>;
+  msExitFullscreen?: () => Promise<void>;
+  webkitFullscreenElement?: Element | null;
+  mozFullScreenElement?: Element | null;
+  msFullscreenElement?: Element | null;
+}
+
+// noVNC 이벤트 타입 (라이브러리에 타입 정의가 없어서 정의)
+interface VNCEvent {
+  detail?: {
+    reason?: string;
+    code?: number;
+    message?: string;
+  };
 }
 
 export default function VNCViewer({ uuid }: { uuid: string }) {
@@ -49,9 +77,9 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
       await vmAPI.action(uuid, 'restart', {});
       setStatus('VM restarting... Connection will resume shortly.');
       // Auto-reconnect after restart is handled by WebSocket
-    } catch (error: any) {
+    } catch (error: unknown) {
         handleError(error, { component: 'VNCViewer', action: 'restart' });
-      setStatus(`Error: ${error.message || 'Failed to restart VM'}`);
+      setStatus(`Error: ${getErrorMessage(error)}`);
     } finally {
       setIsProcessing(false);
     }
@@ -74,14 +102,15 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
       } else {
         setMountedMedia([]);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // If 404 or error, assume no media attached
-      if (error?.status === 404 || error?.message?.includes('Not Found')) {
+      const apiError = error as { status?: number; message?: string };
+      if (apiError?.status === 404 || apiError?.message?.includes('Not Found')) {
         setMountedMedia([]);
         return;
       }
       // Log media loading errors
-      logger.warn(`[VNCViewer] Failed to load media: ${error instanceof Error ? error.message : String(error)}`);
+      logger.warn(`[VNCViewer] Failed to load media: ${getErrorMessage(error)}`);
       setMountedMedia([]);
     }
   };
@@ -92,8 +121,9 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
     try {
       const result = await vmAPI.getISOs();
       setAvailableISOs(result.isos || []);
-    } catch (error: any) {
-      logger.error(error instanceof Error ? error : new Error(String(error)), { component: 'VNCViewer', action: 'load_iso_list' });
+    } catch (error: unknown) {
+      const errorObj = error instanceof Error ? error : new Error(getErrorMessage(error));
+      logger.error(errorObj, { component: 'VNCViewer', action: 'load_iso_list' });
       setAvailableISOs([]);
     } finally {
       setIsLoadingISOs(false);
@@ -132,13 +162,14 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
           logger.error(err instanceof Error ? err : new Error(String(err)), { component: 'VNCViewer', action: 'reload_media_after_disable' });
         }
       }, 1500);
-    } catch (error: any) {
+    } catch (error: unknown) {
         handleError(error, { component: 'VNCViewer', action: 'detach_media' });
       
       // Enhanced error message handling
+      const apiError = error as { responseData?: { message?: string }; message?: string };
       let errorMessage = 'Failed to disable media';
-      if (error?.responseData?.message) {
-        errorMessage = error.responseData.message;
+      if (apiError?.responseData?.message) {
+        errorMessage = apiError.responseData.message;
       } else if (error?.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error?.message) {
@@ -178,9 +209,10 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
       setShowMountDialog(false);
       // Reload media state
       setTimeout(() => loadMountedMedia(), 1000);
-    } catch (error: any) {
+    } catch (error: unknown) {
         handleError(error, { component: 'VNCViewer', action: 'attach_media' });
-      setStatus(`Error: ${error.message || 'Failed to attach media'}`);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to attach media';
+      setStatus(`Error: ${errorMessage}`);
     } finally {
       setIsProcessing(false);
     }
@@ -207,26 +239,27 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
     try {
       if (!isFullscreen) {
         // 전체화면 진입
-        const element = viewerRef.current;
-        if (element.requestFullscreen) {
+        const element = viewerRef.current as FullscreenElement | null;
+        if (element?.requestFullscreen) {
           await element.requestFullscreen();
-        } else if ((element as any).webkitRequestFullscreen) {
-          await (element as any).webkitRequestFullscreen();
-        } else if ((element as any).mozRequestFullScreen) {
-          await (element as any).mozRequestFullScreen();
-        } else if ((element as any).msRequestFullscreen) {
-          await (element as any).msRequestFullscreen();
+        } else if (element?.webkitRequestFullscreen) {
+          await element.webkitRequestFullscreen();
+        } else if (element?.mozRequestFullScreen) {
+          await element.mozRequestFullScreen();
+        } else if (element?.msRequestFullscreen) {
+          await element.msRequestFullscreen();
         }
       } else {
         // 전체화면 종료
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        } else if ((document as any).webkitExitFullscreen) {
-          await (document as any).webkitExitFullscreen();
-        } else if ((document as any).mozCancelFullScreen) {
-          await (document as any).mozCancelFullScreen();
-        } else if ((document as any).msExitFullscreen) {
-          await (document as any).msExitFullscreen();
+        const doc = document as FullscreenDocument;
+        if (doc.exitFullscreen) {
+          await doc.exitFullscreen();
+        } else if (doc.webkitExitFullscreen) {
+          await doc.webkitExitFullscreen();
+        } else if (doc.mozCancelFullScreen) {
+          await doc.mozCancelFullScreen();
+        } else if (doc.msExitFullscreen) {
+          await doc.msExitFullscreen();
         }
       }
     } catch (error) {
@@ -237,11 +270,12 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
   // 전체화면 상태 변경 감지
   useEffect(() => {
     const handleFullscreenChange = () => {
+      const doc = document as FullscreenDocument;
       const isCurrentlyFullscreen = !!(
-        document.fullscreenElement ||
-        (document as any).webkitFullscreenElement ||
-        (document as any).mozFullScreenElement ||
-        (document as any).msFullscreenElement
+        doc.fullscreenElement ||
+        doc.webkitFullscreenElement ||
+        doc.mozFullScreenElement ||
+        doc.msFullscreenElement
       );
       setIsFullscreen(isCurrentlyFullscreen);
       
@@ -434,7 +468,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
       return finalUrl;
     };
     
-    let rfb: any;
+    let rfb: RFBInstance | null = null;
 
     // Check VM status before attempting VNC connection
     // Exponential backoff와 최대 재시도 횟수 적용
@@ -484,9 +518,10 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
         setStatus('Connecting to VNC...');
         vmStatusCheckAttemptsRef.current = 0; // 성공 시 재시도 카운터 리셋
         connect(url);
-      } catch (error: any) {
+      } catch (error: unknown) {
         // AbortController로 취소된 경우
-        if (error?.name === 'AbortError' || abortController.signal.aborted) {
+        const err = error as { name?: string };
+        if (err?.name === 'AbortError' || abortController.signal.aborted) {
           logger.warn('[VNCViewer] VM status check aborted');
           return;
         }
@@ -552,7 +587,8 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
         // noVNC 동적 import (1.7.0-beta: ESM 모듈)
         // package.json의 "exports": "./core/rfb.js"에 따라
         // @novnc/novnc를 import하면 자동으로 core/rfb.js가 로드됨
-        let RFB: any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let RFB: new (...args: unknown[]) => RFBInstance;
         try {
           // @ts-ignore - noVNC 타입 정의 없음
           // Turbopack의 resolveAlias를 통해 올바른 경로로 resolve됨
@@ -596,11 +632,13 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
         });
         
         // 클린업 함수 설정 (rfb 생성 후)
-        (rfb as any)._clickCleanup = () => {
-          if (containerRef.current) {
-            containerRef.current.removeEventListener('click', handleContainerClick);
-          }
-        };
+        if (rfb) {
+          rfb._clickCleanup = () => {
+            if (containerRef.current) {
+              containerRef.current.removeEventListener('click', handleContainerClick);
+            }
+          };
+        }
 
         // Configure VNC scaling and sizing
         rfb.scaleViewport = true;
@@ -632,7 +670,9 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
           }
         };
         
-        (rfb as any)._resizeCleanup = cleanupResize;
+        if (rfb) {
+          rfb._resizeCleanup = cleanupResize;
+        }
 
         rfb.addEventListener('connect', () => {
           logger.log('[VNCViewer] RFB Connected successfully');
@@ -660,9 +700,10 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
 
         // Handle connection failures (including initial connection failures)
         // Note: disconnect event usually fires before connectfailed, so we handle reconnection in disconnect
-        rfb.addEventListener('connectfailed', (e: any) => {
-          const reason = e?.detail?.reason || e?.reason || 'Connection failed';
-          const code = e?.detail?.code || e?.code || '';
+        rfb.addEventListener('connectfailed', (e: unknown) => {
+          const event = e as VNCEvent & { reason?: string; code?: number | string };
+          const reason = event?.detail?.reason || event?.reason || 'Connection failed';
+          const code = event?.detail?.code || event?.code || '';
           
           logger.error(new Error(`VNC Connection failed: ${reason || 'Unknown reason'}`), { component: 'VNCViewer', action: 'connection_failed', code, url: url.replace(/token=[^&]+/, 'token=***') });
           
@@ -710,9 +751,10 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
           }
         });
 
-        rfb.addEventListener('disconnect', (e: any) => {
-            const reason = e?.detail?.reason || e?.reason || 'Unknown reason';
-            const code = e?.detail?.code || e?.code || '';
+        rfb.addEventListener('disconnect', (e: unknown) => {
+          const event = e as VNCEvent & { reason?: string; code?: number | string };
+            const reason = event?.detail?.reason || event?.reason || 'Unknown reason';
+            const code = event?.detail?.code || event?.code || '';
             
             logger.log('[VNCViewer] Disconnect event:', { 
               reason, 
@@ -784,9 +826,10 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
                 
                 vmStatusCheckAttemptsRef.current = 0; // 성공 시 재시도 카운터 리셋
                 return true;
-              } catch (err: any) {
+              } catch (err: unknown) {
                 // AbortController로 취소된 경우
-                if (err?.name === 'AbortError' || abortController.signal.aborted) {
+                const error = err as { name?: string };
+                if (error?.name === 'AbortError' || abortController.signal.aborted) {
                   logger.warn('[VNCViewer] VM status check aborted');
                   return false;
                 }
@@ -889,7 +932,8 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
             }
         });
         
-        rfb.addEventListener('securityfailure', (e: any) => {
+        rfb.addEventListener('securityfailure', (e: unknown) => {
+          const event = e as VNCEvent;
             setStatus('Security Failure');
             const error = new Error('VNC Security Failure');
             handleError(error, {
@@ -905,8 +949,9 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
         });
 
         // Add error handler
-        rfb.addEventListener('error', (e: any) => {
-            const errorMsg = e?.detail?.message || 'Connection error';
+        rfb.addEventListener('error', (e: unknown) => {
+          const event = e as VNCEvent;
+            const errorMsg = event?.detail?.message || 'Connection error';
             logger.error(new Error(`RFB Error: ${errorMsg}`), { component: 'VNCViewer', action: 'rfb_error', detail: errorMsg });
             setStatus(`Error: ${errorMsg}`);
             const error = new Error(`VNC Error: ${errorMsg}`);
@@ -957,12 +1002,12 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
         try {
           // Cleanup resize listener from RFB
           const rfb = rfbRef.current;
-          if (rfb && (rfb as any)._resizeCleanup) {
-            (rfb as any)._resizeCleanup();
+          if (rfb?._resizeCleanup) {
+            rfb._resizeCleanup();
           }
           // Cleanup click listener
-          if (rfb && (rfb as any)._clickCleanup) {
-            (rfb as any)._clickCleanup();
+          if (rfb?._clickCleanup) {
+            rfb._clickCleanup();
           }
           if (rfb && typeof rfb.disconnect === 'function') {
             rfb.disconnect();

@@ -8,6 +8,7 @@ import { trackPerformanceMetric } from '../analytics';
 import { tokenManager } from '../tokenManager';
 import { API_CONSTANTS } from '../constants';
 import type { APIError } from '../types';
+import { logger } from '../utils/logger';
 
 /**
  * API URL 가져오기
@@ -52,14 +53,14 @@ export async function apiRequest<T>(
   if (!skipAuth) {
     try {
       accessToken = await tokenManager.getAccessToken();
-      console.log('[apiRequest] Access token check:', {
+      logger.log('[apiRequest] Access token check:', {
         hasAccessToken: !!accessToken,
         accessTokenLength: accessToken?.length || 0,
         endpoint,
       });
     } catch (error) {
       // 토큰 갱신 실패는 무시 (401 에러로 처리됨)
-      console.warn('[apiRequest] Token refresh failed:', error);
+      logger.warn('[apiRequest] Token refresh failed:', error);
     }
   }
 
@@ -90,15 +91,13 @@ export async function apiRequest<T>(
     : 0;
 
   // 디버그 로그 (개발 환경만)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[API Request]', {
-      url,
-      method,
-      endpoint,
-      hasAuth: !!accessToken,
-      hasCSRF: !!csrfToken,
-    });
-  }
+  logger.log('[API Request]', {
+    url,
+    method,
+    endpoint,
+    hasAuth: !!accessToken,
+    hasCSRF: !!csrfToken,
+  });
 
   // 요청 실행 (재시도 포함)
   const executeRequest = async (attempt: number = 1): Promise<Response> => {
@@ -122,7 +121,7 @@ export async function apiRequest<T>(
         }
       }
       
-      console.log('[executeRequest] Request details:', {
+      logger.log('[executeRequest] Request details:', {
         url,
         method,
         hasBody: !!requestBody,
@@ -200,21 +199,19 @@ export async function apiRequest<T>(
     }
 
     // 디버그 로그 (CORS 헤더 확인 포함)
-    if (process.env.NODE_ENV === 'development') {
-      const corsHeaders = {
-        'access-control-allow-credentials': response.headers.get('access-control-allow-credentials'),
-        'access-control-allow-headers': response.headers.get('access-control-allow-headers'),
-        'access-control-allow-origin': response.headers.get('access-control-allow-origin'),
-        'access-control-allow-methods': response.headers.get('access-control-allow-methods'),
-      };
-      console.log('[API Response]', {
-        url,
-        method,
-        status: response.status,
-        duration: duration > 0 ? `${duration.toFixed(2)}ms` : 'N/A',
-        corsHeaders,
-      });
-    }
+    const corsHeaders = {
+      'access-control-allow-credentials': response.headers.get('access-control-allow-credentials'),
+      'access-control-allow-headers': response.headers.get('access-control-allow-headers'),
+      'access-control-allow-origin': response.headers.get('access-control-allow-origin'),
+      'access-control-allow-methods': response.headers.get('access-control-allow-methods'),
+    };
+    logger.log('[API Response]', {
+      url,
+      method,
+      status: response.status,
+      duration: duration > 0 ? `${duration.toFixed(2)}ms` : 'N/A',
+      corsHeaders,
+    });
 
     // 응답 처리
     return await handleResponse<T>(response, endpoint, url, method);
@@ -282,7 +279,7 @@ async function handleResponse<T>(
       }
     } catch (refreshError) {
       // 토큰 갱신 실패
-      console.warn('[apiRequest] Token refresh failed:', refreshError);
+      logger.warn('[apiRequest] Token refresh failed:', refreshError);
     }
 
     // 토큰 갱신 실패 또는 재시도 실패
@@ -337,7 +334,7 @@ async function handleResponse<T>(
 /**
  * 에러 응답 파싱
  */
-async function parseErrorResponse(response: Response): Promise<any> {
+async function parseErrorResponse(response: Response): Promise<{ message?: string; error?: string; [key: string]: unknown }> {
   try {
     const text = await response.text();
     if (text) {
@@ -358,9 +355,9 @@ async function parseErrorResponse(response: Response): Promise<any> {
  * 성공 응답 파싱
  */
 async function parseResponse<T>(response: Response, endpoint: string): Promise<T> {
-  // 상세 로깅 (항상 출력)
+  // 상세 로깅 (개발 환경만)
   const contentLength = response.headers.get('content-length');
-  console.log('[parseResponse] Response details:', {
+  logger.log('[parseResponse] Response details:', {
     status: response.status,
     statusText: response.statusText,
     contentLength,
@@ -370,14 +367,14 @@ async function parseResponse<T>(response: Response, endpoint: string): Promise<T
   
   // 204 No Content
   if (response.status === 204 || contentLength === '0') {
-    console.log('[parseResponse] 204 No Content or content-length=0, returning empty object');
+    logger.log('[parseResponse] 204 No Content or content-length=0, returning empty object');
     return {} as T;
   }
 
   // JSON 파싱
   const text = await response.text();
   
-  console.log('[parseResponse] Response text:', {
+  logger.log('[parseResponse] Response text:', {
     hasText: !!text,
     textLength: text?.length || 0,
     textPreview: text ? text.substring(0, 300) : 'empty',
@@ -385,13 +382,13 @@ async function parseResponse<T>(response: Response, endpoint: string): Promise<T
   });
   
   if (!text || text.trim() === '') {
-    console.warn('[parseResponse] Empty response body, returning empty object');
+    logger.warn('[parseResponse] Empty response body, returning empty object');
     return {} as T;
   }
 
   try {
     const parsed = JSON.parse(text) as T;
-    console.log('[parseResponse] Parsed response:', {
+    logger.log('[parseResponse] Parsed response:', {
       hasData: !!parsed,
       keys: parsed ? Object.keys(parsed) : [],
       dataPreview: parsed ? JSON.stringify(parsed).substring(0, 300) : 'empty',
@@ -399,7 +396,9 @@ async function parseResponse<T>(response: Response, endpoint: string): Promise<T
     });
     return parsed;
   } catch (err) {
-    console.error('[parseResponse] JSON parse error:', err, {
+    logger.error(err instanceof Error ? err : new Error(String(err)), {
+      component: 'parseResponse',
+      action: 'json_parse',
       text: text.substring(0, 300),
       endpoint,
     });

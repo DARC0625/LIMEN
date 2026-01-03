@@ -92,6 +92,7 @@ export RAG_PATH=/home/darc0/LIMEN/RAG
 - [시스템 설계](./01-architecture/system-design.md)
 - [네트워크 보안](./01-architecture/network-security.md)
 - [로드맵](./01-architecture/roadmap.md)
+- [**서비스 발전 로드맵**](./01-architecture/development-roadmap.md) ⭐ **NEW**
 
 ### 💻 [개발 가이드](./02-development/)
 - [시작하기](./02-development/getting-started.md)
@@ -112,6 +113,11 @@ export RAG_PATH=/home/darc0/LIMEN/RAG
 - [VM 미디어 관리](./04-operations/vm-media-management.md)
 - [프록시 수정 가이드](./04-operations/proxy-fix-guide.md)
 - [최적화](./04-operations/optimization.md)
+- [**상세 최적화 계획**](./04-operations/optimization-detailed-plan.md) ⭐ **NEW**
+- [**최적화 실행 체크리스트**](./04-operations/optimization-checklist.md) ⭐ **NEW**
+- [**최적화 완료 보고서**](./04-operations/optimization-completion-report.md) ⭐ **NEW**
+- [**최적화 빠른 참조**](./04-operations/optimization-quick-reference.md) ⭐ **NEW**
+- [**최적화 검증 가이드**](./04-operations/optimization-verification.md) ⭐ **NEW**
 - [공통 RAG 폴더](./04-operations/rag-common-folder.md)
 - [자동 동기화 가이드](./04-operations/auto-sync-guide.md)
 
@@ -133,6 +139,7 @@ export RAG_PATH=/home/darc0/LIMEN/RAG
 - [암호화](./04-operations/security/encryption.md)
 - [보안 강화](./04-operations/security/hardening.md)
 - [제로 트러스트](./04-operations/security/zero-trust.md)
+- [**보안 강화 계획**](./04-operations/security-enhancement-plan.md) ⭐ **NEW**
 
 ### 🎨 [프론트엔드](./05-frontend/)
 - [프론트엔드 오류](./05-frontend/frontend-errors.md)
@@ -145,4 +152,15 @@ export RAG_PATH=/home/darc0/LIMEN/RAG
 
 ---
 
-**마지막 업데이트**: 2025-01-02
+**마지막 업데이트**: 2025-01-14
+
+## 🆕 최신 문서 (2025-01-14)
+
+새로 추가된 발전 및 최적화 계획 문서:
+
+1. **[서비스 발전 로드맵](./01-architecture/development-roadmap.md)** - LIMEN 서비스의 종합적인 발전 방향과 최적화 계획
+2. **[상세 최적화 계획](./04-operations/optimization-detailed-plan.md)** - 프론트엔드, 백엔드, 데이터베이스 등 각 영역별 상세 최적화 계획
+3. **[보안 강화 계획](./04-operations/security-enhancement-plan.md)** - 인증, 인가, 입력 검증, 네트워크 보안 등 보안 강화 계획
+4. **[최적화 실행 체크리스트](./04-operations/optimization-checklist.md)** - 실행 가능한 단계별 체크리스트
+
+이 문서들은 LIMEN 서비스의 지속적인 발전과 최적화를 위한 종합적인 가이드입니다.

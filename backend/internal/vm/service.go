@@ -480,23 +480,37 @@ func (s *VMService) RestartVM(name string) error {
 		return fmt.Errorf("failed to stop VM: %w", err)
 	}
 	
-	// Wait a moment for VM to fully stop (optimized: use shorter wait with status check)
-	time.Sleep(1 * time.Second)
+	// Optimized: Use context with timeout instead of fixed sleep
+	// Wait for VM to fully stop (max 5 seconds)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	
-	// Verify VM is stopped before starting
-	maxWait := 5 * time.Second
-	waitInterval := 500 * time.Millisecond
-	for elapsed := time.Duration(0); elapsed < maxWait; elapsed += waitInterval {
-		dom, err := s.conn.LookupDomainByName(name)
-		if err != nil {
-			break // VM might not exist, try to start anyway
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	
+	vmStopped := false
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Log.Warn("Timeout waiting for VM to stop", zap.String("vm_name", name))
+			break
+		case <-ticker.C:
+			dom, err := s.conn.LookupDomainByName(name)
+			if err != nil {
+				// VM might not exist, try to start anyway
+				vmStopped = true
+				break
+			}
+			active, _ := dom.IsActive()
+			dom.Free() // Free libvirt domain resource immediately after use
+			if !active {
+				vmStopped = true
+				break
+			}
 		}
-		active, _ := dom.IsActive()
-		dom.Free() // Free libvirt domain resource immediately after use
-		if !active {
-			break // VM is stopped
+		if vmStopped {
+			break
 		}
-		time.Sleep(waitInterval)
 	}
 	
 	// Start VM

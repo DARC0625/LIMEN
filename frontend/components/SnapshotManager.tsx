@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { snapshotAPI } from '../lib/api';
 import type { VMSnapshot } from '../lib/types';
 import { useToast } from './ToastContainer';
+import { logger } from '../lib/utils/logger';
 
 interface SnapshotManagerProps {
   vmUuid: string;
@@ -27,7 +28,10 @@ export default function SnapshotManager({ vmUuid, vmName }: SnapshotManagerProps
       const data = await snapshotAPI.list(vmUuid);
       setSnapshots(data);
     } catch (err) {
-      console.error('Failed to fetch snapshots', err);
+      logger.error(err instanceof Error ? err : new Error(String(err)), {
+        component: 'SnapshotManager',
+        action: 'fetch_snapshots',
+      });
     }
   };
 
@@ -46,8 +50,9 @@ export default function SnapshotManager({ vmUuid, vmName }: SnapshotManagerProps
       setShowCreate(false);
       fetchSnapshots();
       toast.success('Snapshot created successfully!');
-    } catch (err: any) {
-      toast.error(`Failed to create snapshot: ${err.message}`);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create snapshot';
+      toast.error(`Failed to create snapshot: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -61,8 +66,9 @@ export default function SnapshotManager({ vmUuid, vmName }: SnapshotManagerProps
       await snapshotAPI.restore(snapshotId);
       fetchSnapshots();
       toast.success('Snapshot restored successfully!');
-    } catch (err: any) {
-      toast.error(`Failed to restore snapshot: ${err.message}`);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to restore snapshot';
+      toast.error(`Failed to restore snapshot: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -76,8 +82,9 @@ export default function SnapshotManager({ vmUuid, vmName }: SnapshotManagerProps
       await snapshotAPI.delete(snapshotId);
       fetchSnapshots();
       toast.success('Snapshot deleted successfully!');
-    } catch (err: any) {
-      toast.error(`Failed to delete snapshot: ${err.message}`);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete snapshot';
+      toast.error(`Failed to delete snapshot: ${errorMessage}`);
     } finally {
       setLoading(false);
     }

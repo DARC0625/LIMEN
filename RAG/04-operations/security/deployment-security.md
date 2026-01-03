@@ -236,3 +236,4 @@ find deploy-frontend -name "*.go" -delete
 
 **마지막 업데이트**: 2025-01-02
 
+

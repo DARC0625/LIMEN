@@ -100,3 +100,4 @@ echo "  3. auto-sync.yml의 서버 경로 확인 및 수정"
 echo "  4. 테스트: git push origin main"
 echo ""
 
+

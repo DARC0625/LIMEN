@@ -86,6 +86,75 @@ export function formatDuration(seconds: number): string {
   }
 }
 
+/**
+ * 한국어 로케일 날짜 포맷팅
+ */
+export function formatDateKR(isoString: string): string {
+  if (!isoString) return '-';
+  try {
+    return new Date(isoString).toLocaleString('ko-KR', { 
+      timeZone: 'Asia/Seoul', 
+      year: 'numeric', 
+      month: '2-digit', 
+      day: '2-digit', 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit' 
+    });
+  } catch (e) {
+    return isoString;
+  }
+}
+
+/**
+ * 상대 시간 포맷팅 (예: "2분 전", "1시간 전")
+ */
+export function formatRelativeTime(date: Date | string): string {
+  if (!date) return '-';
+  
+  const now = new Date();
+  const target = typeof date === 'string' ? new Date(date) : date;
+  const diffMs = now.getTime() - target.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+  
+  if (diffSec < 60) return '방금 전';
+  if (diffMin < 60) return `${diffMin}분 전`;
+  if (diffHour < 24) return `${diffHour}시간 전`;
+  if (diffDay < 7) return `${diffDay}일 전`;
+  
+  return formatDateKR(target.toISOString());
+}
+
+/**
+ * 날짜를 간단한 형식으로 변환 (예: "2024-01-14")
+ */
+export function formatDateSimple(date: Date | string): string {
+  if (!date) return '-';
+  
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * 시간을 간단한 형식으로 변환 (예: "14:30")
+ */
+export function formatTimeSimple(date: Date | string): string {
+  if (!date) return '-';
+  
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const hour = String(d.getHours()).padStart(2, '0');
+  const minute = String(d.getMinutes()).padStart(2, '0');
+  
+  return `${hour}:${minute}`;
+}
+
 
 
 

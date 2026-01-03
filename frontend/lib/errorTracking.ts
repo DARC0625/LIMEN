@@ -9,8 +9,16 @@ export interface ErrorContext {
   [key: string]: unknown;
 }
 
+// Sentry 타입 정의
+interface SentryInstance {
+  captureException: (error: Error, options?: {
+    contexts?: { custom?: ErrorContext };
+    tags?: Record<string, string>;
+  }) => void;
+}
+
 // Sentry 연동 (환경 변수로 활성화)
-let Sentry: any = null;
+let Sentry: SentryInstance | null = null;
 if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_SENTRY_DSN) {
   try {
     // 동적 import로 Sentry 로드 (필요시 설치: npm install @sentry/nextjs)

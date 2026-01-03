@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { StatusCard, StatusRow } from './StatusCard';
+import { formatDateKR } from '../lib/utils/format';
+import { logger } from '../lib/utils/logger';
 
 type BackendHealth = {
   status: string;
@@ -58,9 +60,7 @@ export default function HealthStatus() {
         }
         
         // 개발 환경에서만 로그 출력 (성능 최적화)
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[HealthStatus] Fetching health from:', apiUrl);
-        }
+        logger.log('[HealthStatus] Fetching health from:', apiUrl);
         
         // 헬스체크는 인증 없이도 가능하므로 credentials를 선택적으로 설정
         // 로그인 페이지에서 불필요한 쿠키 전송 방지
@@ -134,11 +134,12 @@ export default function HealthStatus() {
         
         // AbortError는 타임아웃이므로 조용히 처리
         if (err instanceof Error && err.name === 'AbortError') {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn("[HealthStatus] Request timeout");
-          }
-        } else if (process.env.NODE_ENV === 'development') {
-          console.error("[HealthStatus] Health check failed", err);
+          logger.warn("[HealthStatus] Request timeout");
+        } else {
+          logger.error(err instanceof Error ? err : new Error(String(err)), {
+            component: 'HealthStatus',
+            action: 'health_check',
+          });
         }
         
         consecutiveErrorsRef.current++;
@@ -170,9 +171,7 @@ export default function HealthStatus() {
     // 네트워크 상태 변화 감지 (온라인/오프라인 이벤트)
     const handleOnline = () => {
       if (mountedRef.current) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("[HealthStatus] Network online, checking health immediately");
-        }
+        logger.log("[HealthStatus] Network online, checking health immediately");
         setIsLoading(true);
         setIsError(false);
         consecutiveErrorsRef.current = 0;
@@ -182,9 +181,7 @@ export default function HealthStatus() {
     
     const handleOffline = () => {
       if (mountedRef.current) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("[HealthStatus] Network offline");
-        }
+        logger.log("[HealthStatus] Network offline");
         setIsError(true);
         setHealth(null);
       }
@@ -230,18 +227,7 @@ export default function HealthStatus() {
     };
   }, []);
 
-  const formatDate = (isoString: string) => {
-    if (!isoString) return '-';
-    try {
-      return new Date(isoString).toLocaleString('ko-KR', { 
-        timeZone: 'Asia/Seoul', 
-        year: 'numeric', month: '2-digit', day: '2-digit', 
-        hour: '2-digit', minute: '2-digit', second: '2-digit' 
-      });
-    } catch (e) {
-      return isoString;
-    }
-  };
+  // formatDateKR은 lib/utils/format에서 import
   
   // React Error #310 완전 해결: useMemo 제거, 직접 계산 (hydration mismatch 방지)
   const isOffline = isError || !health || (health && health.status !== 'ok');
@@ -290,7 +276,7 @@ export default function HealthStatus() {
       {health && !isOffline && (
         <div className="text-xs text-gray-400 dark:text-gray-500 text-right mt-2" aria-live="polite" aria-atomic="true" suppressHydrationWarning>
           <span className="sr-only">Last update:</span>
-          {formatDate(health.time)}
+          {formatDateKR(health.time)}
         </div>
       )}
     </StatusCard>

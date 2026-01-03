@@ -27,6 +27,7 @@ export type * from '../types';
 // 하위 호환성을 위한 유틸리티 함수
 import { getUserRoleFromToken, isUserApprovedFromToken } from '../utils/token';
 import { tokenManager } from '../tokenManager';
+import { logger } from '../utils/logger';
 
 /**
  * 사용자 역할 가져오기 (동기 버전 - 하위 호환성)
@@ -134,7 +135,10 @@ export async function setTokens(
     const { authAPI } = await import('./auth');
     await authAPI.createSession(accessToken, refreshToken);
   } catch (error) {
-    console.error('[setTokens] Session creation failed:', error);
+    logger.error(error instanceof Error ? error : new Error(String(error)), {
+      component: 'api/index',
+      action: 'setTokens',
+    });
   }
 }
 

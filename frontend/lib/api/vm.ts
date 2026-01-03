@@ -152,7 +152,12 @@ export const vmAPI = {
     action: 'detach' | 'attach',
     iso_path?: string
   ): Promise<{ message: string; vm_uuid?: string; previous_media_path?: string }> => {
-    const body: any = { action };
+    interface MediaActionBody {
+      action: 'detach' | 'attach';
+      iso_path?: string;
+    }
+    
+    const body: MediaActionBody = { action };
     
     if (action === 'attach') {
       if (!iso_path || !iso_path.trim()) {

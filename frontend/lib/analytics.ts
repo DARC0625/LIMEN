@@ -1,16 +1,24 @@
 // 성능 모니터링 및 분석 유틸리티
 // FRONTEND_DEPLOYMENT_STRATEGY.md 가이드 준수
 
+// Window 타입 확장 (Google Analytics, Plausible)
+interface WindowWithAnalytics extends Window {
+  gtag?: (...args: unknown[]) => void;
+  plausible?: (event: string, options?: { props?: Record<string, unknown> }) => void;
+}
+
 // Google Analytics 연동 헬퍼
-function getGtag(): any {
+function getGtag(): ((...args: unknown[]) => void) | null {
   if (typeof window === 'undefined') return null;
-  return (window as any).gtag || null;
+  const win = window as WindowWithAnalytics;
+  return win.gtag || null;
 }
 
 // Plausible 연동 헬퍼
-function trackPlausible(event: string, props?: Record<string, any>): void {
+function trackPlausible(event: string, props?: Record<string, unknown>): void {
   if (typeof window === 'undefined') return;
-  const plausible = (window as any).plausible;
+  const win = window as WindowWithAnalytics;
+  const plausible = win.plausible;
   if (plausible) {
     plausible(event, { props });
   }
@@ -53,7 +61,7 @@ export function trackPageView(path: string): void {
  */
 export function trackEvent(
   name: string,
-  properties?: Record<string, any>
+  properties?: Record<string, unknown>
 ): void {
   if (typeof window === 'undefined') return;
 
@@ -148,8 +156,9 @@ export function trackWebVitals(metric: {
   trackPerformanceMetric(metric.name, metric.value);
   
   // Google Analytics 등으로 전송
-  if (typeof window !== 'undefined' && (window as any).gtag) {
-    (window as any).gtag('event', metric.name, {
+  const gtag = getGtag();
+  if (gtag) {
+    gtag('event', metric.name, {
       event_category: 'Web Vitals',
       value: Math.round(metric.value),
       event_label: metric.id,

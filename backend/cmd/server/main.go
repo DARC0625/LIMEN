@@ -52,6 +52,7 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/models"
 	"github.com/DARC0625/LIMEN/backend/internal/router"
 	"github.com/DARC0625/LIMEN/backend/internal/security"
+	"github.com/DARC0625/LIMEN/backend/internal/shutdown"
 	"github.com/DARC0625/LIMEN/backend/internal/vm"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
@@ -273,10 +274,52 @@ func main() {
 		IdleTimeout:  120 * time.Second, // Timeout for idle connections (keep-alive)
 		MaxHeaderBytes: 1 << 20,         // 1MB max header size
 	}
-	logger.Log.Info("Server starting", zap.String("address", addr))
-	if err := server.ListenAndServe(); err != nil {
-		logger.Log.Fatal("Server failed", zap.Error(err))
+
+	// Create shutdown manager for graceful shutdown
+	shutdownMgr := shutdown.NewShutdownManager(server, logger.Log)
+
+	// Register cleanup functions
+	shutdownMgr.RegisterCleanup(func(ctx context.Context) error {
+		logger.Log.Info("Closing database connections...")
+		if sqlDB, err := database.DB.DB(); err == nil {
+			return sqlDB.Close()
+		}
+		return nil
+	})
+
+	// Register VM service cleanup if available
+	if vmService != nil {
+		shutdownMgr.RegisterCleanup(func(ctx context.Context) error {
+			logger.Log.Info("Closing libvirt connections...")
+			// VM service cleanup can be added here if needed
+			return nil
+		})
 	}
+
+	// Register WebSocket broadcaster cleanup
+	if h != nil && h.VMStatusBroadcaster != nil {
+		shutdownMgr.RegisterCleanup(func(ctx context.Context) error {
+			logger.Log.Info("Shutting down WebSocket broadcaster...")
+			h.VMStatusBroadcaster.Shutdown()
+			return nil
+		})
+	}
+
+	// Start server in a goroutine
+	go func() {
+		logger.Log.Info("Server starting", zap.String("address", addr))
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Log.Fatal("Server failed", zap.Error(err))
+		}
+	}()
+
+	// Wait for shutdown signal and perform graceful shutdown
+	if err := shutdownMgr.WaitForShutdown(); err != nil {
+		logger.Log.Error("Error during shutdown", zap.Error(err))
+		os.Exit(1)
+	}
+
+	logger.Log.Info("Server stopped")
 }
 
 // ensureAdminUser ensures that an admin user exists in the database

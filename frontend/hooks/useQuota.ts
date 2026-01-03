@@ -1,23 +1,18 @@
 // 할당량 조회 훅 (React Query)
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
 import { quotaAPI } from '../lib/api/index';
 import type { QuotaUsage } from '../lib/types';
 import { useAuth } from '../components/AuthGuard';
 import { logger } from '../lib/utils/logger';
 import { handleAuthError } from '../lib/utils/errorHelpers';
+import { useMounted } from './useMounted';
 
 /**
  * 할당량 조회 훅 (일반)
  */
 export function useQuota() {
   const { isAuthenticated } = useAuth();
-  const [mounted, setMounted] = useState(false);
-  
-  // React Error #310 완전 해결: 클라이언트 마운트 확인 (hydration mismatch 방지)
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useMounted();
   
   // 서버와 클라이언트 초기 렌더링에서 동일한 값 반환 (false)
   // 마운트 후에만 인증 상태 확인

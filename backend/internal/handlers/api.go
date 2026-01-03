@@ -153,23 +153,64 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 		// Optimized: Only sync if there are VMs and VMService is available
 		if h.VMService != nil && len(vms) > 0 {
 			// Use goroutines for parallel status sync (limited concurrency)
+			// Add context with timeout to prevent goroutines from running indefinitely
+			syncCtx, syncCancel := context.WithTimeout(r.Context(), 10*time.Second)
+			defer syncCancel()
+			
 			const maxConcurrency = 5
 			sem := make(chan struct{}, maxConcurrency)
 			var wg sync.WaitGroup
 			
+			// Wait for all goroutines with timeout
+			done := make(chan struct{})
+			
 			for i := range vms {
+				// Check if context is cancelled before starting new goroutine
+				select {
+				case <-syncCtx.Done():
+					logger.Log.Warn("VM status sync cancelled due to timeout or context cancellation")
+					goto syncComplete
+				default:
+				}
+				
 				wg.Add(1)
 				go func(idx int) {
 					defer wg.Done()
-					sem <- struct{}{} // Acquire semaphore
-					defer func() { <-sem }() // Release semaphore
 					
-					if err := h.VMService.SyncVMStatus(&vms[idx]); err != nil {
-						logger.Log.Debug("Failed to sync VM status", zap.String("vm_name", vms[idx].Name), zap.Error(err))
-						// Continue even if sync fails for one VM
+					// Check context before acquiring semaphore
+					select {
+					case <-syncCtx.Done():
+						return
+					case sem <- struct{}{}:
+						defer func() { <-sem }() // Release semaphore
+					}
+					
+					// Check context again before sync
+					select {
+					case <-syncCtx.Done():
+						return
+					default:
+						if err := h.VMService.SyncVMStatus(&vms[idx]); err != nil {
+							logger.Log.Debug("Failed to sync VM status", zap.String("vm_name", vms[idx].Name), zap.Error(err))
+							// Continue even if sync fails for one VM
+						}
 					}
 				}(i)
 			}
+			
+			go func() {
+				wg.Wait()
+				close(done)
+			}()
+			
+			select {
+			case <-done:
+				// All goroutines completed
+			case <-syncCtx.Done():
+				logger.Log.Warn("VM status sync timed out, some syncs may be incomplete")
+			}
+			
+			syncComplete:
 			wg.Wait()
 		}
 
@@ -1267,11 +1308,20 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 	ws.Write(successCtx, websocket.MessageText, []byte(`{"type":"status","message":"VNC connection established, starting proxy..."}`))
 
 	errc := make(chan error, 2)
+	vncCtx, vncCancel := context.WithCancel(r.Context())
+	defer vncCancel() // Ensure context is cancelled when function returns
 
 	go func() {
+		defer vncCancel() // Cancel context when goroutine exits
 		messageCount := 0
 		for {
-			_, message, err := ws.Read(r.Context())
+			select {
+			case <-vncCtx.Done():
+				return
+			default:
+			}
+
+			_, message, err := ws.Read(vncCtx)
 			if err != nil {
 				// Only log non-normal closure errors
 				closeStatus := websocket.CloseStatus(err)
@@ -1310,12 +1360,21 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	go func() {
+		defer vncCancel() // Cancel context when goroutine exits
 		// Optimized: Use buffer pool to reduce memory allocations
 		buf := vncBufferPool.Get().([]byte)
 		defer vncBufferPool.Put(buf)
 		
 		readCount := int32(0)
 		for {
+			select {
+			case <-vncCtx.Done():
+				return
+			default:
+			}
+
+			// Set read deadline to prevent blocking indefinitely
+			conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 			n, err := conn.Read(buf)
 			if err != nil {
 				// Only log non-EOF errors

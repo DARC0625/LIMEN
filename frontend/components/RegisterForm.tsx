@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { authAPI, setToken } from '../lib/api';
 import { useRouter } from 'next/navigation';
 import { useToast } from './ToastContainer';
+import { getErrorMessage } from '../lib/types/errors';
 
 export default function RegisterForm() {
   const [username, setUsername] = useState('');
@@ -42,9 +43,10 @@ export default function RegisterForm() {
       setTimeout(() => {
         router.push('/login');
       }, 2000);
-    } catch (err: any) {
-      setError(err.message || 'Registration failed');
-      toast.error(err.message || 'Registration failed');
+    } catch (err: unknown) {
+      const errorMessage = getErrorMessage(err);
+      setError(errorMessage);
+      toast.error(errorMessage);
       setLoading(false);
     }
   };

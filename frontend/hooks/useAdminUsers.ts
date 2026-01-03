@@ -4,6 +4,7 @@ import { startTransition } from 'react';
 import { adminAPI } from '../lib/api';
 import type { UserWithStats, User, VM, CreateUserRequest, UpdateUserRequest } from '../lib/types';
 import { useToast } from '../components/ToastContainer';
+import { getErrorMessage } from '../lib/types/errors';
 
 /**
  * 사용자 목록 조회 훅 (Admin 전용)
@@ -57,8 +58,8 @@ export function useCreateUser() {
         toast.success('User created successfully');
       });
     },
-    onError: (error: any) => {
-      toast.error(`Failed to create user: ${error.message}`);
+    onError: (error: unknown) => {
+      toast.error(`Failed to create user: ${getErrorMessage(error)}`);
     },
   });
 }
@@ -94,8 +95,8 @@ export function useUpdateUser() {
         toast.success('User updated successfully');
       });
     },
-    onError: (error: any) => {
-      toast.error(`Failed to update user: ${error.message}`);
+    onError: (error: unknown) => {
+      toast.error(`Failed to update user: ${getErrorMessage(error)}`);
     },
   });
 }
@@ -126,7 +127,7 @@ export function useDeleteUser() {
         toast.success('User deleted successfully');
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       // React Error #321 완전 해결: queueMicrotask로 비동기 처리
       queueMicrotask(() => {
         startTransition(() => {
@@ -134,7 +135,7 @@ export function useDeleteUser() {
         });
       });
       queueMicrotask(() => {
-        toast.error(`Failed to delete user: ${error.message}`);
+        toast.error(`Failed to delete user: ${getErrorMessage(error)}`);
       });
     },
   });
@@ -168,8 +169,8 @@ export function useApproveUser() {
         toast.success('User approved successfully');
       });
     },
-    onError: (error: any) => {
-      toast.error(`Failed to approve user: ${error.message}`);
+    onError: (error: unknown) => {
+      toast.error(`Failed to approve user: ${getErrorMessage(error)}`);
     },
   });
 }

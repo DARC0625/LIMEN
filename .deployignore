@@ -47,3 +47,4 @@ RAG/vectors/
 RAG/index/*.json
 RAG/embeddings/
 
+

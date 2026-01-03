@@ -7,6 +7,7 @@ import type { VM } from '../lib/types';
 // WebSocket 완전 제거 - React Error #321 근본 해결
 import dynamicImport from 'next/dynamic';
 import Loading from './Loading';
+import { formatBytes } from '../lib/utils/format';
 
 // 동적 import: SnapshotManager는 조건부로만 렌더링되므로 코드 스플리팅 적용
 const SnapshotManager = dynamicImport(
@@ -283,11 +284,7 @@ export default function VMListSection({
   // WebSocket 완전 비활성화 - React Error #321 근본 해결
   // React Query의 자동 리페치만 사용 (refetchInterval)
   // WebSocket 관련 코드 모두 제거
-
-  const formatBytes = (bytes: number) => {
-    const gb = bytes / (1024 * 1024 * 1024);
-    return `${gb.toFixed(2)} GB`;
-  };
+  // formatBytes는 lib/utils/format에서 import
 
   if (isLoading) {
     return (

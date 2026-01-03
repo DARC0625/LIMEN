@@ -4,14 +4,17 @@ on:
   push:
     branches:
       - main
-    # 모든 변경사항에 대해 동기화 (paths 필터 제거 - 전체 리포지토리 감지)
+    # RAG 문서 변경도 동기화 필요하므로 paths-ignore 제거
+    # paths-ignore:
+    #   - '**.md'
+    #   - '.gitignore'
+    #   - '.gitattributes'
   workflow_dispatch:
 
 jobs:
   sync-backend:
     name: Sync to Backend Server
     runs-on: ubuntu-latest
-    # 모든 push에 대해 항상 실행 (백엔드 우선순위)
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     
     steps:
@@ -40,38 +43,34 @@ jobs:
             CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
             echo "📋 현재 브랜치: $CURRENT_BRANCH"
             
-            # Git 동기화 (최신 코드 가져오기)
-            echo "⬇️  최신 코드 가져오는 중..."
-            
-            # Git remote 확인
-            echo "📋 Git remote 확인:"
-            git remote -v || echo "⚠️  git remote 확인 실패"
-            
-            # 현재 상태 확인
-            echo "📋 현재 상태:"
-            git status --short || echo "⚠️  git status 실패"
-            
-            # 최신 코드 가져오기
-            echo "🔄 Git fetch 실행..."
+            # Git pull (최신 코드 가져오기) - 백엔드 우선
+            echo "⬇️  최신 코드 가져오는 중 (백엔드 우선)..."
             git fetch origin || {
-              echo "❌ git fetch 실패 - SSH 키 또는 권한 확인 필요"
-              exit 1
+              echo "⚠️  git fetch 실패, 계속 진행..."
             }
             
-            echo "🔄 Git reset 실행..."
-            git reset --hard origin/main || {
-              echo "❌ git reset 실패"
-              exit 1
+            # 백엔드 코드 우선 동기화
+            echo "📦 백엔드 코드 동기화 중..."
+            git checkout origin/main -- backend/ || {
+              echo "⚠️  backend/ 체크아웃 실패, 전체 동기화 시도..."
+              git reset --hard origin/main || git reset --hard origin/$CURRENT_BRANCH || {
+                echo "❌ git reset 실패"
+                exit 1
+              }
             }
             
-            echo "🔄 Git clean 실행..."
+            # RAG 문서 동기화 (항상 최신)
+            echo "📚 RAG 문서 동기화 중..."
+            git checkout origin/main -- RAG/ || {
+              echo "⚠️  RAG/ 체크아웃 실패"
+            }
+            
+            # 나머지 필수 파일들 동기화
+            git checkout origin/main -- scripts/ config/ infra/ .github/ || true
+            
             git clean -fd || {
               echo "⚠️  git clean 실패, 계속 진행..."
             }
-            
-            # 동기화 결과 확인
-            echo "✅ 동기화 완료 - 최신 커밋:"
-            git log --oneline -1 || echo "⚠️  git log 실패"
             
             # RAG 인덱싱 실행
             if [ -f "scripts/rag-index.sh" ]; then
@@ -105,7 +104,6 @@ jobs:
   sync-frontend:
     name: Sync to Frontend Server
     runs-on: ubuntu-latest
-    # 모든 push에 대해 항상 실행 (프론트엔드 우선순위)
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     
     steps:
@@ -134,38 +132,34 @@ jobs:
             CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
             echo "📋 현재 브랜치: $CURRENT_BRANCH"
             
-            # Git 동기화 (최신 코드 가져오기)
-            echo "⬇️  최신 코드 가져오는 중..."
-            
-            # Git remote 확인
-            echo "📋 Git remote 확인:"
-            git remote -v || echo "⚠️  git remote 확인 실패"
-            
-            # 현재 상태 확인
-            echo "📋 현재 상태:"
-            git status --short || echo "⚠️  git status 실패"
-            
-            # 최신 코드 가져오기
-            echo "🔄 Git fetch 실행..."
+            # Git pull (최신 코드 가져오기) - 프론트엔드 우선
+            echo "⬇️  최신 코드 가져오는 중 (프론트엔드 우선)..."
             git fetch origin || {
-              echo "❌ git fetch 실패 - SSH 키 또는 권한 확인 필요"
-              exit 1
+              echo "⚠️  git fetch 실패, 계속 진행..."
             }
             
-            echo "🔄 Git reset 실행..."
-            git reset --hard origin/main || {
-              echo "❌ git reset 실패"
-              exit 1
+            # 프론트엔드 코드 우선 동기화
+            echo "📦 프론트엔드 코드 동기화 중..."
+            git checkout origin/main -- frontend/ || {
+              echo "⚠️  frontend/ 체크아웃 실패, 전체 동기화 시도..."
+              git reset --hard origin/main || git reset --hard origin/$CURRENT_BRANCH || {
+                echo "❌ git reset 실패"
+                exit 1
+              }
             }
             
-            echo "🔄 Git clean 실행..."
+            # RAG 문서 동기화 (항상 최신)
+            echo "📚 RAG 문서 동기화 중..."
+            git checkout origin/main -- RAG/ || {
+              echo "⚠️  RAG/ 체크아웃 실패"
+            }
+            
+            # 나머지 필수 파일들 동기화
+            git checkout origin/main -- scripts/ config/ infra/ .github/ || true
+            
             git clean -fd || {
               echo "⚠️  git clean 실패, 계속 진행..."
             }
-            
-            # 동기화 결과 확인
-            echo "✅ 동기화 완료 - 최신 커밋:"
-            git log --oneline -1 || echo "⚠️  git log 실패"
             
             # RAG 인덱싱 실행
             if [ -f "scripts/rag-index.sh" ]; then

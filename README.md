@@ -215,6 +215,18 @@ WebSocket 연결을 효율적으로 관리하여 메모리 사용량 최적화
 ### 6. **Lazy Loading**
 필요한 컴포넌트만 로드하여 초기 번들 크기 감소
 
+### 7. **데이터베이스 인덱스 최적화**
+주요 쿼리 경로에 인덱스 추가로 쿼리 성능 향상
+
+### 8. **메모리 최적화**
+버퍼 풀을 통한 메모리 재사용으로 GC 압력 감소
+
+### 9. **타입 안정성 강화**
+TypeScript 타입 안정성 98%+ 달성으로 런타임 에러 감소
+
+### 10. **로깅 표준화**
+통합 로깅 시스템으로 디버깅 및 모니터링 효율성 향상
+
 ## 🔒 보안 아키텍처
 
 ### 다층 보안 구조
@@ -419,6 +431,13 @@ docker-compose up -d
 - [시작하기](./RAG/02-development/getting-started.md) - 개발 환경 설정
 - [API 문서](./RAG/02-development/api-documentation.md) - Backend API 상세 문서
 - [기여 가이드](./RAG/02-development/contributing.md) - 기여 방법
+
+### ⚡ 최적화 문서
+- [최적화 마스터 인덱스](./RAG/04-operations/optimization-master-index.md) ⭐ - 모든 최적화 문서의 통합 인덱스
+- [최적화 빠른 시작](./RAG/04-operations/optimization-getting-started.md) - 5분 안에 시작하기
+- [최적화 완전 완료 보고서](./RAG/04-operations/optimization-complete-summary.md) - Phase 1-7 요약
+- [최적화 최종 확장 요약](./RAG/04-operations/optimization-final-summary-extended.md) - Phase 1-8 요약
+- [추가 도구 및 유틸리티](./RAG/04-operations/optimization-additional-tools.md) - 성능 측정, 유틸리티 함수
 
 **전체 문서 목록**: [RAG/README.md](./RAG/README.md) 참조
 

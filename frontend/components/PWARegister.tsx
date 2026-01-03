@@ -2,8 +2,14 @@
 
 import { useEffect, useState } from 'react';
 
+// BeforeInstallPromptEvent 타입 정의
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
 export default function PWARegister() {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallButton, setShowInstallButton] = useState(false);
 
   useEffect(() => {
@@ -14,9 +20,7 @@ export default function PWARegister() {
           .register('/sw.js', { scope: '/' })
           .then((registration) => {
             // 프로덕션에서만 로그 출력
-            if (process.env.NODE_ENV === 'production') {
-              console.log('Service Worker registered:', registration);
-            }
+            logger.log('Service Worker registered:', registration);
             
             // 업데이트 확인
             registration.addEventListener('updatefound', () => {
@@ -35,9 +39,7 @@ export default function PWARegister() {
           })
           .catch((error) => {
             // ServiceWorker 등록 실패는 무시 (선택적 기능)
-            if (process.env.NODE_ENV === 'development') {
-              console.warn('Service Worker registration failed:', error);
-            }
+            logger.warn('Service Worker registration failed:', error);
           });
       });
     } else if ('serviceWorker' in navigator) {
@@ -52,7 +54,8 @@ export default function PWARegister() {
     // PWA 설치 프롬프트 가로채기
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e);
+      const promptEvent = e as BeforeInstallPromptEvent;
+      setDeferredPrompt(promptEvent);
       setShowInstallButton(true);
     };
 
@@ -77,9 +80,9 @@ export default function PWARegister() {
     const { outcome } = await deferredPrompt.userChoice;
     
     if (outcome === 'accepted') {
-      console.log('User accepted the install prompt');
+      logger.log('User accepted the install prompt');
     } else {
-      console.log('User dismissed the install prompt');
+      logger.log('User dismissed the install prompt');
     }
     
     setDeferredPrompt(null);

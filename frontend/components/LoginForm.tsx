@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { authAPI, setToken, setTokens } from '../lib/api';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { logger } from '../lib/utils/logger';
 
 export default function LoginForm() {
   const [username, setUsername] = useState('');
@@ -83,9 +84,9 @@ export default function LoginForm() {
     setLoading(true);
 
     try {
-      console.log('[LoginForm] Starting login...');
+      logger.log('[LoginForm] Starting login...');
       const response = await authAPI.login({ username, password });
-      console.log('[LoginForm] Login API response received:', {
+      logger.log('[LoginForm] Login API response received:', {
         hasAccessToken: !!response.access_token,
         hasRefreshToken: !!response.refresh_token,
         expiresIn: response.expires_in,
@@ -98,7 +99,7 @@ export default function LoginForm() {
         // 1. TokenManager에 토큰 저장 (authAPI.login() 내부에서도 저장하지만, 여기서도 명시적으로 저장)
         // authAPI.login()에서 이미 저장했지만, 확실히 하기 위해 다시 저장
         const { tokenManager } = await import('../lib/tokenManager');
-        console.log('[LoginForm] Saving tokens to tokenManager...', {
+        logger.log('[LoginForm] Saving tokens to tokenManager...', {
           accessTokenLength: response.access_token.length,
           refreshTokenLength: response.refresh_token.length,
           expiresIn,
@@ -118,18 +119,22 @@ export default function LoginForm() {
           expiresAt: expiresAtInStorage,
           refreshTokenValue: refreshTokenInStorage ? refreshTokenInStorage.substring(0, 20) + '...' : 'none',
         };
-        console.log('[LoginForm] Tokens saved, verifying...', verifyResult);
+        logger.log('[LoginForm] Tokens saved, verifying...', verifyResult);
         
         // 저장 실패 시 에러
         if (!verifyResult.hasRefreshToken || !verifyResult.refreshTokenInStorage) {
-          console.error('[LoginForm] Token save failed!', verifyResult);
+          logger.error(new Error('[LoginForm] Token save failed!'), {
+            component: 'LoginForm',
+            action: 'token_save',
+            verifyResult,
+          });
           setError('토큰 저장에 실패했습니다. 다시 시도해주세요.');
           setLoading(false);
           return;
         }
         
         // 추가 확인: localStorage에 직접 확인
-        console.log('[LoginForm] Direct localStorage check:', {
+        logger.log('[LoginForm] Direct localStorage check:', {
           refresh_token: localStorage.getItem('refresh_token') ? 'exists' : 'missing',
           token_expires_at: localStorage.getItem('token_expires_at') ? 'exists' : 'missing',
         });
@@ -139,7 +144,7 @@ export default function LoginForm() {
         // 브라우저 쿠키 확인 (로그인 응답 후)
         await new Promise(resolve => setTimeout(resolve, 200)); // 쿠키 설정 대기
         const cookies = document.cookie;
-        console.log('[LoginForm] Browser cookies after login:', {
+        logger.log('[LoginForm] Browser cookies after login:', {
           hasCookies: !!cookies,
           cookieCount: cookies ? cookies.split(';').length : 0,
           cookies: cookies ? cookies.substring(0, 300) : 'none',
@@ -153,25 +158,29 @@ export default function LoginForm() {
         let sessionCreationSuccess = false;
         try {
           const { authAPI } = await import('../lib/api/auth');
-          console.log('[LoginForm] Creating session with tokens...');
+          logger.log('[LoginForm] Creating session with tokens...');
           await authAPI.createSession(response.access_token, response.refresh_token);
           sessionCreationSuccess = true;
-          console.log('[LoginForm] Session created successfully');
+          logger.log('[LoginForm] Session created successfully');
           
           // 세션 생성 후 쿠키가 설정되기를 대기
           await new Promise(resolve => setTimeout(resolve, 200));
-        } catch (sessionError: any) {
-          console.error('[LoginForm] Session creation failed:', {
+        } catch (sessionError: unknown) {
+          const error = sessionError instanceof Error ? sessionError : new Error(String(sessionError));
+          const apiError = sessionError as { status?: number; message?: string; stack?: string };
+          logger.error(new Error('[LoginForm] Session creation failed'), {
+            component: 'LoginForm',
+            action: 'session_creation',
             error: sessionError,
-            message: sessionError?.message,
-            status: sessionError?.status,
-            stack: sessionError?.stack?.substring(0, 500),
+            message: apiError?.message || error.message,
+            status: apiError?.status,
+            stack: apiError?.stack?.substring(0, 500) || error.stack?.substring(0, 500),
           });
           // 세션 생성 실패해도 계속 진행 (재시도 로직에서 처리)
         }
         
         if (!sessionCreationSuccess) {
-          console.warn('[LoginForm] Session creation failed, but will retry verification');
+          logger.warn('[LoginForm] Session creation failed, but will retry verification');
         }
         
         // 4. 세션 생성 완료 확인 (최대 5초 대기, 더 많은 재시도)
@@ -181,7 +190,7 @@ export default function LoginForm() {
             // 쿠키 확인 (개발 환경)
             if (process.env.NODE_ENV === 'development' && i === 0) {
               const cookies = document.cookie;
-              console.log('[LoginForm] Cookies before session check:', {
+              logger.log('[LoginForm] Cookies before session check:', {
                 hasCookies: !!cookies,
                 cookieCount: cookies ? cookies.split(';').length : 0,
                 cookies: cookies ? cookies.substring(0, 200) : 'none',
@@ -197,7 +206,7 @@ export default function LoginForm() {
             });
             
             if (process.env.NODE_ENV === 'development' && i === 0) {
-              console.log('[LoginForm] Session check response:', {
+              logger.log('[LoginForm] Session check response:', {
                 status: sessionCheck.status,
                 ok: sessionCheck.ok,
                 hasSetCookie: sessionCheck.headers.getSetCookie().length > 0,
@@ -208,19 +217,19 @@ export default function LoginForm() {
               const sessionData = await sessionCheck.json();
               if (sessionData.valid === true) {
                 sessionCreated = true;
-                console.log('[LoginForm] Session verified successfully');
+                logger.log('[LoginForm] Session verified successfully');
                 break;
               }
             } else if (sessionCheck.status === 401) {
               // 401이면 세션이 아직 생성되지 않음, 계속 재시도
               if (process.env.NODE_ENV === 'development') {
-                console.log(`[LoginForm] Session not ready yet (attempt ${i + 1}/25)`);
+                logger.log(`[LoginForm] Session not ready yet (attempt ${i + 1}/25)`);
               }
             }
           } catch (err) {
             // 세션 확인 실패는 무시하고 재시도
             if (process.env.NODE_ENV === 'development') {
-              console.warn(`[LoginForm] Session check failed (attempt ${i + 1}/25):`, err);
+              logger.warn(`[LoginForm] Session check failed (attempt ${i + 1}/25):`, err);
             }
           }
           
@@ -229,7 +238,10 @@ export default function LoginForm() {
         }
         
         if (!sessionCreated) {
-          console.error('[LoginForm] Session creation verification failed after 5 seconds');
+          logger.error(new Error('[LoginForm] Session creation verification failed after 5 seconds'), {
+            component: 'LoginForm',
+            action: 'session_verification',
+          });
           setError('로그인에 성공했지만 세션 설정에 실패했습니다. 페이지를 새로고침해주세요.');
           setLoading(false);
           return;
@@ -252,7 +264,7 @@ export default function LoginForm() {
         
         // router.push()를 사용하여 클라이언트 사이드 네비게이션
         // 이렇게 하면 페이지 새로고침 없이 이동하고 콘솔 로그가 유지됨
-        console.log('[LoginForm] Redirecting to /dashboard using router.push()...');
+        logger.log('[LoginForm] Redirecting to /dashboard using router.push()...');
         
         // 리다이렉트 직전 최종 확인
         const refreshTokenValue = localStorage.getItem('refresh_token');
@@ -261,10 +273,14 @@ export default function LoginForm() {
           refreshTokenInStorage: !!refreshTokenValue,
           refreshTokenValue: refreshTokenValue ? refreshTokenValue.substring(0, 20) + '...' : 'none',
         };
-        console.log('[LoginForm] Last check before redirect:', lastCheck);
+        logger.log('[LoginForm] Last check before redirect:', lastCheck);
         
         if (!lastCheck.hasRefreshToken || !lastCheck.refreshTokenInStorage) {
-          console.error('[LoginForm] Token lost before redirect!', lastCheck);
+          logger.error(new Error('[LoginForm] Token lost before redirect!'), {
+            component: 'LoginForm',
+            action: 'redirect',
+            lastCheck,
+          });
           setError('토큰이 사라졌습니다. 다시 시도해주세요.');
           setLoading(false);
           return;
@@ -273,19 +289,21 @@ export default function LoginForm() {
         // 클라이언트 사이드 네비게이션 (페이지 새로고침 없음)
         router.push('/dashboard');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      
       // 네트워크 에러 또는 백엔드 연결 실패 처리
-      if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError') || err.message?.includes('network')) {
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError') || errorMessage.includes('network')) {
         setIsOffline(true);
         setError('백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.');
-      } else if (err.message?.includes('approval') || err.message?.includes('pending')) {
-        setError('Your account is pending admin approval. Please wait for approval.');
-      } else if (err.message?.includes('401') || err.message?.includes('Unauthorized') || err.message?.includes('인증')) {
+      } else if (errorMessage.includes('approval') || errorMessage.includes('pending')) {
+        setError('계정이 관리자 승인 대기 중입니다. 승인을 기다려주세요.');
+      } else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized') || errorMessage.includes('인증')) {
         setError('사용자 이름 또는 비밀번호가 올바르지 않습니다.');
-      } else if (err.message?.includes('403') || err.message?.includes('Forbidden') || err.message?.includes('권한')) {
+      } else if (errorMessage.includes('403') || errorMessage.includes('Forbidden') || errorMessage.includes('권한')) {
         setError('권한이 없습니다. 관리자에게 문의하세요.');
       } else {
-        setError(err.message || '로그인에 실패했습니다. 다시 시도해주세요.');
+        setError(errorMessage || '로그인에 실패했습니다. 다시 시도해주세요.');
       }
       setLoading(false);
     }

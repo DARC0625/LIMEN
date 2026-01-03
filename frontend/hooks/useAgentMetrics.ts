@@ -1,7 +1,7 @@
 // 에이전트 메트릭스 조회 훅 (React Query)
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
 import { useAuth } from '../components/AuthGuard';
+import { useMounted } from './useMounted';
 
 interface AgentMetrics {
   cpu_usage: number;
@@ -16,12 +16,7 @@ interface AgentMetrics {
  */
 export function useAgentMetrics() {
   const { isAuthenticated } = useAuth();
-  const [mounted, setMounted] = useState(false);
-  
-  // React Error #310 완전 해결: 클라이언트 마운트 확인 (hydration mismatch 방지)
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useMounted();
   
   // 서버와 클라이언트 초기 렌더링에서 동일한 값 반환 (false)
   // 마운트 후에만 인증 상태 확인

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/DARC0625/LIMEN/backend/internal/auth"
 	"github.com/DARC0625/LIMEN/backend/internal/config"
@@ -23,6 +24,8 @@ type VMStatusBroadcaster struct {
 	register   chan *websocket.Conn
 	unregister chan *websocket.Conn
 	mu         sync.RWMutex
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
 // NewVMStatusBroadcaster creates a new VMStatusBroadcaster
@@ -35,10 +38,32 @@ func NewVMStatusBroadcaster() *VMStatusBroadcaster {
 	}
 }
 
-// Run starts the broadcaster goroutine
+// Shutdown gracefully shuts down the broadcaster
+func (b *VMStatusBroadcaster) Shutdown() {
+	if b.cancel != nil {
+		b.cancel()
+	}
+}
+
+// Run starts the broadcaster goroutine with context support for graceful shutdown
 func (b *VMStatusBroadcaster) Run() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	b.ctx = ctx
+	b.cancel = cancel
+
 	for {
 		select {
+		case <-ctx.Done():
+			logger.Log.Info("VMStatusBroadcaster shutting down, closing all connections")
+			b.mu.Lock()
+			for conn := range b.clients {
+				conn.Close(websocket.StatusGoingAway, "Server shutting down")
+			}
+			b.clients = make(map[*websocket.Conn]bool)
+			b.mu.Unlock()
+			return
+
 		case conn := <-b.register:
 			b.mu.Lock()
 			b.clients[conn] = true
@@ -57,8 +82,10 @@ func (b *VMStatusBroadcaster) Run() {
 		case message := <-b.broadcast:
 			b.mu.RLock()
 			for conn := range b.clients {
-				// Use background context for broadcast (no timeout)
-				err := conn.Write(context.Background(), websocket.MessageText, message)
+				// Use context with timeout for broadcast
+				writeCtx, writeCancel := context.WithTimeout(ctx, 5*time.Second)
+				err := conn.Write(writeCtx, websocket.MessageText, message)
+				writeCancel()
 				if err != nil {
 					logger.Log.Warn("Failed to send message to WebSocket client", zap.Error(err))
 					b.mu.RUnlock()
