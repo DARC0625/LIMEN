@@ -191,3 +191,5 @@ cd frontend
 **작성자**: AI Assistant  
 **최종 업데이트**: 2025-01-14
 
+
+

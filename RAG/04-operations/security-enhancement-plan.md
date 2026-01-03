@@ -861,3 +861,5 @@ func HandleSuspiciousActivity(userID string, ip string) {
 **검토 필요**: 보안팀 리뷰  
 **업데이트 주기**: 월 1회 또는 보안 이슈 발생 시
 
+
+
