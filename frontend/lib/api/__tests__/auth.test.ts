@@ -56,7 +56,7 @@ describe('authAPI', () => {
         getSetCookie: () => [],
       },
       json: async () => mockResponse,
-    } as Response)
+    } as unknown as Response)
 
     const result = await authAPI.login({
       username: 'testuser',

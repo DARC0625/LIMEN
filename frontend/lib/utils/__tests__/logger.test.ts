@@ -25,7 +25,11 @@ describe('logger', () => {
   });
 
   afterEach(() => {
-    process.env.NODE_ENV = originalEnv;
+    Object.defineProperty(process, 'env', {
+      value: { ...process.env, NODE_ENV: originalEnv },
+      writable: true,
+      configurable: true,
+    });
     jest.resetModules();
     console.log = originalConsoleLog;
     console.warn = originalConsoleWarn;
@@ -35,7 +39,11 @@ describe('logger', () => {
 
   describe('development environment', () => {
     beforeEach(() => {
-      process.env.NODE_ENV = 'development';
+      Object.defineProperty(process, 'env', {
+        value: { ...process.env, NODE_ENV: 'development' },
+        writable: true,
+        configurable: true,
+      });
     });
 
     it('should log to console.log in development', () => {

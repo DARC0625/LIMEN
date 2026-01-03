@@ -21,7 +21,11 @@ describe('errorTracking', () => {
 
   it('tracks error in development', () => {
     const originalEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'development'
+    Object.defineProperty(process, 'env', {
+      value: { ...process.env, NODE_ENV: 'development' },
+      writable: true,
+      configurable: true,
+    })
 
     const error = new Error('Test error')
     const context = { component: 'TestComponent', action: 'test_action' }
@@ -38,7 +42,11 @@ describe('errorTracking', () => {
       }),
     })
 
-    process.env.NODE_ENV = originalEnv
+    Object.defineProperty(process, 'env', {
+      value: { ...process.env, NODE_ENV: originalEnv },
+      writable: true,
+      configurable: true,
+    })
   })
 
   it('skips tracking for 404 errors', () => {
@@ -62,7 +70,11 @@ describe('errorTracking', () => {
 
   it('includes error context', () => {
     const originalEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'development'
+    Object.defineProperty(process, 'env', {
+      value: { ...process.env, NODE_ENV: 'development' },
+      writable: true,
+      configurable: true,
+    })
 
     const error = new Error('Test error')
     const context = {
@@ -84,7 +96,11 @@ describe('errorTracking', () => {
       }),
     })
 
-    process.env.NODE_ENV = originalEnv
+    Object.defineProperty(process, 'env', {
+      value: { ...process.env, NODE_ENV: originalEnv },
+      writable: true,
+      configurable: true,
+    })
   })
 })
 
