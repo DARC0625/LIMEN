@@ -48,6 +48,7 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/handlers"
 	"github.com/DARC0625/LIMEN/backend/internal/hardware"
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
+	"github.com/DARC0625/LIMEN/backend/internal/metrics"
 	"github.com/DARC0625/LIMEN/backend/internal/middleware"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
 	"github.com/DARC0625/LIMEN/backend/internal/router"
