@@ -160,7 +160,7 @@ export default function UserManagementPage() {
   if (error) {
     if (error instanceof Error && (error.message?.includes('403') || error.message?.includes('Forbidden'))) {
       toast.error('Admin access required');
-      router.push('/');
+      router.push('/dashboard');
     }
   }
 
