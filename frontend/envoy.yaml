@@ -60,25 +60,28 @@ static_resources:
                             timeout: 60s
                         # VNC WebSocket 프록시 (백엔드로 직접)
                         # 모든 /vnc/ 요청을 백엔드로 프록시 (WebSocket 업그레이드 자동 처리)
+                        # 정책: idle timeout 1시간, max connection duration 24시간
                         - match:
                             prefix: "/vnc/"
                           route:
                             cluster: backend_cluster
-                            timeout: 604800s  # 7일 = 604800초
+                            timeout: 3600s  # idle timeout: 1시간
+                            max_stream_duration: 86400s  # max connection duration: 24시간
                             host_rewrite_literal: 10.0.0.100
                             upgrade_configs:
                               - upgrade_type: websocket
                         # WebSocket 프록시 (백엔드로 직접)
+                        # 정책: idle timeout 1시간, max connection duration 24시간
                         - match:
                             prefix: "/ws/"
                           route:
                             cluster: backend_cluster
-                            timeout: 604800s  # 7일 = 604800초
+                            timeout: 3600s  # idle timeout: 1시간
+                            max_stream_duration: 86400s  # max connection duration: 24시간
                             host_rewrite_literal: 10.0.0.100
                             # WebSocket upgrade 명시적 설정
                             upgrade_configs:
                               - upgrade_type: websocket
-                            # WebSocket 연결 유지 설정 (timeout으로 대체)
                         # API 프록시 (Next.js middleware를 통해 백엔드로)
                         # 중요: Next.js middleware가 쿠키를 제대로 처리하도록 Next.js로 전달
                         - match:
