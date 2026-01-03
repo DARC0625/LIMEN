@@ -1,3 +1,12 @@
+## 2026-01-03 12:33:38 - frontend
+
+**파일**: `frontend/app/(protected)/admin/users/page.tsx`
+
+**변경 내용**:
+User Management Back 버튼 세션 유지 개선: /dashboard로 직접 이동
+
+---
+
 ## 2026-01-03 12:32:44 - frontend
 
 **파일**: `frontend/app/(protected)/admin/users/page.tsx`
