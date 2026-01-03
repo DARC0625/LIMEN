@@ -11,6 +11,7 @@ import (
 
 	"github.com/DARC0625/LIMEN/backend/internal/database"
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
+	"github.com/DARC0625/LIMEN/backend/internal/metrics"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
 	"go.uber.org/zap"
 )
@@ -114,6 +115,9 @@ func (sm *SessionManager) CreateSession(userID, vmID uint, vmUUID, clientIP, use
 	sm.activeSessions[sessionID] = sess
 	sm.userSessions[userID] = append(sm.userSessions[userID], sessionID)
 
+	// Update active sessions metric
+	metrics.ConsoleActiveSessions.Set(float64(len(sm.activeSessions)))
+
 	// Save to database
 	dbSession := models.ConsoleSession{
 		SessionID:      sessionID,
@@ -176,6 +180,9 @@ func (sm *SessionManager) EndSession(sessionID, reason string) error {
 
 	// Remove from active sessions
 	delete(sm.activeSessions, sessionID)
+
+	// Update active sessions metric
+	metrics.ConsoleActiveSessions.Set(float64(len(sm.activeSessions)))
 
 	// Remove from user sessions
 	userSessions := sm.userSessions[sess.UserID]
@@ -265,11 +272,14 @@ func (sm *SessionManager) cleanupExpiredSessions() {
 		}
 	}
 
-	// End expired sessions
-	for _, sid := range expired {
-		sess := sm.activeSessions[sid]
-		sess.cancel()
-		delete(sm.activeSessions, sid)
+		// End expired sessions
+		for _, sid := range expired {
+			sess := sm.activeSessions[sid]
+			sess.cancel()
+			delete(sm.activeSessions, sid)
+
+			// Update active sessions metric
+			metrics.ConsoleActiveSessions.Set(float64(len(sm.activeSessions)))
 
 		// Remove from user sessions
 		userSessions := sm.userSessions[sess.UserID]

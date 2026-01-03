@@ -92,6 +92,7 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 			// Use same error message as invalid password to prevent user enumeration
 			// But still record failed attempt for security monitoring
 			security.RecordFailedLogin(r.Context(), 0, r.RemoteAddr)
+			metrics.AuthFailureTotal.WithLabelValues("invalid_credentials").Inc()
 			errors.WriteUnauthorized(w, "Invalid credentials")
 		} else {
 			logger.Log.Error("Failed to find user", zap.Error(err))
@@ -134,6 +135,8 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 		// Use same generic error message (zero-trust: don't reveal which part failed)
 		// Audit log: login failure
 		audit.LogLogin(r.Context(), user.ID, user.Username, string(user.Role), false, "Invalid password")
+		// Increment auth failure metric
+		metrics.AuthFailureTotal.WithLabelValues("invalid_password").Inc()
 		errors.WriteUnauthorized(w, "Invalid credentials")
 		return
 	}

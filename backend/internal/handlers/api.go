@@ -330,6 +330,12 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 				zap.Uint("user_id", userID),
 				zap.String("vm_name", req.Name),
 				zap.Error(err))
+			// Increment quota denied metric
+			if quotaErr, ok := err.(*models.QuotaError); ok {
+				metrics.VMQuotaDeniedTotal.WithLabelValues(quotaErr.Resource, fmt.Sprintf("%d", userID)).Inc()
+			} else {
+				metrics.VMQuotaDeniedTotal.WithLabelValues("VM_ResourceLimits", fmt.Sprintf("%d", userID)).Inc()
+			}
 			errors.WriteBadRequest(w, err.Error(), nil)
 			return
 		}
@@ -342,6 +348,8 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 					zap.Uint("user_id", userID),
 					zap.String("vm_name", req.Name),
 					zap.String("resource", quotaErr.Resource))
+				// Increment quota denied metric
+				metrics.VMQuotaDeniedTotal.WithLabelValues(quotaErr.Resource, fmt.Sprintf("%d", userID)).Inc()
 				errors.WriteBadRequest(w, quotaErr.Error(), nil)
 			} else {
 				errors.WriteInternalError(w, err, cfg.Env == "development")
@@ -359,6 +367,8 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 
 		if err := quota.CheckQuota(h.DB, req.CPU, req.Memory); err != nil {
 			if quotaErr, ok := err.(*models.QuotaError); ok {
+				// Increment quota denied metric
+				metrics.VMQuotaDeniedTotal.WithLabelValues(quotaErr.Resource, fmt.Sprintf("%d", userID)).Inc()
 				errors.WriteBadRequest(w, quotaErr.Error(), nil)
 			} else {
 				errors.WriteInternalError(w, err, cfg.Env == "development")

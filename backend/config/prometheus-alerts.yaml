@@ -1,0 +1,95 @@
+groups:
+  - name: limen_backend_alerts
+    interval: 30s
+    rules:
+      # Alert 1: API 5xx 급증
+      - alert: High5xxErrorRate
+        expr: |
+          rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "High 5xx error rate detected"
+          description: "5xx error rate is {{ $value }} errors/sec (threshold: 0.1/sec) for the last 5 minutes"
+          runbook_url: "https://github.com/DARC0625/LIMEN/wiki/Runbook-High5xxErrorRate"
+
+      # Alert 2: 로그인 실패 급증
+      - alert: HighAuthFailureRate
+        expr: |
+          rate(auth_failure_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+          component: auth
+        annotations:
+          summary: "High authentication failure rate detected"
+          description: "Authentication failure rate is {{ $value }} failures/sec (threshold: 5/sec) for the last 5 minutes. Possible brute force attack."
+          runbook_url: "https://github.com/DARC0625/LIMEN/wiki/Runbook-HighAuthFailureRate"
+
+      # Alert 3: 콘솔 세션 수 급증
+      - alert: HighConsoleSessionCount
+        expr: |
+          console_active_sessions > 50
+        for: 5m
+        labels:
+          severity: warning
+          component: console
+        annotations:
+          summary: "High number of active console sessions"
+          description: "Active console sessions: {{ $value }} (threshold: 50). Possible resource exhaustion."
+          runbook_url: "https://github.com/DARC0625/LIMEN/wiki/Runbook-HighConsoleSessionCount"
+
+      # Alert 4: 호스트 자원 부족 (CPU)
+      - alert: HighHostCPUUsage
+        expr: |
+          host_cpu_usage_percent > 90
+        for: 5m
+        labels:
+          severity: warning
+          component: host
+        annotations:
+          summary: "High host CPU usage"
+          description: "Host CPU usage is {{ $value }}% (threshold: 90%) for the last 5 minutes"
+          runbook_url: "https://github.com/DARC0625/LIMEN/wiki/Runbook-HighHostCPUUsage"
+
+      # Alert 4b: 호스트 자원 부족 (Memory)
+      - alert: HighHostMemoryUsage
+        expr: |
+          host_memory_usage_percent > 90
+        for: 5m
+        labels:
+          severity: warning
+          component: host
+        annotations:
+          summary: "High host memory usage"
+          description: "Host memory usage is {{ $value }}% (threshold: 90%) for the last 5 minutes"
+          runbook_url: "https://github.com/DARC0625/LIMEN/wiki/Runbook-HighHostMemoryUsage"
+
+      # Alert 4c: 호스트 자원 부족 (Disk)
+      - alert: HighHostDiskUsage
+        expr: |
+          host_disk_usage_percent > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: host
+        annotations:
+          summary: "High host disk usage"
+          description: "Host disk usage is {{ $value }}% (threshold: 85%) for the last 5 minutes"
+          runbook_url: "https://github.com/DARC0625/LIMEN/wiki/Runbook-HighHostDiskUsage"
+
+      # Additional: Quota 거부 급증
+      - alert: HighQuotaDenialRate
+        expr: |
+          rate(vm_quota_denied_total[5m]) > 2
+        for: 2m
+        labels:
+          severity: info
+          component: quota
+        annotations:
+          summary: "High quota denial rate"
+          description: "Quota denial rate is {{ $value }} denials/sec (threshold: 2/sec) for the last 5 minutes"
+          runbook_url: "https://github.com/DARC0625/LIMEN/wiki/Runbook-HighQuotaDenialRate"
+

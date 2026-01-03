@@ -195,6 +195,54 @@ var (
 		},
 		[]string{"endpoint", "method"},
 	)
+
+	// Quota metrics
+	VMQuotaDeniedTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vm_quota_denied_total",
+			Help: "Total number of VM creation requests denied due to quota limits",
+		},
+		[]string{"resource", "user_id"}, // resource: VMs, CPU, Memory, Disk
+	)
+
+	// Console session metrics
+	ConsoleActiveSessions = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "console_active_sessions",
+			Help: "Current number of active console sessions",
+		},
+	)
+
+	// Authentication metrics
+	AuthFailureTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "auth_failure_total",
+			Help: "Total number of authentication failures",
+		},
+		[]string{"reason"}, // reason: invalid_credentials, token_expired, etc.
+	)
+
+	// Host resource metrics
+	HostCPUUsage = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "host_cpu_usage_percent",
+			Help: "Host CPU usage percentage",
+		},
+	)
+
+	HostMemoryUsage = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "host_memory_usage_percent",
+			Help: "Host memory usage percentage",
+		},
+	)
+
+	HostDiskUsage = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "host_disk_usage_percent",
+			Help: "Host disk usage percentage",
+		},
+	)
 )
 
 // UpdateVMMetrics updates VM-related metrics based on current state.
