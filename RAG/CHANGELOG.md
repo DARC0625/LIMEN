@@ -1,3 +1,12 @@
+## 2026-01-03 12:32:44 - frontend
+
+**파일**: `frontend/app/(protected)/admin/users/page.tsx`
+
+**변경 내용**:
+User Management 페이지 버튼 정렬 개선
+
+---
+
 ## 2026-01-03 12:31:11 - frontend
 
 **파일**: `frontend/hooks/useVMs.ts`

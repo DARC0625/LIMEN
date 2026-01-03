@@ -178,7 +178,15 @@ export default function UserManagementPage() {
     <div className="min-h-screen p-4 sm:p-6 md:p-8 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans transition-colors">
       <main className="max-w-7xl mx-auto flex flex-col gap-4 sm:gap-6 md:gap-8">
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-200 dark:border-gray-700 pb-4">
-          <h1 className="text-2xl sm:text-3xl font-bold">User Management</h1>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => router.push('/')}
+              className="px-3 py-1 text-sm bg-gray-500 dark:bg-gray-600 text-white rounded hover:bg-gray-600 dark:hover:bg-gray-700 transition-colors"
+            >
+              ← Back to Dashboard
+            </button>
+            <h1 className="text-2xl sm:text-3xl font-bold">User Management</h1>
+          </div>
           <div className="flex items-center gap-4">
             <div className="relative create-user-popup-container">
               <button
@@ -244,12 +252,6 @@ export default function UserManagementPage() {
                 </div>
               )}
             </div>
-            <button
-              onClick={() => router.push('/')}
-              className="px-3 py-1 text-sm bg-gray-500 dark:bg-gray-600 text-white rounded hover:bg-gray-600 dark:hover:bg-gray-700 transition-colors"
-            >
-              ← Back to Dashboard
-            </button>
           </div>
         </header>
 
@@ -309,7 +311,7 @@ export default function UserManagementPage() {
                       {new Date(user.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex gap-2 flex-wrap">
+                      <div className="flex gap-2 flex-wrap items-center">
                         {!user.approved && (
                           <button
                             onClick={() => handleApproveUser(user.id)}
@@ -320,19 +322,19 @@ export default function UserManagementPage() {
                         )}
                         <button
                           onClick={() => handleToggleExpand(user.id)}
-                          className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+                          className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors whitespace-nowrap"
                         >
                           {expandedUser === user.id ? 'Hide' : 'Details'}
                         </button>
                         <button
                           onClick={() => setEditingUser(user.id)}
-                          className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                          className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors whitespace-nowrap"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleDeleteUser(user.id, user.username)}
-                          className="px-3 py-1 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
+                          className="px-3 py-1 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded hover:bg-red-200 dark:hover:bg-red-800 transition-colors whitespace-nowrap"
                         >
                           Delete
                         </button>
