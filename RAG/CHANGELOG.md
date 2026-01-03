@@ -1,3 +1,12 @@
+## 2026-01-03 12:31:11 - frontend
+
+**파일**: `frontend/hooks/useVMs.ts`
+
+**변경 내용**:
+VM 시작 실패 감지 및 에러 처리 개선
+
+---
+
 ## 2026-01-03 12:26:15 - frontend
 
 **파일**: `frontend/components/VNCViewer.tsx,frontend/lib/auth/index.ts,frontend/components/AuthGuard.tsx`
