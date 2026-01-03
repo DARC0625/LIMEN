@@ -180,6 +180,7 @@ func IsPublicEndpoint(path string) bool {
 		"/api/auth/register",
 		"/api/auth/session", // Session management endpoints (GET, POST, DELETE)
 		"/api/auth/refresh", // Token refresh endpoint
+		"/api/public/waitlist", // Public waitlist registration (no auth required)
 		"/agent",            // Agent reverse-proxy path (public metrics)
 		"/apiauth/login",    // Handle Envoy rewrite issue
 		"/apiauth/register", // Handle Envoy rewrite issue

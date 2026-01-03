@@ -26,6 +26,9 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *chi.Mux {
 	api.Get("/health", h.HandleHealth)
 	api.Get("/health_proxy", h.HandleHealth) // Health check proxy endpoint (for Next.js rewrites)
 	api.Get("/metrics", h.HandleMetrics)     // Prometheus metrics endpoint
+	api.Post("/public/waitlist", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleWaitlist(w, r, cfg)
+	}) // Public waitlist registration (no auth required)
 
 	// Swagger documentation endpoints
 	// http-swagger handles /swagger/doc.json automatically

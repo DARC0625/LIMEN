@@ -48,6 +48,7 @@ func Connect(cfg *config.Config) error {
 		&models.ConsoleSession{},
 		&models.UserQuota{},
 		&models.AuditLog{},
+		&models.Waitlist{},
 	)
 	if err != nil {
 		return err
