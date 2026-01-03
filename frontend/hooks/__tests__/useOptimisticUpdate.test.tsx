@@ -4,7 +4,7 @@
 
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+import type { ReactNode, JSX } from 'react'
 import { useOptimisticUpdate } from '../useOptimisticUpdate'
 
 describe('useOptimisticUpdate', () => {

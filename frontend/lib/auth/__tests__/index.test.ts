@@ -65,7 +65,7 @@ describe('checkAuth', () => {
         getSetCookie: () => [],
       },
       json: async () => ({ valid: false, reason: 'Session expired' }),
-    } as Response)
+    } as unknown as Response)
 
     const result = await checkAuth()
 

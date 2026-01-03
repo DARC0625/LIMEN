@@ -98,7 +98,11 @@ describe('logger', () => {
 
   describe('production environment', () => {
     beforeEach(() => {
-      process.env.NODE_ENV = 'production';
+      Object.defineProperty(process, 'env', {
+        value: { ...process.env, NODE_ENV: 'production' },
+        writable: true,
+        configurable: true,
+      });
     });
 
     it('should not log to console.log in production', () => {
