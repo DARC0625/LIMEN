@@ -189,9 +189,25 @@ describe('useVMAction', () => {
 
   it('should start VM successfully', async () => {
     const uuid = 'vm-uuid-123'
-    mockVMAPI.action = jest.fn().mockResolvedValue(undefined)
+    const mockVM = { uuid, name: 'Test VM', status: 'Running', cpu: 2, memory: 4096 }
+    mockVMAPI.action = jest.fn().mockResolvedValue(mockVM)
 
-    const { result } = renderHook(() => useVMAction(), { wrapper: createWrapper() })
+    // QueryClient에 초기 VM 데이터 설정
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    queryClient.setQueryData(['vms'], [{ uuid, name: 'Test VM', status: 'Stopped', cpu: 2, memory: 4096 }])
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    )
+
+    const { result } = renderHook(() => useVMAction(), { wrapper })
 
     result.current.mutate({ uuid, action: 'start' })
 
@@ -204,9 +220,25 @@ describe('useVMAction', () => {
 
   it('should stop VM successfully', async () => {
     const uuid = 'vm-uuid-123'
-    mockVMAPI.action = jest.fn().mockResolvedValue(undefined)
+    const mockVM = { uuid, name: 'Test VM', status: 'Stopped', cpu: 2, memory: 4096 }
+    mockVMAPI.action = jest.fn().mockResolvedValue(mockVM)
 
-    const { result } = renderHook(() => useVMAction(), { wrapper: createWrapper() })
+    // QueryClient에 초기 VM 데이터 설정
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    queryClient.setQueryData(['vms'], [{ uuid, name: 'Test VM', status: 'Running', cpu: 2, memory: 4096 }])
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    )
+
+    const { result } = renderHook(() => useVMAction(), { wrapper })
 
     result.current.mutate({ uuid, action: 'stop' })
 
@@ -232,6 +264,174 @@ describe('useVMAction', () => {
     }, { timeout: 3000 })
 
     expect(result.current.error).toBe(error)
+  })
+
+  it('should delete VM successfully', async () => {
+    const uuid = 'vm-uuid-123'
+    const mockVM = { uuid, name: 'Test VM', status: 'Stopped', cpu: 2, memory: 4096, disk: 20480 }
+    mockVMAPI.action = jest.fn().mockResolvedValue(mockVM)
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    queryClient.setQueryData(['vms'], [mockVM])
+    queryClient.setQueryData(['quota'], {
+      usage: { vms: 1, cpu: 2, memory: 4096 },
+      limit: { vms: 10, cpu: 20, memory: 81920 },
+    })
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    )
+
+    const { result } = renderHook(() => useVMAction(), { wrapper })
+
+    result.current.mutate({ uuid, action: 'delete' })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(mockVMAPI.action).toHaveBeenCalledWith(uuid, 'delete', {})
+  })
+
+  it('should restart VM successfully', async () => {
+    const uuid = 'vm-uuid-123'
+    const mockVM = { uuid, name: 'Test VM', status: 'Restarting', cpu: 2, memory: 4096 }
+    mockVMAPI.action = jest.fn().mockResolvedValue(mockVM)
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    queryClient.setQueryData(['vms'], [{ uuid, name: 'Test VM', status: 'Running', cpu: 2, memory: 4096 }])
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    )
+
+    const { result } = renderHook(() => useVMAction(), { wrapper })
+
+    result.current.mutate({ uuid, action: 'restart' })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(mockVMAPI.action).toHaveBeenCalledWith(uuid, 'restart', {})
+  })
+
+  it('should update VM successfully', async () => {
+    const uuid = 'vm-uuid-123'
+    const mockVM = { uuid, name: 'Updated VM', status: 'Running', cpu: 4, memory: 8192 }
+    mockVMAPI.action = jest.fn().mockResolvedValue(mockVM)
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    queryClient.setQueryData(['vms'], [{ uuid, name: 'Test VM', status: 'Running', cpu: 2, memory: 4096 }])
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    )
+
+    const { result } = renderHook(() => useVMAction(), { wrapper })
+
+    result.current.mutate({ uuid, action: 'update', cpu: 4, memory: 8192, name: 'Updated VM' })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(mockVMAPI.action).toHaveBeenCalledWith(uuid, 'update', { cpu: 4, memory: 8192, name: 'Updated VM' })
+  })
+
+  it('should handle optimistic updates for delete', async () => {
+    const uuid = 'vm-uuid-123'
+    const mockVM = { uuid, name: 'Test VM', status: 'Stopped', cpu: 2, memory: 4096, disk: 20480 }
+    mockVMAPI.action = jest.fn().mockResolvedValue(mockVM)
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    queryClient.setQueryData(['vms'], [mockVM])
+    queryClient.setQueryData(['quota'], {
+      usage: { vms: 1, cpu: 2, memory: 4096 },
+      limit: { vms: 10, cpu: 20, memory: 81920 },
+    })
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    )
+
+    const { result } = renderHook(() => useVMAction(), { wrapper })
+
+    result.current.mutate({ uuid, action: 'delete' })
+
+    // Optimistic update 확인
+    await waitFor(() => {
+      const vms = queryClient.getQueryData(['vms']) as any[]
+      expect(vms).toEqual([])
+    }, { timeout: 1000 })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+  })
+
+  it('should rollback optimistic updates on error', async () => {
+    const uuid = 'vm-uuid-123'
+    const mockVM = { uuid, name: 'Test VM', status: 'Running', cpu: 2, memory: 4096 }
+    const error = new Error('Failed to delete VM')
+    mockVMAPI.action = jest.fn().mockRejectedValue(error)
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    queryClient.setQueryData(['vms'], [mockVM])
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    )
+
+    const { result } = renderHook(() => useVMAction(), { wrapper })
+
+    result.current.mutate({ uuid, action: 'delete' })
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true)
+    }, { timeout: 3000 })
+
+    // 롤백 확인
+    await waitFor(() => {
+      const vms = queryClient.getQueryData(['vms']) as any[]
+      expect(vms).toHaveLength(1)
+      expect(vms[0].uuid).toBe(uuid)
+    }, { timeout: 2000 })
   })
 })
 

@@ -81,6 +81,43 @@ describe('security', () => {
 
       expect(validateTokenIntegrity(token)).toBe(true)
     })
+
+    it('returns false for invalid header', () => {
+      const header = btoa('invalid-json')
+      const payload = btoa(JSON.stringify({ sub: 'user123' }))
+      const signature = 'signature'
+      const token = `${header}.${payload}.${signature}`
+
+      expect(validateTokenIntegrity(token)).toBe(false)
+    })
+
+    it('returns false for invalid payload', () => {
+      const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+      const payload = btoa('invalid-json')
+      const signature = 'signature'
+      const token = `${header}.${payload}.${signature}`
+
+      expect(validateTokenIntegrity(token)).toBe(false)
+    })
+
+    it('returns false for invalid exp type', () => {
+      const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+      const payload = btoa(JSON.stringify({ sub: 'user123', exp: 'invalid' }))
+      const signature = 'signature'
+      const token = `${header}.${payload}.${signature}`
+
+      expect(validateTokenIntegrity(token)).toBe(false)
+    })
+
+    it('handles base64 URL encoding', () => {
+      // JWT는 base64url 인코딩을 사용하므로 -와 _를 처리해야 함
+      const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).replace(/\+/g, '-').replace(/\//g, '_')
+      const payload = btoa(JSON.stringify({ sub: 'user123' })).replace(/\+/g, '-').replace(/\//g, '_')
+      const signature = 'signature'
+      const token = `${header}.${payload}.${signature}`
+
+      expect(validateTokenIntegrity(token)).toBe(true)
+    })
   })
 
   describe('forceLogout', () => {
@@ -97,17 +134,51 @@ describe('security', () => {
       )
     })
 
-    it('logs logout event on client side', () => {
+    it('removes token when reason includes expired', () => {
       localStorage.setItem('auth_token', 'test-token')
+      localStorage.setItem('auth_token_timestamp', '123456')
+
+      forceLogout('토큰이 만료되었습니다')
+
+      expect(localStorage.getItem('auth_token')).toBeNull()
+      expect(localStorage.getItem('auth_token_timestamp')).toBeNull()
+    })
+
+    it('removes token when reason includes invalid', () => {
+      localStorage.setItem('auth_token', 'test-token')
+      localStorage.setItem('auth_token_timestamp', '123456')
+
+      forceLogout('invalid token')
+
+      expect(localStorage.getItem('auth_token')).toBeNull()
+      expect(localStorage.getItem('auth_token_timestamp')).toBeNull()
+    })
+
+    it('does not remove token for other reasons', () => {
+      localStorage.setItem('auth_token', 'test-token')
+      localStorage.setItem('auth_token_timestamp', '123456')
+
+      forceLogout('normal logout')
+
+      expect(localStorage.getItem('auth_token')).toBe('test-token')
+      expect(localStorage.getItem('auth_token_timestamp')).toBe('123456')
+    })
+
+    it('sends broadcast message', () => {
+      const mockChannel = {
+        postMessage: jest.fn(),
+        close: jest.fn(),
+      }
+      global.BroadcastChannel = jest.fn().mockImplementation(() => mockChannel) as any
 
       forceLogout('test reason')
 
-      expect(logger.warn).toHaveBeenCalledWith(
-        '[Security Log] Logout event detected:',
-        expect.objectContaining({
-          reason: 'test reason',
-        })
-      )
+      expect(mockChannel.postMessage).toHaveBeenCalledWith({
+        type: 'AUTH_EVENT',
+        reason: 'test reason',
+        action: 'log',
+      })
+      expect(mockChannel.close).toHaveBeenCalled()
     })
   })
 
@@ -119,6 +190,26 @@ describe('security', () => {
 
       // 차단 플래그가 제거되었는지 확인
       expect(localStorage.getItem('account_blocked')).toBeNull()
+    })
+
+    it('removes all block flags', () => {
+      localStorage.setItem('account_blocked', 'true')
+      localStorage.setItem('user_blocked', 'true')
+      localStorage.setItem('admin_blocked', 'true')
+      localStorage.setItem('security_block', 'true')
+      localStorage.setItem('rate_limit_blocked', 'true')
+      localStorage.setItem('fingerprint_blocked', 'true')
+      sessionStorage.setItem('logout_redirect', 'true')
+
+      checkAndUnblockAccount()
+
+      expect(localStorage.getItem('account_blocked')).toBeNull()
+      expect(localStorage.getItem('user_blocked')).toBeNull()
+      expect(localStorage.getItem('admin_blocked')).toBeNull()
+      expect(localStorage.getItem('security_block')).toBeNull()
+      expect(localStorage.getItem('rate_limit_blocked')).toBeNull()
+      expect(localStorage.getItem('fingerprint_blocked')).toBeNull()
+      expect(sessionStorage.getItem('logout_redirect')).toBeNull()
     })
   })
 
@@ -149,6 +240,23 @@ describe('security', () => {
 
   describe('detectAbnormalActivity', () => {
     it('returns false for normal activity', () => {
+      const result = detectAbnormalActivity()
+
+      expect(result.isAbnormal).toBe(false)
+    })
+
+    it('logs warning for invalid token but does not block', () => {
+      localStorage.setItem('auth_token', 'invalid.token.format')
+
+      const result = detectAbnormalActivity()
+
+      expect(result.isAbnormal).toBe(false)
+      expect(logger.warn).toHaveBeenCalled()
+    })
+
+    it('returns false when no token exists', () => {
+      localStorage.removeItem('auth_token')
+
       const result = detectAbnormalActivity()
 
       expect(result.isAbnormal).toBe(false)

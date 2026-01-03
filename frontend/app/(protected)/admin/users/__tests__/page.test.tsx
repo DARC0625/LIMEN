@@ -80,7 +80,7 @@ describe('User Management Page', () => {
     render(<UserManagementPage />)
 
     await waitFor(() => {
-      expect(mockRouter.push).toHaveBeenCalledWith('/')
+      expect(mockRouter.push).toHaveBeenCalledWith('/dashboard')
     }, { timeout: 3000 })
   })
 })
