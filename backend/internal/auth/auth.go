@@ -23,11 +23,12 @@ var (
 
 // RefreshTokenClaims represents JWT claims for refresh tokens.
 type RefreshTokenClaims struct {
-	UserID   uint   `json:"user_id"`
-	Username string `json:"username"`
-	Role     string `json:"role"`
-	Approved bool   `json:"approved"`
-	TokenID  string `json:"token_id"` // Unique token ID for rotation
+	UserID     uint   `json:"user_id"`
+	Username   string `json:"username"`
+	Role       string `json:"role"`
+	Approved   bool   `json:"approved"`
+	BetaAccess bool   `json:"beta_access"` // Beta access permission
+	TokenID    string `json:"token_id"`    // Unique token ID for rotation
 	jwt.RegisteredClaims
 }
 
@@ -60,10 +61,11 @@ func CheckPassword(password, hash string) bool {
 
 // Claims represents JWT claims.
 type Claims struct {
-	UserID   uint   `json:"user_id"`
-	Username string `json:"username"`
-	Role     string `json:"role"`     // User role: admin or user
-	Approved bool   `json:"approved"` // User approval status
+	UserID     uint   `json:"user_id"`
+	Username   string `json:"username"`
+	Role       string `json:"role"`        // User role: admin or user
+	Approved   bool   `json:"approved"`    // User approval status
+	BetaAccess bool   `json:"beta_access"` // Beta access permission
 	jwt.RegisteredClaims
 }
 
@@ -132,12 +134,18 @@ func ExtractTokenFromHeader(authHeader string) (string, error) {
 
 // GenerateAccessToken generates a short-lived access token (15 minutes).
 func GenerateAccessToken(userID uint, username, role string, approved bool, secret string) (string, error) {
+	return GenerateAccessTokenWithBetaAccess(userID, username, role, approved, false, secret)
+}
+
+// GenerateAccessTokenWithBetaAccess generates a short-lived access token with beta access flag.
+func GenerateAccessTokenWithBetaAccess(userID uint, username, role string, approved, betaAccess bool, secret string) (string, error) {
 	expirationTime := time.Now().Add(15 * time.Minute) // 15 minutes
 	claims := &Claims{
-		UserID:   userID,
-		Username: username,
-		Role:     role,
-		Approved: approved,
+		UserID:     userID,
+		Username:   username,
+		Role:       role,
+		Approved:   approved,
+		BetaAccess: betaAccess,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -151,6 +159,11 @@ func GenerateAccessToken(userID uint, username, role string, approved bool, secr
 
 // GenerateRefreshToken generates a long-lived refresh token (7 days).
 func GenerateRefreshToken(userID uint, username, role string, approved bool, secret string) (string, string, error) {
+	return GenerateRefreshTokenWithBetaAccess(userID, username, role, approved, false, secret)
+}
+
+// GenerateRefreshTokenWithBetaAccess generates a long-lived refresh token with beta access flag.
+func GenerateRefreshTokenWithBetaAccess(userID uint, username, role string, approved, betaAccess bool, secret string) (string, string, error) {
 	// Generate unique token ID for rotation
 	tokenID, err := generateTokenID()
 	if err != nil {
@@ -159,11 +172,12 @@ func GenerateRefreshToken(userID uint, username, role string, approved bool, sec
 
 	expirationTime := time.Now().Add(7 * 24 * time.Hour) // 7 days
 	claims := &RefreshTokenClaims{
-		UserID:   userID,
-		Username: username,
-		Role:     role,
-		Approved: approved,
-		TokenID:  tokenID,
+		UserID:     userID,
+		Username:   username,
+		Role:       role,
+		Approved:   approved,
+		BetaAccess: betaAccess,
+		TokenID:    tokenID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

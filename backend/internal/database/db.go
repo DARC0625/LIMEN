@@ -39,7 +39,16 @@ func Connect(cfg *config.Config) error {
 	sqlDB.SetConnMaxIdleTime(5 * time.Minute)  // Reduced from 10 minutes for faster cleanup
 
 	// Migrate the schema
-	err = DB.AutoMigrate(&models.User{}, &models.VM{}, &models.VMImage{}, &models.VMSnapshot{}, &models.ResourceQuota{})
+	err = DB.AutoMigrate(
+		&models.User{},
+		&models.VM{},
+		&models.VMImage{},
+		&models.VMSnapshot{},
+		&models.ResourceQuota{},
+		&models.ConsoleSession{},
+		&models.UserQuota{},
+		&models.AuditLog{},
+	)
 	if err != nil {
 		return err
 	}

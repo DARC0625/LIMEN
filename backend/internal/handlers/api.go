@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/DARC0625/LIMEN/backend/internal/audit"
 	"github.com/DARC0625/LIMEN/backend/internal/auth"
 	"github.com/DARC0625/LIMEN/backend/internal/cache"
 	"github.com/DARC0625/LIMEN/backend/internal/config"
@@ -19,6 +20,8 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/metrics"
 	"github.com/DARC0625/LIMEN/backend/internal/middleware"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
+	"github.com/DARC0625/LIMEN/backend/internal/ratelimit"
+	"github.com/DARC0625/LIMEN/backend/internal/session"
 	"github.com/DARC0625/LIMEN/backend/internal/validator"
 	"github.com/DARC0625/LIMEN/backend/internal/vm"
 	"github.com/go-chi/chi/v5"
@@ -260,7 +263,93 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 			userID = 1 // Fallback to admin if not authenticated (for backward compatibility)
 		}
 
-		// Check system-wide resource quota
+		// Check beta access (admin always has access)
+		role, _ := middleware.GetRole(r.Context())
+		if role != string(models.RoleAdmin) {
+			// Check beta access from token
+			authHeader := r.Header.Get("Authorization")
+			if tokenString, err := auth.ExtractTokenFromHeader(authHeader); err == nil {
+				if claims, err := auth.ValidateToken(tokenString, h.Config.JWTSecret); err == nil {
+					if !claims.BetaAccess {
+						logger.Log.Warn("VM creation denied - beta access required",
+							zap.Uint("user_id", userID),
+							zap.String("vm_name", req.Name))
+						errors.WriteForbidden(w, "Beta access required to create VMs. Please contact administrator.")
+						return
+					}
+				} else {
+					// Fallback: check database
+					var user models.User
+					if err := h.DB.Select("id", "beta_access", "role").Where("id = ?", userID).First(&user).Error; err == nil {
+						if user.Role != models.RoleAdmin && !user.BetaAccess {
+							logger.Log.Warn("VM creation denied - beta access required",
+								zap.Uint("user_id", userID),
+								zap.String("vm_name", req.Name))
+							errors.WriteForbidden(w, "Beta access required to create VMs. Please contact administrator.")
+							return
+						}
+					}
+				}
+			} else {
+				// Fallback: check database
+				var user models.User
+				if err := h.DB.Select("id", "beta_access", "role").Where("id = ?", userID).First(&user).Error; err == nil {
+					if user.Role != models.RoleAdmin && !user.BetaAccess {
+						logger.Log.Warn("VM creation denied - beta access required",
+							zap.Uint("user_id", userID),
+							zap.String("vm_name", req.Name))
+						errors.WriteForbidden(w, "Beta access required to create VMs. Please contact administrator.")
+						return
+					}
+				}
+			}
+		}
+
+		// Check VM creation rate limit
+		vmLimiter := ratelimit.GetVMCreationLimiter()
+		if err := vmLimiter.CheckRateLimit(userID); err != nil {
+			logger.Log.Warn("VM creation rate limit exceeded",
+				zap.Uint("user_id", userID),
+				zap.String("vm_name", req.Name),
+				zap.Error(err))
+			errors.WriteTooManyRequests(w, err.Error())
+			return
+		}
+
+		// Check user-specific quota
+		userQuota, err := models.GetOrCreateUserQuota(h.DB, userID)
+		if err != nil {
+			logger.Log.Error("Failed to get user quota", zap.Error(err))
+			errors.WriteInternalError(w, err, cfg.Env == "development")
+			return
+		}
+
+		// Check individual VM resource limits
+		if err := userQuota.CheckVMResourceLimits(req.CPU, req.Memory); err != nil {
+			logger.Log.Warn("VM resource limits exceeded",
+				zap.Uint("user_id", userID),
+				zap.String("vm_name", req.Name),
+				zap.Error(err))
+			errors.WriteBadRequest(w, err.Error(), nil)
+			return
+		}
+
+		// Check user quota (total resources)
+		diskSize := 20 // Default disk size in GB
+		if err := userQuota.CheckUserQuota(h.DB, req.CPU, req.Memory, diskSize); err != nil {
+			if quotaErr, ok := err.(*models.QuotaError); ok {
+				logger.Log.Warn("User quota exceeded",
+					zap.Uint("user_id", userID),
+					zap.String("vm_name", req.Name),
+					zap.String("resource", quotaErr.Resource))
+				errors.WriteBadRequest(w, quotaErr.Error(), nil)
+			} else {
+				errors.WriteInternalError(w, err, cfg.Env == "development")
+			}
+			return
+		}
+
+		// Check system-wide resource quota (after user quota check)
 		quota, err := models.GetOrCreateQuota(h.DB)
 		if err != nil {
 			logger.Log.Error("Failed to get quota", zap.Error(err))
@@ -345,6 +434,8 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 		if err := h.VMService.CreateVM(req.Name, req.Memory, req.CPU, req.OSType, newVM.UUID, graphicsType, enableVNC); err != nil {
 			tx.Rollback()
 			logger.Log.Error("Failed to create VM in libvirt", zap.Error(err), zap.String("vm_name", req.Name), zap.String("uuid", newVM.UUID))
+			// Audit log: VM creation failure
+			audit.LogVMCreate(r.Context(), userID, newVM.ID, newVM.UUID, req.Name, false, err.Error())
 			errors.WriteInternalError(w, err, cfg.Env == "development")
 			return
 		}
@@ -439,6 +530,9 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 
 		logger.Log.Info("VM created successfully", zap.String("vm_name", req.Name), zap.String("uuid", newVM.UUID), zap.Int("cpu", req.CPU), zap.Int("memory", req.Memory), zap.String("os_type", req.OSType), zap.String("status", string(newVM.Status)))
 
+		// Audit log: VM creation success
+		audit.LogVMCreate(r.Context(), userID, newVM.ID, newVM.UUID, req.Name, true, "")
+
 		// Broadcast VM update via WebSocket
 		h.VMStatusBroadcaster.BroadcastVMUpdate(newVM)
 
@@ -473,6 +567,12 @@ type VMActionRequest struct {
 // @Security BearerAuth
 // @Router /vms/{uuid}/action [post]
 func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		userID = 0 // Fallback for unauthenticated requests (should not happen)
+	}
+
 	// Get VM UUID from URL path variable (set by chi router)
 	uuidStr := chi.URLParam(r, "uuid")
 	if uuidStr == "" {
@@ -526,12 +626,14 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 	case models.VMActionStart:
 		if err := h.VMService.StartVM(vmRec.Name); err != nil {
 			logger.Log.Error("Failed to start VM", zap.Error(err), zap.String("vm_name", vmRec.Name))
+			audit.LogVMStart(r.Context(), userID, vmRec.UUID, false)
 			errors.WriteInternalError(w, err, h.Config.Env == "development")
 			return
 		}
 		vmRec.Status = models.VMStatusRunning
 		actionSuccess = true
 		logger.Log.Info("VM started", zap.String("vm_name", vmRec.Name))
+		audit.LogVMStart(r.Context(), userID, vmRec.UUID, true)
 		// Broadcast VM update via WebSocket
 		h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
 	case models.VMActionStop:
@@ -575,6 +677,7 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 			vmRec.Status = models.VMStatusStopped
 			actionSuccess = true
 			logger.Log.Info("VM stopped", zap.String("vm_name", vmRec.Name))
+			audit.LogVMStop(r.Context(), userID, vmRec.UUID, true)
 			// Broadcast VM update via WebSocket
 			h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
 		}
@@ -594,12 +697,14 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 	case models.VMActionDelete:
 		if err := h.VMService.DeleteVM(vmRec.Name); err != nil {
 			logger.Log.Error("Failed to delete VM", zap.Error(err), zap.String("vm_name", vmRec.Name))
+			audit.LogVMDelete(r.Context(), userID, vmRec.UUID, false)
 			errors.WriteInternalError(w, err, h.Config.Env == "development")
 			return
 		}
 		// DB deletion is handled inside VMService.DeleteVM with Unscoped()
 		actionSuccess = true
 		logger.Log.Info("VM deleted", zap.String("vm_name", vmRec.Name))
+		audit.LogVMDelete(r.Context(), userID, vmRec.UUID, true)
 
 		// Invalidate cache
 		h.Cache.Delete("vms:list")
@@ -906,6 +1011,67 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	
+	// Check beta access for VNC console (admin always has access)
+	// Get user ID from token or cookie
+	var userID uint
+	var username string
+	var role string
+	var betaAccess bool
+	
+	// Try to get from token first
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+			token = strings.TrimPrefix(authHeader, "Bearer ")
+		}
+	}
+	
+	if token != "" {
+		claims, err := auth.ValidateToken(token, h.Config.JWTSecret)
+		if err == nil {
+			userID = claims.UserID
+			username = claims.Username
+			role = claims.Role
+			betaAccess = claims.BetaAccess
+		}
+	}
+	
+	// Fallback to refresh token cookie
+	if userID == 0 {
+		if cookie, err := r.Cookie("refresh_token"); err == nil {
+			refreshClaims, err := auth.ValidateRefreshToken(cookie.Value, h.Config.JWTSecret)
+			if err == nil {
+				userID = refreshClaims.UserID
+				username = refreshClaims.Username
+				role = refreshClaims.Role
+				betaAccess = refreshClaims.BetaAccess
+			}
+		}
+	}
+	
+	// Check beta access (admin always has access)
+	if role != string(models.RoleAdmin) && !betaAccess {
+		// Fallback: check database
+		if userID > 0 {
+			var user models.User
+			if err := h.DB.Select("id", "beta_access", "role").Where("id = ?", userID).First(&user).Error; err == nil {
+				if user.Role != models.RoleAdmin && !user.BetaAccess {
+					logger.Log.Warn("VNC console access denied - beta access required",
+						zap.Uint("user_id", userID),
+						zap.String("username", username))
+					http.Error(w, `{"type":"error","error":"Beta access required to access console. Please contact administrator.","code":"BETA_ACCESS_REQUIRED"}`, http.StatusForbidden)
+					return
+				}
+			}
+		} else {
+			// No user ID found, deny access
+			logger.Log.Warn("VNC console access denied - authentication required")
+			http.Error(w, `{"type":"error","error":"Authentication required","code":"AUTH_REQUIRED"}`, http.StatusUnauthorized)
+			return
+		}
+	}
+
 	logger.Log.Info("VNC WebSocket connection attempt - DETAILED",
 		zap.String("remote_addr", r.RemoteAddr),
 		zap.String("origin", origin),
@@ -925,12 +1091,14 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		zap.Strings("allowed_origins", h.Config.AllowedOrigins))
 
 	// Verify authentication: Try multiple methods (query param, Authorization header, refresh token cookie)
-	var token string
+	// Note: token variable already declared above for beta access check
 	var claims *auth.Claims
 	var err error
 
-	// 1. Try query parameter (for backward compatibility)
-	token = r.URL.Query().Get("token")
+	// 1. Try query parameter (for backward compatibility) - token already set above
+	if token == "" {
+		token = r.URL.Query().Get("token")
+	}
 	if token != "" {
 		claims, err = auth.ValidateToken(token, h.Config.JWTSecret)
 		if err == nil {
@@ -1307,9 +1475,50 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 	defer successCancel() // Ensure context is cancelled to prevent resource leak
 	ws.Write(successCtx, websocket.MessageText, []byte(`{"type":"status","message":"VNC connection established, starting proxy..."}`))
 
+	// Create console session
+	sessionMgr := session.GetSessionManager()
+	
+	// Check reconnect limit
+	if err := sessionMgr.CheckReconnectLimit(claims.UserID); err != nil {
+		logger.Log.Warn("Reconnect limit exceeded",
+			zap.Uint("user_id", claims.UserID),
+			zap.String("username", claims.Username),
+			zap.Error(err))
+		ws.Write(successCtx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"error","error":"%s","code":"RECONNECT_LIMIT_EXCEEDED"}`, err.Error())))
+		return
+	}
+
+	sessionID, err := sessionMgr.CreateSession(claims.UserID, vmRec.ID, vmRec.UUID, r.RemoteAddr, r.UserAgent())
+	if err != nil {
+		logger.Log.Warn("Failed to create console session",
+			zap.Uint("user_id", claims.UserID),
+			zap.String("username", claims.Username),
+			zap.Error(err))
+		ws.Write(successCtx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"error","error":"%s","code":"SESSION_CREATE_FAILED"}`, err.Error())))
+		return
+	}
+
+	// Audit log: console session start
+	audit.LogConsoleSessionStart(r.Context(), claims.UserID, sessionID, vmRec.UUID)
+
+	// Get session for context
+	sess, ok := sessionMgr.GetSession(sessionID)
+	if !ok {
+		logger.Log.Error("Session not found after creation", zap.String("session_id", sessionID))
+		ws.Write(successCtx, websocket.MessageText, []byte(`{"type":"error","error":"Session not found","code":"SESSION_NOT_FOUND"}`))
+		return
+	}
+
+	// Use session context for VNC connection
 	errc := make(chan error, 2)
-	vncCtx, vncCancel := context.WithCancel(r.Context())
-	defer vncCancel() // Ensure context is cancelled when function returns
+	vncCtx, vncCancel := context.WithCancel(sess.Context())
+	defer func() {
+		vncCancel()
+		// End session when connection closes
+		sessionMgr.EndSession(sessionID, "user_disconnect")
+		// Audit log: console session end
+		audit.LogConsoleSessionEnd(r.Context(), claims.UserID, sessionID, vmRec.UUID, "user_disconnect")
+	}()
 
 	go func() {
 		defer vncCancel() // Cancel context when goroutine exits
@@ -1336,6 +1545,13 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			messageCount++
+			
+			// Update session activity (every 100 messages to reduce DB load)
+			if messageCount%100 == 0 {
+				if err := sessionMgr.UpdateActivity(sessionID); err != nil {
+					logger.Log.Warn("Failed to update session activity", zap.Error(err))
+				}
+			}
 			// Reduced logging: only log first message and every 1000th message
 			if messageCount == 1 {
 				logger.Log.Debug("VNC WebSocket -> TCP (first message)",
@@ -1389,6 +1605,14 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			count := atomic.AddInt32(&readCount, 1)
+			
+			// Update session activity (every 100 reads to reduce DB load)
+			if count%100 == 0 {
+				if err := sessionMgr.UpdateActivity(sessionID); err != nil {
+					logger.Log.Warn("Failed to update session activity", zap.Error(err))
+				}
+			}
+			
 			// Reduced logging: only log first read and every 1000th read
 			if count == 1 {
 				logger.Log.Debug("VNC TCP -> WebSocket (first read)",

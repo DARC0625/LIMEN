@@ -1,135 +1,266 @@
-# 프론트엔드 검증 상세 가이드
+# 프론트엔드 Proof Pack 작성 가이드
 
-## 개요
-
-이 문서는 LIMEN 프론트엔드 검증을 위한 상세 가이드를 제공합니다.
+> **프론트엔드 담당자용**: 이 문서는 프론트엔드 Proof Pack을 작성하는 방법을 안내합니다.
 
 ---
 
-## 검증 항목 상세 설명
+## 📍 문서 위치
 
-### F1. Beta Access 거부 시 에러 메시지 표시
+프론트엔드 Proof Pack 문서는 다음 경로에 있습니다:
 
-**검증 방법**:
-1. 승인되지 않은 사용자로 로그인 시도
-2. `/waiting` 페이지로 리다이렉트 확인
-3. 에러 메시지 표시 확인
+```
+/home/darc0/LIMEN/proof-pack/frontend/PROOF-PACK-FRONTEND.md
+```
+
+또는 프로젝트 루트에서:
+
+```
+LIMEN/proof-pack/frontend/PROOF-PACK-FRONTEND.md
+```
+
+---
+
+## 📝 작성 방법
+
+### 1단계: 문서 열기
+
+```bash
+cd /home/darc0/LIMEN
+code proof-pack/frontend/PROOF-PACK-FRONTEND.md
+# 또는 원하는 에디터 사용
+```
+
+### 2단계: 검증 항목 추가
+
+기존 템플릿을 참고하여 프론트엔드 검증 항목을 추가하세요.
+
+**제출 형식**:
+```markdown
+### 항목명
+
+**항목ID**: [항목ID] - PASS/FAIL/PARTIAL
+
+**증거**:
+- 스크린샷: `screenshots/항목명.png`
+- 코드 위치: `frontend/lib/api/vm.ts:123`
+- 브라우저 콘솔 로그:
+  ```
+  [로그 내용]
+  ```
+- API 응답:
+  ```json
+  {
+    "code": 403,
+    "message": "..."
+  }
+  ```
+
+**비고**: 
+- PASS: 구현 완료 설명
+- FAIL: 원인 + 수정 계획 + ETA (예: 2026-01-12/15:00)
+- PARTIAL: 현재 상태 + 추가 작업 + ETA
+```
+
+### 3단계: 증거 수집
+
+#### 스크린샷 저장
+```bash
+# 스크린샷은 다음 폴더에 저장
+proof-pack/frontend/screenshots/
+```
+
+#### 코드 위치 표시
+```typescript
+// frontend/lib/api/vm.ts:123
+export async function createVM(data: CreateVMRequest) {
+  try {
+    const response = await api.post('/api/vms', data);
+    return response.data;
+  } catch (error) {
+    // 에러 처리
+    if (error.response?.status === 403) {
+      // Beta access 거부 처리
+    }
+  }
+}
+```
+
+#### 브라우저 개발자 도구
+- Network 탭: API 응답 확인
+- Console 탭: 에러 로그 확인
+- Application 탭: 쿠키/로컬 스토리지 확인
+
+---
+
+## ✅ 검증 체크리스트
+
+프론트엔드에서 확인해야 할 항목:
+
+### 1. 에러 처리
+- [ ] Beta access 거부 시 사용자에게 명확한 메시지 표시
+- [ ] 세션 제한 초과 시 안내 메시지
+- [ ] Rate limit 초과 시 재시도 안내
+- [ ] 쿼터 초과 시 한도 정보 표시
+
+### 2. UI/UX
+- [ ] 에러 메시지가 사용자 친화적
+- [ ] 로딩 상태 표시
+- [ ] 성공/실패 피드백
+
+### 3. 버전 정보
+- [ ] 화면 하단 또는 설정 페이지에 버전 표시
+- [ ] Git commit hash 또는 빌드 번호
+
+### 4. 보안
+- [ ] 브라우저에서 보안 헤더 확인
+- [ ] HTTPS 강제 (HSTS)
+
+### 5. WebSocket
+- [ ] 콘솔 연결 안정성
+- [ ] 연결 끊김 시 재연결 처리
+- [ ] 타임아웃 알림
+
+---
+
+## 📸 스크린샷 가이드
+
+### 저장 위치
+```
+proof-pack/frontend/screenshots/
+```
+
+### 파일명 규칙
+```
+[항목ID]-[설명].png
+예: F1-beta-access-error.png
+예: F2-session-timeout.png
+```
+
+### 캡처 항목
+1. 에러 메시지 화면
+2. 버전 정보 표시 화면
+3. 브라우저 개발자 도구 (Network, Console)
+4. 보안 헤더 (Response Headers)
+
+---
+
+## 🔍 증거 수집 예시
+
+### 예시 1: Beta Access 거부 처리
 
 **코드 위치**:
-- `frontend/lib/utils/errorMessages.ts:18-29`
-- `frontend/components/ErrorDisplay.tsx`
-- `frontend/app/(protected)/waiting/page.tsx`
+```typescript
+// frontend/lib/api/vm.ts:50
+if (error.response?.status === 403 && error.response?.data?.error_code === 'FORBIDDEN') {
+  showError('Beta access required to create VMs. Please contact administrator.');
+}
+```
 
 **스크린샷**: `screenshots/F1-beta-access-error.png`
 
----
+**브라우저 콘솔**:
+```
+POST /api/vms 403 (Forbidden)
+Response: {
+  "code": 403,
+  "message": "Beta access required to create VMs. Please contact administrator.",
+  "error_code": "FORBIDDEN"
+}
+```
 
-### F2. 세션 타임아웃 알림
-
-**검증 방법**:
-1. 로그인 후 10분간 활동 없음
-2. 세션 만료 알림 확인
-3. 재로그인 버튼 동작 확인
+### 예시 2: 세션 타임아웃 알림
 
 **코드 위치**:
-- `frontend/components/AuthGuard.tsx:18-19`
-- `frontend/lib/utils/errorMessages.ts:51-75`
+```typescript
+// frontend/components/VNCViewer.tsx:123
+useEffect(() => {
+  const timer = setTimeout(() => {
+    showWarning('세션이 곧 만료됩니다. (15분 유휴)');
+  }, 14 * 60 * 1000); // 14분 후 알림
+  return () => clearTimeout(timer);
+}, []);
+```
 
 **스크린샷**: `screenshots/F2-session-timeout.png`
 
 ---
 
-### F3. Rate Limit 초과 시 재시도 안내
+## 📋 문서 작성 템플릿
 
-**검증 방법**:
-1. 짧은 시간에 많은 요청 전송
-2. HTTP 429 응답 확인
-3. 재시도 안내 메시지 확인
+```markdown
+# LIMEN Frontend Proof Pack 제출서 - 2026-01-12
 
-**코드 위치**:
-- `frontend/lib/utils/errorMessages.ts:76-100`
-
-**스크린샷**: `screenshots/F3-rate-limit.png`
-
-**참고**: 현재는 서버 과부하 메시지로 대체됨. HTTP 429 전용 메시지 추가 권장.
+**제출일**: 2026-01-12  
+**Commit Hash**: `[프론트엔드 commit hash]`  
+**담당**: Frontend  
+**검증자**: [프론트엔드 담당자명]
 
 ---
 
-### F4. 쿼터 초과 시 한도 정보 표시
+## F1. Beta Access 거부 에러 처리
 
-**검증 방법**:
-1. VM 생성 시 쿼터 초과 시도
-2. 에러 메시지 확인
-3. QuotaDisplay 컴포넌트에서 현재 사용량 확인
+**항목ID**: F1 - PASS
 
-**코드 위치**:
-- `frontend/lib/utils/errorMessages.ts:32-49`
-- `frontend/components/QuotaDisplay.tsx`
+**증거**:
+- 코드 위치: `frontend/lib/api/vm.ts:50`
+- 스크린샷: `screenshots/F1-beta-access-error.png`
+- 브라우저 콘솔 로그:
+  ```
+  POST /api/vms 403 (Forbidden)
+  ```
 
-**스크린샷**: `screenshots/F4-quota-exceeded.png`
-
----
-
-### F5. 버전 정보 화면 표시
-
-**검증 방법**:
-1. 모든 페이지 하단 확인
-2. 버전, 커밋 해시, 빌드 시간 표시 확인
-3. 링크 동작 확인 (서비스 상태, 문서)
-
-**코드 위치**:
-- `frontend/components/VersionInfo.tsx`
-- `frontend/app/layout.tsx:335`
-- `frontend/app/(protected)/layout.tsx`
-
-**스크린샷**: `screenshots/F5-version-info.png`
+**비고**: Beta access 거부 시 사용자에게 명확한 메시지 표시. 구현 완료.
 
 ---
 
-### F6. 보안 헤더 브라우저 확인
+## F2. 세션 타임아웃 알림
 
-**검증 방법**:
-1. 브라우저 개발자 도구 열기
-2. Network 탭에서 요청 선택
-3. Response Headers 확인
+**항목ID**: F2 - PASS
 
-**예상 헤더**:
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: DENY`
-- `X-XSS-Protection: 1; mode=block`
-- `Strict-Transport-Security: max-age=31536000`
-- `Content-Security-Policy: ...`
+**증거**:
+- 코드 위치: `frontend/components/VNCViewer.tsx:123`
+- 스크린샷: `screenshots/F2-session-timeout.png`
 
-**스크린샷**: `screenshots/F6-security-headers.png`
-
-**참고**: 보안 헤더는 주로 백엔드에서 설정됨. 백엔드 검증 문서 참고.
+**비고**: 유휴 타임아웃 1분 전 알림 표시. 구현 완료.
 
 ---
 
-## 스크린샷 촬영 가이드
-
-### 필수 스크린샷
-1. **F1-beta-access-error.png**: 초대 대기 화면
-2. **F2-session-timeout.png**: 세션 만료 알림
-3. **F3-rate-limit.png**: Rate limit 오류 (또는 서버 과부하 메시지)
-4. **F4-quota-exceeded.png**: 쿼터 초과 에러 메시지
-5. **F5-version-info.png**: 버전 정보 표시 (페이지 하단)
-6. **F6-security-headers.png**: 브라우저 개발자 도구 Response Headers
-
-### 스크린샷 저장 위치
-```
-proof-pack/frontend/screenshots/
+[추가 항목...]
 ```
 
 ---
 
-## 관련 문서
+## 🚀 문서 제출
 
-- [프론트엔드 검증 문서](./PROOF-PACK-FRONTEND.md)
-- [빠른 시작 가이드](../QUICK-START-FRONTEND.md)
-- [백엔드 검증 문서](../backend/PROOF-PACK-BACKEND.md)
+### 1. 문서 작성 완료 후
+
+```bash
+cd /home/darc0/LIMEN
+git add proof-pack/frontend/
+git commit -m "docs: 프론트엔드 Proof Pack 작성 완료"
+git push
+```
+
+### 2. 검토 요청
+
+- 백엔드 담당자에게 검토 요청
+- 필요 시 수정 사항 반영
 
 ---
 
-**작성일**: 2025-01-15
+## ❓ FAQ
+
+### Q: 스크린샷은 필수인가요?
+A: 가능하면 제공하되, 코드 위치와 로그로도 증명 가능합니다.
+
+### Q: FAIL 항목이 있으면 어떻게 하나요?
+A: 원인 분석 후 수정 계획과 ETA를 명시하세요.
+
+### Q: 백엔드 API 응답 형식은 어디서 확인하나요?
+A: `proof-pack/backend/PROOF-PACK-BACKEND.md`의 "증거" 섹션을 참고하세요.
+
+---
+
+**문서 버전**: 1.0  
+**최종 업데이트**: 2026-01-12
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DARC0625/LIMEN/backend/internal/audit"
 	"github.com/DARC0625/LIMEN/backend/internal/auth"
 	"github.com/DARC0625/LIMEN/backend/internal/config"
 	"github.com/DARC0625/LIMEN/backend/internal/errors"
@@ -131,6 +132,8 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 		)
 
 		// Use same generic error message (zero-trust: don't reveal which part failed)
+		// Audit log: login failure
+		audit.LogLogin(r.Context(), user.ID, user.Username, string(user.Role), false, "Invalid password")
 		errors.WriteUnauthorized(w, "Invalid credentials")
 		return
 	}
@@ -168,24 +171,26 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 		return
 	}
 
-	// Generate tokens with role and approval status
+	// Generate tokens with role, approval status, and beta access
 	role := string(user.Role)
 	if role == "" {
 		role = string(models.RoleUser) // Default to user if role is empty
 	}
 	// Only generate token if user is approved (admin users are always approved)
 	approved := user.Approved || user.Role == models.RoleAdmin
+	// Beta access: admin always has access, or if BetaAccess flag is set
+	betaAccess := user.Role == models.RoleAdmin || user.BetaAccess
 
-	// Generate Access Token (15 minutes)
-	accessToken, err := auth.GenerateAccessToken(user.ID, user.Username, role, approved, cfg.JWTSecret)
+	// Generate Access Token (15 minutes) with beta access
+	accessToken, err := auth.GenerateAccessTokenWithBetaAccess(user.ID, user.Username, role, approved, betaAccess, cfg.JWTSecret)
 	if err != nil {
 		logger.Log.Error("Failed to generate access token", zap.Error(err))
 		errors.WriteInternalError(w, err, false)
 		return
 	}
 
-	// Generate Refresh Token (7 days)
-	refreshToken, tokenID, err := auth.GenerateRefreshToken(user.ID, user.Username, role, approved, cfg.JWTSecret)
+	// Generate Refresh Token (7 days) with beta access
+	refreshToken, tokenID, err := auth.GenerateRefreshTokenWithBetaAccess(user.ID, user.Username, role, approved, betaAccess, cfg.JWTSecret)
 	if err != nil {
 		logger.Log.Error("Failed to generate refresh token", zap.Error(err))
 		errors.WriteInternalError(w, err, false)

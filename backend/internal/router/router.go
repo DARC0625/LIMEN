@@ -127,6 +127,10 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *chi.Mux {
 		h.HandleApproveUser(w, r, cfg)
 	})
 
+	r.With(adminIPWhitelist, adminMiddleware).Put("/api/admin/users/{id}/beta-access", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleBetaAccess(w, r, cfg)
+	})
+
 	// Protected endpoints (authentication required)
 	// Use UUID pattern: 8-4-4-4-12 hexadecimal characters
 	api.Get("/vms", func(w http.ResponseWriter, r *http.Request) {

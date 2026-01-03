@@ -256,6 +256,9 @@ func main() {
 			httpHandler = middleware.RateLimitWithConfig(rateLimitConfig)(httpHandler)
 		}
 
+		// Request deduplication (prevent duplicate requests)
+		httpHandler = middleware.Deduplication()(httpHandler)
+
 		httpHandler = middleware.Auth(cfg)(httpHandler) // Authentication middleware
 
 		// HTTP Response Compression (gzip)

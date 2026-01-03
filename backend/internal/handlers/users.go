@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/DARC0625/LIMEN/backend/internal/audit"
 	"github.com/DARC0625/LIMEN/backend/internal/auth"
 	"github.com/DARC0625/LIMEN/backend/internal/config"
 	"github.com/DARC0625/LIMEN/backend/internal/errors"
@@ -19,13 +20,14 @@ import (
 
 // UserResponse represents a user in API responses (without password)
 type UserResponse struct {
-	ID        uint   `json:"id"`
-	UUID      string `json:"uuid"`
-	Username  string `json:"username"`
-	Role      string `json:"role"`
-	Approved  bool   `json:"approved"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID         uint   `json:"id"`
+	UUID       string `json:"uuid"`
+	Username   string `json:"username"`
+	Role       string `json:"role"`
+	Approved   bool   `json:"approved"`
+	BetaAccess bool   `json:"beta_access"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
 }
 
 // UserWithStats includes user information with resource usage statistics
@@ -91,13 +93,14 @@ func (h *Handler) HandleListUsers(w http.ResponseWriter, r *http.Request, cfg *c
 		stats := vmStats[user.ID]
 		usersWithStats = append(usersWithStats, UserWithStats{
 			UserResponse: UserResponse{
-				ID:        user.ID,
-				UUID:      user.UUID,
-				Username:  user.Username,
-				Role:      string(user.Role),
-				Approved:  user.Approved,
-				CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-				UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+				ID:         user.ID,
+				UUID:       user.UUID,
+				Username:   user.Username,
+				Role:       string(user.Role),
+				Approved:   user.Approved,
+				BetaAccess: user.BetaAccess,
+				CreatedAt:  user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+				UpdatedAt:  user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 			},
 			VMCount:     stats.count,
 			TotalCPU:    stats.cpu,
@@ -139,13 +142,14 @@ func (h *Handler) HandleGetUser(w http.ResponseWriter, r *http.Request, cfg *con
 		VMs []models.VM `json:"vms"`
 	}{
 		UserResponse: UserResponse{
-			ID:        user.ID,
-			UUID:      user.UUID,
-			Username:  user.Username,
-			Role:      string(user.Role),
-			Approved:  user.Approved,
-			CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-			UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			ID:         user.ID,
+			UUID:       user.UUID,
+			Username:   user.Username,
+			Role:       string(user.Role),
+			Approved:   user.Approved,
+			BetaAccess: user.BetaAccess,
+			CreatedAt:  user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:  user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		},
 		VMs: vms,
 	}
@@ -213,13 +217,14 @@ func (h *Handler) HandleCreateUser(w http.ResponseWriter, r *http.Request, cfg *
 	logger.Log.Info("User created by admin", zap.String("username", user.Username), zap.String("role", string(user.Role)))
 
 	response := UserResponse{
-		ID:        user.ID,
-		UUID:      user.UUID,
-		Username:  user.Username,
-		Role:      string(user.Role),
-		Approved:  user.Approved,
-		CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ID:         user.ID,
+		UUID:       user.UUID,
+		Username:   user.Username,
+		Role:       string(user.Role),
+		Approved:   user.Approved,
+		BetaAccess: user.BetaAccess,
+		CreatedAt:  user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:  user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -455,6 +460,99 @@ func (h *Handler) HandleApproveUser(w http.ResponseWriter, r *http.Request, cfg 
 		Approved:  user.Approved,
 		CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleBetaAccess handles PUT /api/admin/users/{id}/beta-access - Grant or revoke beta access
+// @Summary     Update beta access
+// @Description Grants or revokes beta access for a user (admin only)
+// @Tags        Admin
+// @Accept      json
+// @Produce     json
+// @Param       id path int true "User ID"
+// @Param       beta_access body map[string]bool true "Beta access status" example({"beta_access": true})
+// @Success     200  {object}  UserResponse  "Beta access updated"
+// @Failure     400  {object}  map[string]interface{}  "Invalid request"
+// @Failure     403  {object}  map[string]interface{}  "Forbidden - admin access required"
+// @Failure     404  {object}  map[string]interface{}  "User not found"
+// @Router      /admin/users/{id}/beta-access [put]
+func (h *Handler) HandleBetaAccess(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
+	// Get ID from URL using chi
+	idStr := chi.URLParam(r, "id")
+	userID, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		errors.WriteBadRequest(w, "Invalid user ID", err)
+		return
+	}
+
+	// Parse request body
+	var req struct {
+		BetaAccess bool `json:"beta_access"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		errors.WriteBadRequest(w, "Invalid request body", err)
+		return
+	}
+
+	// Get admin user ID from context
+	adminID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		errors.WriteUnauthorized(w, "Authentication required")
+		return
+	}
+
+	var user models.User
+	if err := h.DB.First(&user, userID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			errors.WriteNotFound(w, "User not found")
+		} else {
+			logger.Log.Error("Failed to fetch user", zap.Error(err))
+			errors.WriteInternalError(w, err, false)
+		}
+		return
+	}
+
+	// Admin users always have beta access, cannot be changed
+	if user.Role == models.RoleAdmin {
+		errors.WriteBadRequest(w, "Admin users always have beta access", nil)
+		return
+	}
+
+	// Update beta access
+	oldBetaAccess := user.BetaAccess
+	user.BetaAccess = req.BetaAccess
+	if err := h.DB.Save(&user).Error; err != nil {
+		logger.Log.Error("Failed to update beta access", zap.Error(err))
+		errors.WriteInternalError(w, err, false)
+		return
+	}
+
+	action := "granted"
+	if !req.BetaAccess {
+		action = "revoked"
+	}
+	logger.Log.Info("Beta access updated by admin",
+		zap.Uint("admin_id", adminID),
+		zap.Uint("user_id", user.ID),
+		zap.String("username", user.Username),
+		zap.Bool("old_beta_access", oldBetaAccess),
+		zap.Bool("new_beta_access", req.BetaAccess),
+		zap.String("action", action))
+
+	// Audit log: beta access change
+	audit.LogBetaAccessGrant(r.Context(), adminID, user.ID, req.BetaAccess)
+
+	response := UserResponse{
+		ID:         user.ID,
+		Username:   user.Username,
+		Role:       string(user.Role),
+		Approved:   user.Approved,
+		BetaAccess: user.BetaAccess,
+		CreatedAt:  user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:  user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 
 	w.Header().Set("Content-Type", "application/json")

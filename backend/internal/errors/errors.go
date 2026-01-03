@@ -238,6 +238,14 @@ func WriteQuotaExceeded(w http.ResponseWriter, message string) {
 	WriteErrorWithCode(w, http.StatusForbidden, message, ErrCodeQuotaExceeded, nil, false)
 }
 
+// WriteTooManyRequests writes a 429 Too Many Requests response.
+func WriteTooManyRequests(w http.ResponseWriter, message string) {
+	if message == "" {
+		message = "Too many requests"
+	}
+	WriteErrorWithCode(w, http.StatusTooManyRequests, message, "RATE_LIMIT_EXCEEDED", nil, false)
+}
+
 // WriteServiceUnavailable writes a 503 Service Unavailable response.
 func WriteServiceUnavailable(w http.ResponseWriter, message string, err error, isDevelopment bool) {
 	if message == "" {

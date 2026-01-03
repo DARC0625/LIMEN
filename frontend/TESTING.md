@@ -1,308 +1,163 @@
-# 테스트 가이드
+# 프론트엔드 테스트 가이드
 
-## 개요
+**작성일**: 2025-01-14
 
-LIMEN 프론트엔드는 Jest와 React Testing Library를 사용하여 테스트를 작성합니다.
+---
 
-## 현재 상태
+## 📋 개요
 
-### 테스트 커버리지
+LIMEN 프론트엔드는 **Jest**와 **React Testing Library**를 사용하여 테스트를 작성합니다.
 
-- **전체 커버리지**: 58.22%
-  - Statements: 57.25%
-  - Branches: 47.41%
-  - Functions: 61.4%
-  - Lines: 58.22%
+---
 
-### 테스트 통계
+## 🚀 시작하기
 
-- **총 테스트 수**: 437개
-- **테스트 스위트**: 68개
-- **통과율**: 100% (437 passed, 0 failed)
+### 1. 의존성 설치
 
-## 테스트 실행
+```bash
+cd frontend
+npm install --save-dev jest @testing-library/react @testing-library/jest-dom @testing-library/user-event jest-environment-jsdom
+```
 
-### 기본 명령어
+### 2. 테스트 실행
 
 ```bash
 # 모든 테스트 실행
 npm test
 
-# 커버리지 포함 실행
-npm run test:coverage
-
 # Watch 모드 (파일 변경 시 자동 실행)
-npm test -- --watch
+npm run test:watch
 
-# 특정 파일만 테스트
-npm test -- path/to/test/file.test.tsx
-
-# 특정 패턴의 테스트만 실행
-npm test -- --testNamePattern="pattern"
-```
-
-### 커버리지 확인
-
-```bash
 # 커버리지 리포트 생성
 npm run test:coverage
-
-# 커버리지 리포트는 coverage/ 폴더에 생성됩니다
-# HTML 리포트: coverage/lcov-report/index.html
 ```
 
-## 테스트 구조
+---
 
-### 파일 구조
+## 📁 테스트 파일 구조
 
 ```
 frontend/
 ├── components/
-│   ├── __tests__/          # 컴포넌트 테스트
-│   │   ├── Button.test.tsx
-│   │   ├── LoginForm.test.tsx
-│   │   └── ...
-│   └── ...
+│   ├── __tests__/
+│   │   └── Button.test.tsx
+│   └── ui/
+│       └── Button.tsx
 ├── hooks/
-│   ├── __tests__/          # 훅 테스트
-│   │   ├── useDebounce.test.ts
-│   │   └── ...
-│   └── ...
-├── lib/
-│   ├── __tests__/          # 유틸리티 테스트
-│   │   ├── errorTracking.test.ts
-│   │   └── ...
-│   └── ...
-└── __tests__/
-    └── integration/        # 통합 테스트
-        ├── auth.test.tsx
-        └── ...
+│   ├── __tests__/
+│   │   └── useDebounce.test.ts
+│   └── useDebounce.ts
+└── jest.config.js
 ```
 
-### 테스트 파일 명명 규칙
+---
 
-- 컴포넌트 테스트: `ComponentName.test.tsx`
-- 훅 테스트: `useHookName.test.ts` 또는 `useHookName.test.tsx` (JSX 사용 시)
-- 유틸리티 테스트: `utilityName.test.ts`
-- 통합 테스트: `featureName.test.tsx`
-
-## 테스트 작성 가이드
+## ✍️ 테스트 작성 예제
 
 ### 컴포넌트 테스트
 
 ```typescript
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import Component from '../Component'
+import { render, screen, fireEvent } from '@testing-library/react'
+import Button from '../ui/Button'
 
-describe('Component', () => {
-  it('renders correctly', () => {
-    render(<Component />)
-    expect(screen.getByText('Hello')).toBeInTheDocument()
+describe('Button', () => {
+  it('renders button with children', () => {
+    render(<Button>Click me</Button>)
+    expect(screen.getByRole('button', { name: /click me/i })).toBeInTheDocument()
   })
 
-  it('handles user interaction', async () => {
-    render(<Component />)
-    const button = screen.getByRole('button')
-    fireEvent.click(button)
+  it('calls onClick handler when clicked', () => {
+    const handleClick = jest.fn()
+    render(<Button onClick={handleClick}>Click me</Button>)
+    
+    fireEvent.click(screen.getByRole('button'))
+    expect(handleClick).toHaveBeenCalledTimes(1)
+  })
+})
+```
+
+### 커스텀 훅 테스트
+
+```typescript
+import { renderHook, waitFor } from '@testing-library/react'
+import { useDebounce } from '../useDebounce'
+
+describe('useDebounce', () => {
+  it('debounces value changes', async () => {
+    const { result, rerender } = renderHook(
+      ({ value, delay }) => useDebounce(value, delay),
+      { initialProps: { value: 'initial', delay: 500 } }
+    )
+
+    expect(result.current).toBe('initial')
+
+    rerender({ value: 'updated', delay: 500 })
+    jest.advanceTimersByTime(500)
+    
     await waitFor(() => {
-      expect(screen.getByText('Clicked')).toBeInTheDocument()
+      expect(result.current).toBe('updated')
     })
   })
 })
 ```
 
-### 훅 테스트
+---
 
-```typescript
-import { renderHook, act } from '@testing-library/react'
-import { useCustomHook } from '../useCustomHook'
+## 🎯 테스트 작성 가이드
 
-describe('useCustomHook', () => {
-  it('returns initial value', () => {
-    const { result } = renderHook(() => useCustomHook())
-    expect(result.current.value).toBe(0)
-  })
+### 우선순위
 
-  it('updates value', () => {
-    const { result } = renderHook(() => useCustomHook())
-    act(() => {
-      result.current.increment()
-    })
-    expect(result.current.value).toBe(1)
-  })
-})
-```
+1. **공통 컴포넌트** (`components/ui/`)
+   - Button, Input 등 재사용 가능한 컴포넌트
 
-### API 클라이언트 테스트
+2. **커스텀 훅** (`hooks/`)
+   - useDebounce, useThrottle, useOptimisticUpdate 등
 
-```typescript
-import { apiRequest } from '../lib/api/client'
+3. **비즈니스 로직** (`lib/`)
+   - API 클라이언트, 유틸리티 함수
 
-jest.mock('../lib/api/client')
+4. **페이지 컴포넌트** (`app/`)
+   - 주요 페이지 컴포넌트
 
-describe('API Client', () => {
-  it('makes GET request', async () => {
-    const mockApiRequest = apiRequest as jest.MockedFunction<typeof apiRequest>
-    mockApiRequest.mockResolvedValue({ data: 'test' })
+### 테스트 작성 원칙
 
-    const result = await apiRequest('/test')
-    expect(result.data).toBe('test')
-  })
-})
-```
+1. **사용자 관점에서 테스트**
+   - 사용자가 보는 것, 하는 것에 집중
+   - 구현 세부사항보다 동작에 집중
 
-## 모킹 가이드
+2. **접근성 고려**
+   - `getByRole`, `getByLabelText` 등 접근성 API 사용
+   - `getByTestId`는 최후의 수단으로만 사용
 
-### Next.js 모킹
+3. **명확한 테스트 이름**
+   - "should render button" ❌
+   - "renders button with children" ✅
 
-```typescript
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: jest.fn(),
-    replace: jest.fn(),
-  }),
-  usePathname: () => '/dashboard',
-  useParams: () => ({ uuid: 'test-uuid' }),
-}))
-```
+---
 
-### React Query 모킹
+## 📊 커버리지 목표
 
-```typescript
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+- **현재**: 0% (테스트 시작 단계)
+- **목표**: 80% 이상
+- **우선순위**: 공통 컴포넌트 및 훅 100% 커버리지
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: false },
-    mutations: { retry: false },
-  },
-})
+---
 
-render(
-  <QueryClientProvider client={queryClient}>
-    <Component />
-  </QueryClientProvider>
-)
-```
+## 🔧 설정 파일
 
-### API 모킹
+### jest.config.js
+- Next.js 통합 설정
+- 경로 별칭 설정
+- 커버리지 수집 범위
 
-```typescript
-jest.mock('../lib/api', () => ({
-  authAPI: {
-    login: jest.fn(),
-    register: jest.fn(),
-  },
-  vmAPI: {
-    list: jest.fn(),
-    action: jest.fn(),
-  },
-}))
-```
+### jest.setup.js
+- 전역 설정
+- Next.js router 모킹
+- window.matchMedia 모킹
 
-## 테스트 커버리지 목표
+---
 
-### 현재 목표
-
-- **단기 목표**: 60%
-- **중기 목표**: 80%
-- **장기 목표**: 90%
-
-### 커버리지 우선순위
-
-1. **높음**: 핵심 비즈니스 로직, API 클라이언트, 인증 모듈
-2. **중간**: 컴포넌트, 훅, 유틸리티 함수
-3. **낮음**: UI 컴포넌트, 스타일링
-
-## 완료된 테스트 영역
-
-### ✅ 완료된 테스트
-
-1. **유틸리티 함수**
-   - format.ts, validation.ts, error.ts
-   - token.ts, errorHelpers.ts, logger.ts
-   - security.ts, analytics.ts
-
-2. **인증 모듈**
-   - auth/index.ts
-   - tokenManager.ts
-
-3. **코어 모듈**
-   - webVitals.ts, queryClient.ts
-   - errorTracking.ts
-
-4. **Hooks**
-   - useDebounce, useThrottle, useMounted
-   - useOptimisticUpdate, useQuota, useVMs
-   - useAdminUsers, useAgentMetrics
-
-5. **컴포넌트**
-   - Button, Input, Toast, Loading, Skeleton
-   - StatusCard, QuotaDisplay, AgentMetricsCard
-   - ThemeToggle, HealthStatus, LoginForm, RegisterForm
-   - ToastContainer, ThemeProvider, ErrorBoundary
-   - QueryProvider, WebVitalsClient, PWARegister
-   - SnapshotManager, AuthGuard, VMListSection, VNCViewer
-
-6. **API 클라이언트**
-   - client, quota, admin, snapshot, vm, auth, index
-
-7. **페이지 컴포넌트**
-   - app/page.tsx, app/error.tsx
-   - app/login/page.tsx, app/register/page.tsx
-   - app/(protected)/dashboard/page.tsx
-   - app/(protected)/vnc/[uuid]/page.tsx
-   - app/offline/page.tsx
-   - app/(protected)/admin/users/page.tsx
-
-8. **통합 테스트**
-   - 인증 통합 테스트
-   - VM 관리 통합 테스트
-   - 스냅샷 관리 통합 테스트
-
-## 다음 단계
-
-### 추가 테스트 필요 영역
-
-1. **컴포넌트 추가 시나리오**
-   - 엣지 케이스 테스트
-   - 에러 처리 시나리오
-   - 사용자 인터랙션 시나리오
-
-2. **통합 테스트 확장**
-   - 전체 사용자 플로우 테스트
-   - API 통합 테스트
-   - 인증 플로우 테스트
-
-3. **성능 테스트**
-   - 렌더링 성능 테스트
-   - 메모리 누수 테스트
-
-## 문제 해결
-
-### 일반적인 문제
-
-1. **act() 경고**
-   ```typescript
-   import { act } from '@testing-library/react'
-   
-   await act(async () => {
-     // 비동기 작업
-   })
-   ```
-
-2. **모킹 문제**
-   - 모킹은 파일 상단에 배치
-   - jest.clearAllMocks()를 beforeEach에서 호출
-
-3. **비동기 테스트**
-   ```typescript
-   await waitFor(() => {
-     expect(element).toBeInTheDocument()
-   }, { timeout: 3000 })
-   ```
-
-## 참고 자료
+## 📚 참고 자료
 
 - [Jest 공식 문서](https://jestjs.io/)
 - [React Testing Library](https://testing-library.com/react)
@@ -310,4 +165,8 @@ jest.mock('../lib/api', () => ({
 
 ---
 
-**마지막 업데이트**: 2025-01-15
+**작성자**: AI Assistant  
+**최종 업데이트**: 2025-01-14
+
+
+
