@@ -16,7 +16,7 @@ func CreateIndexes(db *gorm.DB) error {
 		unique  bool
 	}{
 		// VM indexes
-		{"vms", "idx_vms_user_id", "user_id", false},
+		{"vms", "idx_vms_owner_id", "owner_id", false}, // Use owner_id (not user_id) - matches VM model
 		{"vms", "idx_vms_status", "status", false},
 		{"vms", "idx_vms_created_at", "created_at DESC", false},
 		{"vms", "idx_vms_uuid", "uuid", true}, // Already exists as uniqueIndex, but ensure it's there
