@@ -103,13 +103,14 @@ access_log:
           protocol: "%PROTOCOL%"
 ```
 
-**실제 런타임 로그 수집 명령어**:
+**실제 런타임 로그 수집 명령어** (Public server에서 실행 필요):
 ```bash
-# Public server에서 실행 필요
-docker logs limen-envoy --tail 200 | tail -n 20
+docker logs limen-envoy --tail 200 | tail -n 30
 # 또는
-journalctl -u envoy -n 120 --no-pager
+journalctl -u envoy -n 200 --no-pager
 ```
+
+**PASS 기준**: request_id, status, path, source_ip 값이 실제로 들어있을 것
 
 **예상 JSON 로그 형식** (Public server에서 실제 로그 수집 필요):
 ```json
@@ -120,7 +121,7 @@ journalctl -u envoy -n 120 --no-pager
 
 **코드 위치**: `frontend/envoy.yaml:15:28` (HTTP), `174:187` (HTTPS limen.kr), `286:299` (HTTPS darc.kr)
 
-**비고**: JSON access log 설정이 정상적으로 구성되어 있으며, 필수 필드(request_id, status, upstream_time, user_agent, source_ip, method, path, protocol) 모두 포함되어 있습니다. 실제 런타임 로그는 Public server에서 `docker logs limen-envoy --tail 200 | tail -n 20` 명령어로 수집 필요합니다.
+**비고**: JSON access log 설정이 정상적으로 구성되어 있으며, 필수 필드(request_id, status, upstream_time, user_agent, source_ip, method, path, protocol) 모두 포함되어 있습니다. 실제 런타임 로그 3줄은 Public server에서 `docker logs limen-envoy --tail 200 | tail -n 30` 또는 `journalctl -u envoy -n 200 --no-pager` 명령어로 수집 필요합니다.
 
 ---
 
