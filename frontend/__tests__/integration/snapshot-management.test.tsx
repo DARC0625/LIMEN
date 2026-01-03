@@ -49,7 +49,7 @@ describe('Snapshot Management Integration', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <SnapshotManager vmUuid="test-uuid" />
+        <SnapshotManager vmUuid="test-uuid" vmName="Test VM" />
       </QueryClientProvider>
     )
 

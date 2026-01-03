@@ -5,7 +5,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { useParams } from 'next/navigation'
 import VNCPage from '../page'
-import VNCViewer from '../../../../components/VNCViewer'
 
 // 의존성 모킹
 jest.mock('next/navigation', () => ({

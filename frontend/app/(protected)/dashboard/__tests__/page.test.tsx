@@ -36,14 +36,14 @@ jest.mock('../../../../lib/api', () => ({
 jest.mock('next/dynamic', () => ({
   __esModule: true,
   default: (loader: () => Promise<any>) => {
-    const Component = () => {
-      const [Component, setComponent] = React.useState<any>(null)
+    const DynamicComponent = () => {
+      const [LoadedComponent, setLoadedComponent] = React.useState<any>(null)
       React.useEffect(() => {
-        loader().then((mod) => setComponent(() => mod.default))
+        loader().then((mod) => setLoadedComponent(() => mod.default))
       }, [])
-      return Component ? <Component /> : <div>Loading...</div>
+      return LoadedComponent ? <LoadedComponent /> : <div>Loading...</div>
     }
-    return Component
+    return DynamicComponent
   },
 }))
 
