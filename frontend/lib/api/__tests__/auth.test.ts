@@ -143,7 +143,7 @@ describe('authAPI', () => {
         getSetCookie: () => [],
       },
       json: async () => ({}),
-    } as Response
+    } as unknown as Response
 
     ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
 
