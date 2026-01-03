@@ -122,11 +122,11 @@ jobs:
             echo "🔄 프론트엔드 서버 동기화 시작..."
             
             # LIMEN 디렉토리 확인 및 이동
-            if [ ! -d "/home/darc/LIMEN" ]; then
-              echo "❌ 오류: /home/darc/LIMEN 디렉토리가 존재하지 않습니다"
+            if [ ! -d "/home/darc0/LIMEN" ]; then
+              echo "❌ 오류: /home/darc0/LIMEN 디렉토리가 존재하지 않습니다"
               exit 1
             fi
-            cd /home/darc/LIMEN || exit 1
+            cd /home/darc0/LIMEN || exit 1
             
             # 현재 브랜치 확인
             CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
@@ -171,7 +171,7 @@ jobs:
             # 프론트엔드 서비스 재시작 (선택적)
             if command -v pm2 &> /dev/null; then
               echo "🔄 프론트엔드 서비스 재시작 중..."
-              cd /home/darc/LIMEN/frontend
+              cd /home/darc0/LIMEN/frontend
               pm2 restart limen-frontend --update-env || true
             fi
             
@@ -186,7 +186,7 @@ jobs:
             echo "❌ 프론트엔드 서버 동기화 실패"
             echo "📋 오류 분석:"
             echo "   - GitHub Secrets 확인 필요 (FRONTEND_HOST, FRONTEND_USER, FRONTEND_SSH_KEY)"
-            echo "   - 서버 경로 확인: /home/darc/LIMEN"
+            echo "   - 서버 경로 확인: /home/darc0/LIMEN"
             echo "   - SSH 연결 확인 필요"
           fi
 
