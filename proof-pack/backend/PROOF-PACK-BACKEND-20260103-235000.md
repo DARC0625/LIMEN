@@ -203,6 +203,8 @@ done
 
 **비고**: Rate limit이 이미 활성화된 상태에서 실행되어 모든 요청이 429로 반환됨
 
+**제출 서류 비고**: Rate limit 테스트는 윈도우가 이미 활성화된 상태에서 실행되어 429-only가 발생했으나, 별도 시점에서 201 Created 원문을 추가 확보하여 기능 동작은 증명됨.
+
 ---
 
 ### 8) 저장 증빙(로그)
@@ -219,6 +221,8 @@ pm2 logs limen --lines 300 --nostream | grep -i "Waitlist entry created" | tail 
 0|limen    | {"level":"info","timestamp":"2026-01-04T00:00:06.129+0900","caller":"handlers/waitlist.go:154","message":"Waitlist entry created","id":6,"ip":"[","email":"test2@example.com"}
 0|limen    | {"level":"info","timestamp":"2026-01-04T00:00:43.658+0900","caller":"handlers/waitlist.go:154","message":"Waitlist entry created","id":7,"ip":"[","email":"test3@example.com"}
 ```
+
+**제출 서류 비고**: Waitlist 저장 증빙은 PM2 로그의 'Waitlist entry created'로 확인됨(최근 id=5~7).
 
 ---
 
