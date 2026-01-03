@@ -1,3 +1,12 @@
+## 2026-01-03 12:41:43 - frontend
+
+**파일**: `frontend/hooks/useVMs.ts,frontend/hooks/useAgentMetrics.ts,frontend/hooks/useAdminUsers.ts,frontend/next.config.js`
+
+**변경 내용**:
+성능 최적화: API 폴링 트리거 방식 변경, 정적 파일 캐싱 활성화
+
+---
+
 ## 2026-01-03 12:33:38 - frontend
 
 **파일**: `frontend/app/(protected)/admin/users/page.tsx`

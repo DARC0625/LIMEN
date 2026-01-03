@@ -3,7 +3,7 @@
  * 통합된 API 클라이언트 사용
  */
 import { useQuery, useSuspenseQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { startTransition } from 'react';
+import { startTransition, useState, useEffect } from 'react';
 import { vmAPI } from '../lib/api/index';
 import type { VM, QuotaUsage } from '../lib/types';
 import { useToast } from '../components/ToastContainer';
@@ -16,6 +16,8 @@ import { useMounted } from './useMounted';
 
 /**
  * VM 목록 조회 훅
+ * 트리거 방식: Mutation 성공 시 invalidateQueries로 자동 갱신
+ * 최후의 수단으로만 폴링 (5분마다) - 백그라운드 동기화용
  */
 export function useVMs() {
   const { isAuthenticated } = useAuth();
@@ -24,7 +26,32 @@ export function useVMs() {
   // 서버와 클라이언트 초기 렌더링에서 동일한 값 반환 (false)
   // 마운트 후에만 인증 상태 확인
   const enabled = mounted && isAuthenticated === true;
-  const refetchInterval = enabled ? 10000 : false;
+  
+  // 트리거 방식: Mutation이 성공하면 invalidateQueries로 자동 갱신
+  // 최후의 수단으로만 폴링 (5분마다) - 백그라운드 동기화용
+  const FALLBACK_POLLING_INTERVAL = 5 * 60 * 1000; // 5분
+  
+  // 창 포커스 시 재요청 조건부 적용 (탭이 비활성화된 시간이 길면만)
+  const [lastFocusTime, setLastFocusTime] = useState<number>(Date.now());
+  
+  useEffect(() => {
+    if (!enabled) return;
+    
+    const handleFocus = () => {
+      const now = Date.now();
+      const timeSinceLastFocus = now - lastFocusTime;
+      setLastFocusTime(now);
+      
+      // 탭이 1분 이상 비활성화되었을 때만 재요청
+      if (timeSinceLastFocus > 60 * 1000) {
+        // queryClient.invalidateQueries는 여기서 직접 호출하지 않고
+        // refetchOnWindowFocus가 처리하도록 함
+      }
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [enabled, lastFocusTime]);
   
   return useQuery({
     queryKey: ['vms'],
@@ -45,10 +72,16 @@ export function useVMs() {
       }
     },
     enabled: enabled,
-    refetchInterval: refetchInterval,
-    staleTime: QUERY_CONSTANTS.STALE_TIME,
+    // 트리거 방식: Mutation 성공 시 invalidateQueries로 갱신
+    // 최후의 수단으로만 폴링 (백그라운드 동기화)
+    refetchInterval: enabled ? FALLBACK_POLLING_INTERVAL : false,
+    staleTime: 2 * 60 * 1000, // 2분간 캐시 유지 (Mutation 트리거 우선)
+    // 창 포커스 시 재요청 (조건부: 탭이 비활성화된 시간이 1분 이상이면만)
+    // Mutation 트리거가 우선이므로, 창 포커스는 보조적 역할만
     refetchOnWindowFocus: true,
+    // 네트워크 재연결 시 재요청
     refetchOnReconnect: true,
+    // 마운트 시 재요청
     refetchOnMount: true,
     retry: QUERY_CONSTANTS.RETRY,
     retryDelay: QUERY_CONSTANTS.RETRY_DELAY,

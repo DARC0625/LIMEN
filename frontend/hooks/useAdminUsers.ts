@@ -21,8 +21,10 @@ export function useAdminUsers() {
         return a.username.localeCompare(b.username);
       });
     },
-    staleTime: 30000, // 30초간 캐시 유지
-    refetchInterval: 60000, // 60초마다 자동 재요청
+    staleTime: 2 * 60 * 1000, // 2분간 캐시 유지
+    // 트리거 방식: Mutation 성공 시 invalidateQueries로 갱신
+    // 최후의 수단으로만 폴링 (5분마다) - 백그라운드 동기화용
+    refetchInterval: 5 * 60 * 1000, // 5분마다 (최후의 수단)
   });
 }
 

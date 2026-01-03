@@ -139,8 +139,9 @@ const nextConfig = {
             value: 'application/javascript; charset=utf-8',
           },
           {
+            // 정적 파일 캐싱 활성화 (1년, 빌드 ID로 버전 관리)
             key: 'Cache-Control',
-            value: 'no-cache, no-store, must-revalidate, max-age=0',
+            value: 'public, max-age=31536000, immutable',
           },
           {
             key: 'X-Content-Type-Options',
@@ -157,26 +158,20 @@ const nextConfig = {
             value: 'text/css; charset=utf-8',
           },
           {
+            // 정적 파일 캐싱 활성화 (1년, 빌드 ID로 버전 관리)
             key: 'Cache-Control',
-            value: 'no-cache, no-store, must-revalidate, max-age=0',
+            value: 'public, max-age=31536000, immutable',
           },
         ],
       },
       {
-        // 기타 정적 파일에 대한 헤더
+        // 기타 정적 파일에 대한 헤더 (이미지, 폰트 등)
         source: '/_next/static/:path*',
         headers: [
           {
+            // 정적 파일 캐싱 활성화 (1년, 빌드 ID로 버전 관리)
             key: 'Cache-Control',
-            value: 'no-cache, no-store, must-revalidate, max-age=0',
-          },
-          {
-            key: 'Pragma',
-            value: 'no-cache',
-          },
-          {
-            key: 'Expires',
-            value: '0',
+            value: 'public, max-age=31536000, immutable',
           },
         ],
       },

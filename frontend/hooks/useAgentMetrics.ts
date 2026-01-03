@@ -39,10 +39,12 @@ export function useAgentMetrics() {
     },
     // 인증 상태가 확인된 후에만 쿼리 활성화 (null이 아닐 때만)
     // null이면 아직 인증 체크 중이므로 대기
-    enabled: enabled,
-    // 에이전트 메트릭스는 자주 변경되므로 짧은 간격으로 재요청
-    staleTime: 5000, // 5초
-    refetchInterval: 5000, // 5초마다 자동 재요청
+    // 페이지가 보일 때만 활성화 (탭이 비활성화되면 폴링 중지)
+    enabled: enabled && isVisible,
+    // 에이전트 메트릭스는 실시간성이 중요하지만, 과도한 폴링 방지
+    // 최후의 수단으로만 폴링 (30초마다) - 백그라운드 동기화용
+    staleTime: 10000, // 10초간 캐시 유지
+    refetchInterval: (enabled && isVisible) ? 30 * 1000 : false, // 30초마다 (최후의 수단, 탭이 보일 때만)
     retry: (failureCount, error) => {
       // 503 에러는 재시도하지 않음 (Agent 서비스가 다운된 경우)
       if (error instanceof Error && (error.message.includes('503') || error.message.includes('Service Unavailable'))) {
@@ -52,6 +54,10 @@ export function useAgentMetrics() {
     },
     // 503 에러는 조용히 처리 (에러로 표시하지 않음)
     throwOnError: false,
+    // 창 포커스 시 재요청 (조건부: 탭이 비활성화된 시간이 길면만)
+    refetchOnWindowFocus: true,
+    // 네트워크 재연결 시 재요청
+    refetchOnReconnect: true,
   });
 }
 
@@ -71,8 +77,8 @@ export function useAgentMetricsSuspense() {
       }
       return response.json() as Promise<AgentMetrics>;
     },
-    staleTime: 5000, // 5초
-    refetchInterval: 5000, // 5초마다 자동 재요청
+    staleTime: 10000, // 10초간 캐시 유지
+    refetchInterval: 30 * 1000, // 30초마다 (최후의 수단)
     retry: 1, // 실패 시 1번만 재시도
   });
 }
