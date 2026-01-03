@@ -1,6 +1,8 @@
 // 보안 관련 유틸리티 함수들
 // 비정상 접근 감지 및 자동 로그아웃 기능
 
+import { logger } from './utils/logger';
+
 // 세션 하이재킹 방지를 위한 브라우저 핑거프린트
 export function getBrowserFingerprint(): string {
   if (typeof window === 'undefined') return '';
@@ -30,9 +32,7 @@ export function validateTokenIntegrity(token: string): boolean {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('[Token Validation] Invalid JWT format: not 3 parts');
-      }
+      logger.warn('[Token Validation] Invalid JWT format: not 3 parts');
       return false;
     }
     
@@ -42,32 +42,24 @@ export function validateTokenIntegrity(token: string): boolean {
     
     // 기본 JWT 구조만 확인 (exp는 선택적, id도 선택적)
     if (!header || typeof header !== 'object') {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('[Token Validation] Invalid header');
-      }
+      logger.warn('[Token Validation] Invalid header');
       return false;
     }
     
     if (!payload || typeof payload !== 'object') {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('[Token Validation] Invalid payload');
-      }
+      logger.warn('[Token Validation] Invalid payload');
       return false;
     }
     
     // exp가 있으면 숫자여야 함
     if (payload.exp && typeof payload.exp !== 'number') {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('[Token Validation] Invalid exp type');
-      }
+      logger.warn('[Token Validation] Invalid exp type');
       return false;
     }
     
     return true;
   } catch (e) {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('[Token Validation] Parse error:', e);
-    }
+    logger.warn('[Token Validation] Parse error:', e);
     return false;
   }
 }
@@ -77,7 +69,7 @@ export function forceLogout(reason: string = '보안상의 이유로 로그아�
   if (typeof window === 'undefined') return;
   
   // 차단하지 않고 로깅만 수행
-  console.warn('[Security Log] Logout event detected:', {
+  logger.warn('[Security Log] Logout event detected:', {
     reason,
     pathname: window.location.pathname,
     timestamp: new Date().toISOString(),
@@ -147,7 +139,7 @@ export function detectAbnormalActivity(): {
   const token = localStorage.getItem('auth_token');
   if (token && !validateTokenIntegrity(token)) {
     // 차단하지 않고 로깅만
-    console.warn('[Security Log] Token integrity check failed (passive monitoring):', {
+    logger.warn('[Security Log] Token integrity check failed (passive monitoring):', {
       timestamp: new Date().toISOString(),
       pathname: window.location.pathname,
     });
@@ -179,7 +171,7 @@ export function checkAndUnblockAccount(): void {
   let hasBlockedFlag = false;
   blockedFlags.forEach(flag => {
     if (localStorage.getItem(flag)) {
-      console.warn('[Security Log] Removing block flag (passive monitoring):', flag);
+      logger.warn('[Security Log] Removing block flag (passive monitoring):', flag);
       localStorage.removeItem(flag);
       hasBlockedFlag = true;
     }
@@ -187,13 +179,13 @@ export function checkAndUnblockAccount(): void {
   
   // 세션 스토리지의 차단 플래그도 제거
   if (sessionStorage.getItem('logout_redirect')) {
-    console.warn('[Security Log] Removing logout redirect flag (passive monitoring)');
+    logger.warn('[Security Log] Removing logout redirect flag (passive monitoring)');
     sessionStorage.removeItem('logout_redirect');
     hasBlockedFlag = true;
   }
   
   if (hasBlockedFlag) {
-    console.warn('[Security Log] Account unblocked (passive monitoring):', {
+    logger.warn('[Security Log] Account unblocked (passive monitoring):', {
       timestamp: new Date().toISOString(),
     });
   }

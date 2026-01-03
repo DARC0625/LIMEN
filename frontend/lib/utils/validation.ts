@@ -5,6 +5,13 @@
 
 /**
  * 이메일 유효성 검사
+ * @param email - 검사할 이메일 주소
+ * @returns 이메일 형식이 유효한 경우 true, 그렇지 않으면 false
+ * @example
+ * ```ts
+ * isValidEmail('user@example.com') // true
+ * isValidEmail('invalid-email') // false
+ * ```
  */
 export function isValidEmail(email: string): boolean {
   if (!email || typeof email !== 'string') return false;
@@ -16,6 +23,14 @@ export function isValidEmail(email: string): boolean {
  * 사용자 이름 유효성 검사
  * - 3-20자
  * - 영문, 숫자, 언더스코어, 하이픈만 허용
+ * @param username - 검사할 사용자 이름
+ * @returns 사용자 이름이 유효한 경우 true, 그렇지 않으면 false
+ * @example
+ * ```ts
+ * isValidUsername('user123') // true
+ * isValidUsername('ab') // false (너무 짧음)
+ * isValidUsername('user@name') // false (특수문자 포함)
+ * ```
  */
 export function isValidUsername(username: string): boolean {
   if (!username || typeof username !== 'string') return false;
@@ -27,6 +42,14 @@ export function isValidUsername(username: string): boolean {
  * 비밀번호 유효성 검사
  * - 최소 8자
  * - 영문, 숫자, 특수문자 중 2가지 이상 포함
+ * @param password - 검사할 비밀번호
+ * @returns 비밀번호가 유효한 경우 true, 그렇지 않으면 false
+ * @example
+ * ```ts
+ * isValidPassword('password123') // true (영문 + 숫자)
+ * isValidPassword('password') // false (8자 이상이지만 조건 불만족)
+ * isValidPassword('pass123!') // true (영문 + 숫자 + 특수문자)
+ * ```
  */
 export function isValidPassword(password: string): boolean {
   if (!password || typeof password !== 'string' || password.length < 8) {
@@ -89,4 +112,59 @@ export function isValidLength(str: string, min: number, max: number): boolean {
   if (typeof str !== 'string') return false;
   const length = str.trim().length;
   return length >= min && length <= max;
+}
+
+/**
+ * XSS 방지를 위한 입력 sanitization
+ * HTML 태그 및 스크립트 제거
+ * @param input - sanitization할 입력 문자열
+ * @returns HTML 태그와 위험한 문자가 제거된 안전한 문자열
+ * @example
+ * ```ts
+ * sanitizeInput('<script>alert("xss")</script>') // 'alertxss'
+ * sanitizeInput('user<input>') // 'userinput'
+ * ```
+ */
+export function sanitizeInput(input: string): string {
+  if (typeof input !== 'string') return '';
+  
+  // HTML 태그 제거
+  let sanitized = input.replace(/<[^>]*>/g, '');
+  
+  // 위험한 문자 제거
+  sanitized = sanitized.replace(/[<>'"&]/g, '');
+  
+  // 연속된 공백 정리
+  sanitized = sanitized.replace(/\s+/g, ' ').trim();
+  
+  return sanitized;
+}
+
+/**
+ * VM 이름 유효성 검사 및 sanitization
+ * - 영문, 숫자, 하이픈, 언더스코어만 허용
+ * - 1-100자
+ */
+export function isValidVMName(name: string): boolean {
+  if (!name || typeof name !== 'string') return false;
+  const sanitized = name.trim();
+  if (sanitized.length < 1 || sanitized.length > 100) return false;
+  const vmNameRegex = /^[a-zA-Z0-9_-]+$/;
+  return vmNameRegex.test(sanitized);
+}
+
+/**
+ * 일반 텍스트 입력 sanitization (XSS 방지)
+ */
+export function sanitizeText(text: string, maxLength?: number): string {
+  if (typeof text !== 'string') return '';
+  
+  let sanitized = sanitizeInput(text);
+  
+  // 최대 길이 제한
+  if (maxLength && sanitized.length > maxLength) {
+    sanitized = sanitized.substring(0, maxLength);
+  }
+  
+  return sanitized;
 }

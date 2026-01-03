@@ -21,9 +21,9 @@ export default function Error({
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
       <div className="text-center max-w-md w-full p-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Something went wrong</h2>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">오류가 발생했습니다</h2>
         <p className="text-gray-600 dark:text-gray-400 mb-6">
-          An unexpected error occurred. Please try again later.
+          예기치 않은 오류가 발생했습니다. 잠시 후 다시 시도해주세요.
         </p>
         <div className="space-y-3">
         <button
@@ -39,7 +39,7 @@ export default function Error({
           }}
           className="w-full px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
         >
-          Try Again
+          다시 시도
         </button>
         <button
           onClick={() => {
@@ -48,9 +48,9 @@ export default function Error({
               window.location.replace('/login');
             }
           }}
-          className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+          className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
         >
-          Go to Login Page
+          로그인 페이지로 이동
         </button>
         </div>
       </div>

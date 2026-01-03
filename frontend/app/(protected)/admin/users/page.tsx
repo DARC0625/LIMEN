@@ -15,6 +15,7 @@ import {
   useDeleteUser, 
   useApproveUser 
 } from '../../../../hooks/useAdminUsers';
+import type { UpdateUserRequest } from '../../../../lib/types';
 import Loading from '../../../../components/Loading';
 
 export default function UserManagementPage() {
@@ -101,7 +102,7 @@ export default function UserManagementPage() {
     const currentUser = users.find(u => u.id === editingUser);
     if (!currentUser) return;
 
-    const updateData: any = {};
+    const updateData: UpdateUserRequest = {};
     if (username && username !== currentUser.username) updateData.username = username;
     if (password) updateData.password = password;
     if (role && role !== currentUser.role) updateData.role = role;

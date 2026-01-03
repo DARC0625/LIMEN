@@ -5,6 +5,7 @@ import { authAPI, setToken } from '../lib/api';
 import { useRouter } from 'next/navigation';
 import { useToast } from './ToastContainer';
 import { getErrorMessage } from '../lib/types/errors';
+import { isValidUsername, isValidPassword, sanitizeInput } from '../lib/utils/validation';
 
 export default function RegisterForm() {
   const [username, setUsername] = useState('');
@@ -19,25 +20,32 @@ export default function RegisterForm() {
     e.preventDefault();
     setError('');
 
+    // 입력 sanitization (XSS 방지)
+    const sanitizedUsername = sanitizeInput(username);
+    const sanitizedPassword = password; // 비밀번호는 sanitization하지 않음 (특수문자 포함 가능)
+
     // Validation
-    if (username.length < 3) {
-      setError('Username must be at least 3 characters');
+    if (!isValidUsername(sanitizedUsername)) {
+      setError('사용자 이름은 3-20자의 영문, 숫자, 언더스코어(_), 하이픈(-)만 사용할 수 있습니다.');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    
+    if (!isValidPassword(sanitizedPassword)) {
+      setError('비밀번호는 최소 8자 이상이며, 영문, 숫자, 특수문자 중 2가지 이상을 포함해야 합니다.');
       return;
     }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
+    
+    if (sanitizedPassword !== confirmPassword) {
+      setError('비밀번호가 일치하지 않습니다.');
       return;
     }
 
     setLoading(true);
 
     try {
-      const response = await authAPI.register({ username, password });
-      toast.success('Account created successfully! Please wait for admin approval.');
+      // Sanitized username 사용
+      const response = await authAPI.register({ username: sanitizedUsername, password: sanitizedPassword });
+      toast.success('계정이 생성되었습니다! 관리자 승인을 기다려주세요.');
       
       // Redirect to login after a short delay
       setTimeout(() => {

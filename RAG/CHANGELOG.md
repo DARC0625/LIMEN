@@ -1,3 +1,12 @@
+## 2026-01-03 12:10:01 - frontend
+
+**파일**: `frontend/docs/COMPONENTS.md`
+
+**변경 내용**:
+frontend/docs 폴더 제거 및 문서를 RAG/05-frontend/03-components/로 이동
+
+---
+
 ## 2026-01-03 00:04:58 - operations
 
 **파일**: `frontend/envoy.yaml`

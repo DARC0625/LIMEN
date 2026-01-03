@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { authAPI, setToken, setTokens } from '../lib/api';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { logger } from '../lib/utils/logger';
+import { sanitizeInput } from '../lib/utils/validation';
 
 export default function LoginForm() {
   const [username, setUsername] = useState('');
@@ -80,12 +81,28 @@ export default function LoginForm() {
       return;
     }
     
+    // 입력 sanitization (XSS 방지)
+    const sanitizedUsername = sanitizeInput(username);
+    const sanitizedPassword = password; // 비밀번호는 sanitization하지 않음
+    
+    // 기본 검증
+    if (!sanitizedUsername || sanitizedUsername.length < 1) {
+      setError('사용자 이름을 입력해주세요.');
+      return;
+    }
+    
+    if (!sanitizedPassword || sanitizedPassword.length < 1) {
+      setError('비밀번호를 입력해주세요.');
+      return;
+    }
+    
     setError('');
     setLoading(true);
 
     try {
       logger.log('[LoginForm] Starting login...');
-      const response = await authAPI.login({ username, password });
+      // Sanitized username 사용
+      const response = await authAPI.login({ username: sanitizedUsername, password: sanitizedPassword });
       logger.log('[LoginForm] Login API response received:', {
         hasAccessToken: !!response.access_token,
         hasRefreshToken: !!response.refresh_token,

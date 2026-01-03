@@ -6,7 +6,7 @@
 'use client';
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { handleError } from '../lib/utils/error';
+import { handleError, getUserFriendlyMessage } from '../lib/utils/error';
 
 interface Props {
   children: ReactNode;
@@ -72,10 +72,10 @@ export class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
-      // Default error UI
+      // 사용자 친화적 에러 메시지 생성
       const errorMessage = this.state.error
-        ? this.state.error.message || 'An unknown error occurred.'
-        : 'An unknown error occurred.';
+        ? getUserFriendlyMessage(this.state.error)
+        : '알 수 없는 오류가 발생했습니다.';
 
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
@@ -86,6 +86,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
@@ -97,7 +98,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
             
             <h2 className="text-xl font-bold text-gray-900 dark:text-white text-center mb-2">
-              Something went wrong
+              오류가 발생했습니다
             </h2>
             
             <p className="text-gray-600 dark:text-gray-400 text-center mb-6">
@@ -107,10 +108,10 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="flex gap-3">
               <button
                 onClick={this.handleReset}
-                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                aria-label="Retry after error"
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                aria-label="오류 후 다시 시도"
               >
-                Try Again
+                다시 시도
               </button>
               <button
                 onClick={() => {
@@ -118,19 +119,19 @@ export class ErrorBoundary extends Component<Props, State> {
                     window.location.href = '/';
                   }
                 }}
-                className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg transition-colors"
-                aria-label="Go to home page"
+                className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                aria-label="홈으로 이동"
               >
-                Go Home
+                홈으로
               </button>
             </div>
             
             {process.env.NODE_ENV === 'development' && this.state.error && (
               <details className="mt-4">
-                <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer">
-                  Developer Information
+                <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+                  개발자 정보 (개발 환경에서만 표시)
                 </summary>
-                <pre className="mt-2 p-3 bg-gray-100 dark:bg-gray-900 rounded text-xs overflow-auto max-h-40">
+                <pre className="mt-2 p-3 bg-gray-100 dark:bg-gray-900 rounded text-xs overflow-auto max-h-40 font-mono">
                   {this.state.error.toString()}
                   {this.state.errorInfo?.componentStack}
                 </pre>

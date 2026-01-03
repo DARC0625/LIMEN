@@ -4,7 +4,7 @@
  */
 
 import { render, screen, fireEvent } from '@testing-library/react'
-import Button from '../ui/Button'
+import { Button } from '../ui/Button'
 
 describe('Button', () => {
   it('renders button with children', () => {
@@ -37,7 +37,7 @@ describe('Button', () => {
 
     rerender(<Button size="lg">Large</Button>)
     button = screen.getByRole('button')
-    expect(button).toHaveClass('px-5', 'py-2.5', 'text-lg')
+    expect(button).toHaveClass('px-6', 'py-3', 'text-lg')
   })
 
   it('is disabled when disabled prop is true', () => {

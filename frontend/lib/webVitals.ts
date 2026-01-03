@@ -147,7 +147,7 @@ export function initWebVitals() {
         try {
           const entries = list.getEntries();
           entries.forEach((entry) => {
-            const perfEntry = entry as PerformanceEventTiming;
+            const perfEntry = entry as PerformanceEventTiming & { id?: string };
             reportWebVitals({
               id: perfEntry.id || 'fid',
               name: 'FID',

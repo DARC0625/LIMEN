@@ -4,6 +4,7 @@
  */
 
 import { validateTokenIntegrity } from '../security';
+import { logger } from './logger';
 
 /**
  * JWT 토큰 디코딩
@@ -40,9 +41,7 @@ export function decodeToken(token: string): DecodedToken | null {
     );
     return JSON.parse(jsonPayload);
   } catch (e) {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('[decodeToken] Parse error:', e);
-    }
+    logger.warn('[decodeToken] Parse error:', e);
     return null;
   }
 }

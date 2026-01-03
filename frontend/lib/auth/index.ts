@@ -9,6 +9,7 @@ import { validateTokenIntegrity } from '../security';
 import { getUserRoleFromToken, isUserApprovedFromToken, isTokenValid } from '../utils/token';
 import { AUTH_CONSTANTS } from '../constants';
 import type { SessionResponse } from '../types';
+import { logger } from '../utils/logger';
 
 /**
  * 인증 확인 결과
@@ -45,7 +46,7 @@ export async function checkAuth(): Promise<AuthCheckResult> {
       }
     } catch (error) {
       // 토큰 갱신 실패는 무시하고 백엔드 세션 확인으로 진행
-      console.warn('[checkAuth] Token refresh failed, checking backend session:', error);
+      logger.warn('[checkAuth] Token refresh failed, checking backend session:', error);
     }
   }
 
@@ -66,7 +67,7 @@ export async function checkAuth(): Promise<AuthCheckResult> {
     return { valid: false, reason: sessionResult.reason || '세션이 유효하지 않습니다.' };
   } catch (error) {
     // 네트워크 오류 - localStorage 토큰으로 폴백
-    console.warn('[checkAuth] Backend session check failed, falling back to localStorage:', error);
+    logger.warn('[checkAuth] Backend session check failed, falling back to localStorage:', error);
     return checkLocalStorageToken();
   }
 }
@@ -98,8 +99,8 @@ async function checkBackendSession(): Promise<AuthCheckResult> {
   try {
     const csrfToken = tokenManager.getCSRFToken();
     
-    // 상세 로깅 (항상 출력)
-    console.log('[checkBackendSession] Checking session', {
+    // 상세 로깅 (개발 환경에서만)
+    logger.log('[checkBackendSession] Checking session', {
       hasCSRFToken: !!csrfToken,
     });
     
@@ -107,7 +108,7 @@ async function checkBackendSession(): Promise<AuthCheckResult> {
     // Phase 4: 보안 강화 - localStorage 직접 사용 제거, tokenManager 사용
     const cookiesBeforeRequest = document.cookie;
     const hasRefreshToken = tokenManager.hasValidToken();
-    console.log('[checkBackendSession] Cookies before request:', {
+    logger.log('[checkBackendSession] Cookies before request:', {
       hasCookies: !!cookiesBeforeRequest,
       cookieCount: cookiesBeforeRequest ? cookiesBeforeRequest.split(';').length : 0,
       cookies: cookiesBeforeRequest ? cookiesBeforeRequest.substring(0, 300) : 'none',
@@ -125,9 +126,9 @@ async function checkBackendSession(): Promise<AuthCheckResult> {
       },
     });
 
-    // 상세 로깅 (항상 출력)
+    // 상세 로깅 (개발 환경에서만)
     const setCookieHeaders = response.headers.getSetCookie();
-    console.log('[checkBackendSession] Session check response:', {
+    logger.log('[checkBackendSession] Session check response:', {
       status: response.status,
       ok: response.ok,
       statusText: response.statusText,
@@ -138,37 +139,42 @@ async function checkBackendSession(): Promise<AuthCheckResult> {
     if (response.ok) {
       const data: SessionResponse = await response.json();
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[checkBackendSession] Session data:', {
-          valid: data.valid,
-          reason: data.reason,
-        });
-      }
+      logger.log('[checkBackendSession] Session data:', {
+        valid: data.valid,
+        reason: data.reason,
+      });
       
       if (data.valid === true) {
-        console.log('[checkBackendSession] Session is valid');
+        logger.log('[checkBackendSession] Session is valid');
         return { valid: true };
       } else {
-        console.log('[checkBackendSession] Session is invalid:', data.reason);
+        logger.log('[checkBackendSession] Session is invalid:', data.reason);
         return { valid: false, reason: data.reason || '세션이 유효하지 않습니다.' };
       }
     } else if (response.status === 401) {
       // 401은 세션이 없거나 만료됨
-      console.log('[checkBackendSession] Session expired or not found (401)');
+      logger.log('[checkBackendSession] Session expired or not found (401)');
       return { valid: false, reason: '인증이 필요합니다.' };
     } else if (response.status === 403) {
       // 403은 권한 문제 (백엔드 변경으로 GET 요청에서는 이제 발생하지 않아야 함)
       // 하지만 혹시 모를 경우를 대비해 처리
-      console.warn('[checkBackendSession] Forbidden (403) - unexpected for GET request');
+      logger.warn('[checkBackendSession] Forbidden (403) - unexpected for GET request');
       return { valid: false, reason: '권한이 없습니다.' };
     } else {
       // 기타 오류는 네트워크 문제로 간주하고 예외 발생
-      console.error('[checkBackendSession] Unexpected status:', response.status);
+      logger.error(new Error(`[checkBackendSession] Unexpected status: ${response.status}`), {
+        status: response.status,
+        component: 'auth',
+        action: 'checkBackendSession',
+      });
       throw new Error(`HTTP ${response.status}`);
     }
   } catch (error) {
     // 네트워크 오류 또는 기타 예외
-    console.error('[checkBackendSession] Session check failed:', error);
+    logger.error(error instanceof Error ? error : new Error(String(error)), {
+      component: 'auth',
+      action: 'checkBackendSession',
+    });
     throw error;
   } finally {
     sessionCheckInProgress = false;

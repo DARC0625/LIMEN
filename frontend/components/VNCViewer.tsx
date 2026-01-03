@@ -15,6 +15,9 @@ interface RFBInstance {
   sendPointerEvent: (x: number, y: number, buttonMask: number) => void;
   addEventListener: (event: string, handler: (e: unknown) => void) => void;
   removeEventListener: (event: string, handler: (e: unknown) => void) => void;
+  scaleViewport?: boolean;
+  resizeSession?: boolean;
+  background?: string;
   _clickCleanup?: () => void;
   _resizeCleanup?: () => void;
 }
@@ -63,6 +66,9 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
   const vmStatusCheckAttemptsRef = useRef<number>(0);
   const MAX_VM_STATUS_CHECK_ATTEMPTS = 3; // Maximum retry attempts for VM status check
   const abortControllerRef = useRef<AbortController | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const BASE_RECONNECT_DELAY = 1000; // 1초부터 시작
+  const MAX_RECONNECT_DELAY = 30000; // 최대 30초
 
   // VM Restart - React Error #321 fix: Remove useCallback
   const handleRestart = async () => {
@@ -166,18 +172,18 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
         handleError(error, { component: 'VNCViewer', action: 'detach_media' });
       
       // Enhanced error message handling
-      const apiError = error as { responseData?: { message?: string }; message?: string };
+      const apiError = error as { responseData?: { message?: string }; response?: { data?: { message?: string } }; message?: string; status?: number };
       let errorMessage = 'Failed to disable media';
       if (apiError?.responseData?.message) {
         errorMessage = apiError.responseData.message;
-      } else if (error?.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error?.message) {
-        errorMessage = error.message;
+      } else if (apiError?.response?.data?.message) {
+        errorMessage = apiError.response.data.message;
+      } else if (apiError?.message) {
+        errorMessage = apiError.message;
       }
       
       // If it's a 500 error, provide more helpful message
-      if (error?.status === 500 || errorMessage.includes('Internal server error')) {
+      if (apiError?.status === 500 || errorMessage.includes('Internal server error')) {
         errorMessage = 'Server error occurred. The media may still be enabled. Please try refreshing or contact support.';
       }
       
@@ -527,7 +533,8 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
         }
         
         // NetworkError는 네트워크 문제이므로 재시도
-        const isNetworkError = error?.name === 'TypeError' && error?.message?.includes('NetworkError');
+        const errorObj = error as { name?: string; message?: string } | null;
+        const isNetworkError = errorObj?.name === 'TypeError' && errorObj?.message?.includes('NetworkError');
         
         if (isNetworkError && retryCount < MAX_VM_STATUS_CHECK_ATTEMPTS) {
           // Exponential backoff: 1s, 2s, 4s
@@ -550,7 +557,8 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
         }
         
         // VNC graphics not found 에러 확인
-        const errorMessage = error?.message || error?.responseData?.message || error?.response?.data?.message || '';
+        const errorWithMessage = error as { message?: string; responseData?: { message?: string }; response?: { data?: { message?: string } } } | null;
+        const errorMessage = errorWithMessage?.message || errorWithMessage?.responseData?.message || errorWithMessage?.response?.data?.message || '';
         if (errorMessage.includes('VNC graphics not found') || errorMessage.includes('VNC graphics') || errorMessage.includes('graphics not found')) {
           setStatus('VNC Connection Failed: VNC graphics not configured for this VM. Please ensure the VM has VNC graphics enabled in its configuration.');
           handleError(new Error(`VNC Connection Failed: VNC graphics not found`), {
@@ -563,8 +571,10 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
           return; // Do not attempt connection if VNC graphics not found
         }
         
-        logger.error(error instanceof Error ? error : new Error(String(error)), { component: 'VNCViewer', action: 'check_vm_status' });
-        setStatus(`Error: Failed to check VM status - ${error.message || 'Unknown error'}`);
+        const errorForLog = error instanceof Error ? error : new Error(String(error));
+        logger.error(errorForLog, { component: 'VNCViewer', action: 'check_vm_status' });
+        const errorMsg = error instanceof Error ? error.message : (typeof error === 'object' && error !== null && 'message' in error ? String((error as { message?: unknown }).message) : 'Unknown error');
+        setStatus(`Error: Failed to check VM status - ${errorMsg}`);
         // Don't try to connect if we can't check status - it will likely fail anyway
       } finally {
         if (!abortController.signal.aborted) {
@@ -786,6 +796,66 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
               return; // 재시도하지 않음
             }
             
+            // 지수 백오프 재연결 함수
+            const attemptReconnect = async () => {
+              if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+                setStatus(`연결 실패: 최대 재시도 횟수(${MAX_RECONNECT_ATTEMPTS}회)를 초과했습니다. 페이지를 새로고침하거나 VM 상태를 확인해주세요.`);
+                logger.error(new Error('VNC reconnection failed: Maximum attempts exceeded'), {
+                  component: 'VNCViewer',
+                  action: 'reconnect',
+                  attempts: reconnectAttemptsRef.current,
+                });
+                return;
+              }
+
+              reconnectAttemptsRef.current += 1;
+              
+              // 지수 백오프 계산: 1초, 2초, 4초, 8초, 16초 (최대 30초)
+              const delay = Math.min(
+                BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttemptsRef.current - 1),
+                MAX_RECONNECT_DELAY
+              );
+
+              setStatus(`연결 끊김. ${delay / 1000}초 후 재연결 시도 중... (${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
+              logger.log(`[VNCViewer] Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})...`);
+
+              // 기존 재연결 타이머 취소
+              if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+              }
+
+              reconnectTimeoutRef.current = setTimeout(async () => {
+                // VM 상태 확인 후 재연결
+                const isVMRunning = await checkVMStatus();
+                if (isVMRunning) {
+                  logger.log(`[VNCViewer] VM is running, attempting reconnection...`);
+                  try {
+                    // 재연결 시 URL 다시 가져오기
+                    const reconnectUrl = await setupVNCConnection();
+                    if (rfbRef.current && typeof rfbRef.current.disconnect === 'function') {
+                      try {
+                        rfbRef.current.disconnect();
+                      } catch (e) {
+                        // ignore
+                      }
+                    }
+                    rfbRef.current = null;
+                    connect(reconnectUrl);
+                  } catch (err) {
+                    logger.error(err instanceof Error ? err : new Error(String(err)), {
+                      component: 'VNCViewer',
+                      action: 'reconnect_setup_url',
+                    });
+                    setStatus('재연결 URL 설정 실패. 페이지를 새로고침해주세요.');
+                  }
+                } else {
+                  // VM이 실행 중이 아니면 재연결 시도 중단
+                  setStatus('VM이 실행 중이 아닙니다. VM을 시작한 후 다시 시도해주세요.');
+                  reconnectAttemptsRef.current = 0; // 재시도 카운터 리셋
+                }
+              }, delay);
+            };
+
             // Check if VM is running before attempting reconnect
             // Exponential backoff와 최대 재시도 횟수 적용
             const checkVMStatus = async (retryCount: number = 0): Promise<boolean> => {
@@ -835,7 +905,8 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
                 }
                 
                 // NetworkError는 네트워크 문제이므로 재시도
-                const isNetworkError = err?.name === 'TypeError' && err?.message?.includes('NetworkError');
+                const errObj = err as { name?: string; message?: string } | null;
+                const isNetworkError = errObj?.name === 'TypeError' && errObj?.message?.includes('NetworkError');
                 
                 if (isNetworkError && retryCount < MAX_VM_STATUS_CHECK_ATTEMPTS) {
                   // Exponential backoff: 1s, 2s, 4s
@@ -871,45 +942,17 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
             // 2. VM is running (we'll check this)
             // 3. We have a container to reconnect to
             if ((code === 1006 || code === '1006') && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
-              reconnectAttemptsRef.current++;
-              logger.warn(`[VNCViewer] Connection closed (1006), attempting reconnect ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS}...`);
-              setStatus(`Connection failed. Reconnecting... (${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
+              // 기존 재연결 타이머 취소
+              if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+                reconnectTimeoutRef.current = null;
+              }
               
-              // Check VM status before reconnecting
-              checkVMStatus().then((shouldReconnect) => {
-                if (!shouldReconnect) {
-                  reconnectAttemptsRef.current = MAX_RECONNECT_ATTEMPTS;
-                  return;
-                }
-                
-                // Retry after 3 seconds - URL 다시 가져오기
-                setTimeout(async () => {
-                  if (containerRef.current && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
-                    logger.log('[VNCViewer] Attempting reconnect...');
-                    try {
-                      if (rfbRef.current && typeof rfbRef.current.disconnect === 'function') {
-                        rfbRef.current.disconnect();
-                      }
-                    } catch (e) {
-                      // ignore
-                    }
-                    rfbRef.current = null;
-                    // 재연결 시 URL 다시 가져오기
-                    const reconnectUrl = await setupVNCConnection();
-                    connect(reconnectUrl);
-                  }
-                }, 3000);
-              }).catch((err) => {
-                // checkVMStatus에서 에러가 발생한 경우 (이미 내부에서 처리되지만 안전장치)
-                logger.error(err instanceof Error ? err : new Error(String(err)), { component: 'VNCViewer', action: 'check_vm_status_promise' });
-                if (err?.name === 'TypeError' && err?.message?.includes('NetworkError')) {
-                  setStatus('Network error: Unable to verify VM status. Please check your connection and refresh the page.');
-                  reconnectAttemptsRef.current = MAX_RECONNECT_ATTEMPTS; // 재시도 중단
-                }
-              });
+              // 지수 백오프 재연결 시도
+              attemptReconnect();
               return;
             } else if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
-              setStatus('Reconnect failed: Maximum retry attempts exceeded. Please check VM and VNC server status.');
+              setStatus('재연결 실패: 최대 재시도 횟수를 초과했습니다. VM 및 VNC 서버 상태를 확인해주세요.');
               return;
             }
             
@@ -989,6 +1032,12 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
+      }
+      
+      // Cleanup: 재연결 타이머 취소
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
       
       // Cleanup resize listener

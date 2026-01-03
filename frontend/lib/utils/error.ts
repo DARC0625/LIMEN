@@ -32,7 +32,7 @@ export function classifyError(error: unknown): {
       if (apiError.status === 401 || apiError.status === 403) {
         return {
           type: ErrorType.AUTH,
-          message: 'Authentication required. Please log in again.',
+          message: '인증이 필요합니다. 다시 로그인해주세요.',
           status: apiError.status,
         };
       }
@@ -40,7 +40,15 @@ export function classifyError(error: unknown): {
       if (apiError.status >= 500) {
         return {
           type: ErrorType.SERVER,
-          message: 'Server error occurred. Please try again later.',
+          message: '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+          status: apiError.status,
+        };
+      }
+      
+      if (apiError.status === 404) {
+        return {
+          type: ErrorType.VALIDATION,
+          message: '요청한 리소스를 찾을 수 없습니다.',
           status: apiError.status,
         };
       }
@@ -48,7 +56,7 @@ export function classifyError(error: unknown): {
       if (apiError.status >= 400) {
         return {
           type: ErrorType.VALIDATION,
-          message: apiError.message || 'Invalid request.',
+          message: apiError.message || '잘못된 요청입니다.',
           status: apiError.status,
         };
       }
@@ -59,23 +67,24 @@ export function classifyError(error: unknown): {
       error.message.includes('Failed to fetch') ||
       error.message.includes('NetworkError') ||
       error.message.includes('network') ||
-      error.message.includes('timeout')
+      error.message.includes('timeout') ||
+      error.message.includes('Request timeout')
     ) {
       return {
         type: ErrorType.NETWORK,
-        message: 'Network connection error. Please check your connection.',
+        message: '네트워크 연결 오류가 발생했습니다. 인터넷 연결을 확인해주세요.',
       };
     }
     
     return {
       type: ErrorType.UNKNOWN,
-      message: error.message || 'An unknown error occurred.',
+      message: error.message || '알 수 없는 오류가 발생했습니다.',
     };
   }
   
   return {
     type: ErrorType.UNKNOWN,
-    message: 'An unknown error occurred.',
+    message: '알 수 없는 오류가 발생했습니다.',
   };
 }
 

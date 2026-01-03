@@ -213,7 +213,10 @@ export default function Home() {
             <h2 className="text-lg sm:text-xl font-semibold mb-4">Create New VM</h2>
             <form onSubmit={handleCreateVM} className="space-y-4" aria-label="Create new virtual machine form">
               <div>
-                <label htmlFor="vm-name" className="block text-sm font-medium mb-1">VM Name</label>
+                <label htmlFor="vm-name" className="block text-sm font-medium mb-1">
+                  VM Name
+                  <span className="text-red-500 ml-1" aria-label="required">*</span>
+                </label>
                     <input 
                       id="vm-name"
                       type="text" 
@@ -236,6 +239,8 @@ export default function Home() {
                       }} 
                       placeholder="e.g. web-server-01"
                       aria-describedby="vm-name-help"
+                      aria-required="true"
+                      aria-invalid={newVM.name.length > 0 && !/^[a-zA-Z0-9_-]+$/.test(newVM.name)}
                     />
                 <p id="vm-name-help" className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Only letters, numbers, hyphens (-), and underscores (_) are allowed.
@@ -243,13 +248,17 @@ export default function Home() {
               </div>
               
               <div>
-                <label htmlFor="os-type" className="block text-sm font-medium mb-1">OS Image</label>
+                <label htmlFor="os-type" className="block text-sm font-medium mb-1">
+                  OS Image
+                  <span className="text-red-500 ml-1" aria-label="required">*</span>
+                </label>
                 <select 
                   id="os-type"
                   className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   value={newVM.os_type}
                   onChange={e => setNewVM({...newVM, os_type: e.target.value})}
                   aria-describedby="os-type-help"
+                  aria-required="true"
                 >
                   <option value="ubuntu-desktop">Ubuntu Desktop (GUI Installer)</option>
                   <option value="ubuntu-server">Ubuntu Server (CLI Installer)</option>
