@@ -175,6 +175,7 @@ func IsPublicEndpoint(path string) bool {
 	publicPaths := []string{
 		"/api/health",
 		"/api/health_proxy", // Health check proxy endpoint
+		"/api/metrics",      // Prometheus metrics endpoint (public)
 		"/api/auth/login",
 		"/api/auth/register",
 		"/api/auth/session", // Session management endpoints (GET, POST, DELETE)
