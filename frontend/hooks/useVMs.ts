@@ -31,28 +31,6 @@ export function useVMs() {
   // 최후의 수단으로만 폴링 (5분마다) - 백그라운드 동기화용
   const FALLBACK_POLLING_INTERVAL = 5 * 60 * 1000; // 5분
   
-  // 창 포커스 시 재요청 조건부 적용 (탭이 비활성화된 시간이 길면만)
-  const [lastFocusTime, setLastFocusTime] = useState<number>(Date.now());
-  
-  useEffect(() => {
-    if (!enabled) return;
-    
-    const handleFocus = () => {
-      const now = Date.now();
-      const timeSinceLastFocus = now - lastFocusTime;
-      setLastFocusTime(now);
-      
-      // 탭이 1분 이상 비활성화되었을 때만 재요청
-      if (timeSinceLastFocus > 60 * 1000) {
-        // queryClient.invalidateQueries는 여기서 직접 호출하지 않고
-        // refetchOnWindowFocus가 처리하도록 함
-      }
-    };
-    
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [enabled, lastFocusTime]);
-  
   return useQuery({
     queryKey: ['vms'],
     queryFn: async () => {
