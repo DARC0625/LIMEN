@@ -16,6 +16,16 @@ static_resources:
                   - name: envoy.access_loggers.stdout
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format:
+                        json_format:
+                          request_id: "%REQ(X-REQUEST-ID)%"
+                          status: "%RESPONSE_CODE%"
+                          upstream_time: "%RESPONSE_DURATION%"
+                          user_agent: "%REQ(USER-AGENT)%"
+                          source_ip: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%"
+                          method: "%REQ(:METHOD)%"
+                          path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+                          protocol: "%PROTOCOL%"
                 upgrade_configs:
                   - upgrade_type: websocket
                 http_filters:
@@ -24,6 +34,19 @@ static_resources:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
                 route_config:
                   name: local_route
+                  response_headers_to_add:
+                    - header:
+                        key: "Strict-Transport-Security"
+                        value: "max-age=31536000; includeSubDomains"
+                    - header:
+                        key: "X-Content-Type-Options"
+                        value: "nosniff"
+                    - header:
+                        key: "Referrer-Policy"
+                        value: "strict-origin-when-cross-origin"
+                    - header:
+                        key: "X-Frame-Options"
+                        value: "DENY"
                   virtual_hosts:
                     # LIMEN 서비스 (limen.kr)
                     - name: limen_frontend
@@ -152,6 +175,16 @@ static_resources:
                   - name: envoy.access_loggers.stdout
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format:
+                        json_format:
+                          request_id: "%REQ(X-REQUEST-ID)%"
+                          status: "%RESPONSE_CODE%"
+                          upstream_time: "%RESPONSE_DURATION%"
+                          user_agent: "%REQ(USER-AGENT)%"
+                          source_ip: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%"
+                          method: "%REQ(:METHOD)%"
+                          path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+                          protocol: "%PROTOCOL%"
                 upgrade_configs:
                   - upgrade_type: websocket
                 # CORS는 백엔드에서 처리하므로 Envoy에서는 헤더를 그대로 전달
@@ -163,6 +196,19 @@ static_resources:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
                 route_config:
                   name: local_route_https_limen
+                  response_headers_to_add:
+                    - header:
+                        key: "Strict-Transport-Security"
+                        value: "max-age=31536000; includeSubDomains"
+                    - header:
+                        key: "X-Content-Type-Options"
+                        value: "nosniff"
+                    - header:
+                        key: "Referrer-Policy"
+                        value: "strict-origin-when-cross-origin"
+                    - header:
+                        key: "X-Frame-Options"
+                        value: "DENY"
                   virtual_hosts:
                     - name: limen_frontend_https
                       domains: ["limen.kr", "www.limen.kr"]
@@ -175,25 +221,28 @@ static_resources:
                             timeout: 60s
                         # VNC WebSocket 프록시 (백엔드로 직접)
                         # 모든 /vnc/ 요청을 백엔드로 프록시 (WebSocket 업그레이드 자동 처리)
+                        # 정책: idle timeout 1시간, max connection duration 24시간
                         - match:
                             prefix: "/vnc/"
                           route:
                             cluster: backend_cluster
-                            timeout: 604800s  # 7일 = 604800초
+                            timeout: 3600s  # idle timeout: 1시간
+                            max_stream_duration: 86400s  # max connection duration: 24시간
                             host_rewrite_literal: 10.0.0.100
                             upgrade_configs:
                               - upgrade_type: websocket
                         # WebSocket 프록시 (백엔드로 직접)
+                        # 정책: idle timeout 1시간, max connection duration 24시간
                         - match:
                             prefix: "/ws/"
                           route:
                             cluster: backend_cluster
-                            timeout: 604800s  # 7일 = 604800초
+                            timeout: 3600s  # idle timeout: 1시간
+                            max_stream_duration: 86400s  # max connection duration: 24시간
                             host_rewrite_literal: 10.0.0.100
                             # WebSocket upgrade 명시적 설정
                             upgrade_configs:
                               - upgrade_type: websocket
-                            # WebSocket 연결 유지 설정 (timeout으로 대체)
                         # API 프록시 (Next.js middleware를 통해 백엔드로)
                         # 중요: Next.js middleware가 쿠키를 제대로 처리하도록 Next.js로 전달
                         - match:
@@ -238,6 +287,16 @@ static_resources:
                   - name: envoy.access_loggers.stdout
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format:
+                        json_format:
+                          request_id: "%REQ(X-REQUEST-ID)%"
+                          status: "%RESPONSE_CODE%"
+                          upstream_time: "%RESPONSE_DURATION%"
+                          user_agent: "%REQ(USER-AGENT)%"
+                          source_ip: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%"
+                          method: "%REQ(:METHOD)%"
+                          path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+                          protocol: "%PROTOCOL%"
                 upgrade_configs:
                   - upgrade_type: websocket
                 http_filters:
@@ -246,6 +305,19 @@ static_resources:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
                 route_config:
                   name: local_route_https_darc
+                  response_headers_to_add:
+                    - header:
+                        key: "Strict-Transport-Security"
+                        value: "max-age=31536000; includeSubDomains"
+                    - header:
+                        key: "X-Content-Type-Options"
+                        value: "nosniff"
+                    - header:
+                        key: "Referrer-Policy"
+                        value: "strict-origin-when-cross-origin"
+                    - header:
+                        key: "X-Frame-Options"
+                        value: "DENY"
                   virtual_hosts:
                     - name: darc_frontend_https
                       domains: ["www.darc.kr", "darc.kr"]
