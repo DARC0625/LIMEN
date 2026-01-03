@@ -1,4 +1,5 @@
 // 에이전트 메트릭스 조회 훅 (React Query)
+import React from 'react';
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { useAuth } from '../components/AuthGuard';
 import { useMounted } from './useMounted';
@@ -13,6 +14,7 @@ interface AgentMetrics {
 
 /**
  * 에이전트 메트릭스 조회 훅
+ * 트리거 방식: 사용자가 대시보드에 있을 때만 활성화
  */
 export function useAgentMetrics() {
   const { isAuthenticated } = useAuth();
@@ -21,6 +23,23 @@ export function useAgentMetrics() {
   // 서버와 클라이언트 초기 렌더링에서 동일한 값 반환 (false)
   // 마운트 후에만 인증 상태 확인
   const enabled = mounted && isAuthenticated === true;
+  
+  // 대시보드 페이지에서만 사용되므로, 페이지 가시성 확인
+  const [isVisible, setIsVisible] = React.useState(true);
+  
+  React.useEffect(() => {
+    if (!enabled) return;
+    
+    const handleVisibilityChange = () => {
+      setIsVisible(!document.hidden);
+    };
+    
+    // 초기 가시성 설정
+    setIsVisible(!document.hidden);
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [enabled]);
   
   return useQuery({
     queryKey: ['agent', 'metrics'],
