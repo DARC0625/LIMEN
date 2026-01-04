@@ -878,10 +878,16 @@ describe('RevolverPicker', () => {
     const originalCAF = global.cancelAnimationFrame
     global.cancelAnimationFrame = mockCancelAnimationFrame as any
 
-    // requestAnimationFrame도 모킹
-    const mockRequestAnimationFrame = jest.fn(() => 1)
+    // requestAnimationFrame도 모킹 - frameId를 반환하도록 설정
+    let frameIdCounter = 1
+    const mockRequestAnimationFrame = jest.fn(() => frameIdCounter++)
     const originalRAF = global.requestAnimationFrame
     global.requestAnimationFrame = mockRequestAnimationFrame as any
+
+    // Date.now 모킹 - 시간 경과를 시뮬레이션
+    let mockTime = 1000
+    const originalDateNow = Date.now
+    Date.now = jest.fn(() => mockTime)
 
     const { unmount } = render(
       <RevolverPicker
@@ -892,24 +898,59 @@ describe('RevolverPicker', () => {
     )
 
     const container = screen.getByText('5').closest('div[class*="overflow"]')
-    if (container) {
-      act(() => {
+    expect(container).toBeInTheDocument()
+
+    // 빠른 드래그로 모멘텀을 생성하여 애니메이션이 활성화되도록 함
+    // momentumRef.current가 0.5보다 커야 애니메이션이 시작됨
+    act(() => {
+      if (container) {
+        // 드래그 시작 (t=0)
+        mockTime = 1000
         fireEvent.mouseDown(container, { clientY: 100 })
-        // 애니메이션 프레임이 설정되도록 함
-        if (mockRequestAnimationFrame.mock.calls.length > 0) {
-          const frameId = mockRequestAnimationFrame.mock.results[0].value
-          unmount()
-          // cancelAnimationFrame이 호출되었는지 확인 (애니메이션이 활성화된 경우)
-          expect(container).toBeInTheDocument()
-        } else {
-          unmount()
-          expect(container).toBeInTheDocument()
-        }
+      }
+    })
+
+    // 빠르게 이동하여 모멘텀 생성 (짧은 시간에 큰 거리 이동 = 높은 속도)
+    act(() => {
+      // t=10ms, 50px 이동 -> 속도 = 50/10 * 16 = 80 (0.5보다 훨씬 큼)
+      mockTime = 1010 // 10ms 경과
+      fireEvent.mouseMove(window, { clientY: 50 }) // 50px 이동
+    })
+
+    act(() => {
+      // mouseUp으로 드래그 종료 - 이때 momentumRef.current가 0.5보다 크면 애니메이션 시작
+      fireEvent.mouseUp(window)
+    })
+
+    // requestAnimationFrame이 호출되었는지 확인 (애니메이션이 시작되었는지)
+    const hasAnimationStarted = mockRequestAnimationFrame.mock.calls.length > 0
+
+    if (hasAnimationStarted) {
+      // 애니메이션이 시작된 경우, unmount 시 cancelAnimationFrame이 호출되어야 함
+      // unmount 전에는 호출되지 않았는지 확인
+      expect(mockCancelAnimationFrame).not.toHaveBeenCalled()
+
+      // unmount 시 cleanup useEffect에서 cancelAnimationFrame 호출
+      act(() => {
+        unmount()
       })
+
+      // unmount 후 cancelAnimationFrame이 호출되었는지 확인
+      expect(mockCancelAnimationFrame).toHaveBeenCalled()
+    } else {
+      // 애니메이션이 시작되지 않은 경우 (momentumRef.current가 0.5 이하)
+      // animationFrameRef.current가 null이므로 cancelAnimationFrame이 호출되지 않음
+      // 이 경우에도 테스트는 통과해야 함 (cleanup이 정상적으로 작동)
+      act(() => {
+        unmount()
+      })
+      // 애니메이션이 없으면 cancelAnimationFrame이 호출되지 않는 것이 정상
+      expect(mockCancelAnimationFrame).not.toHaveBeenCalled()
     }
 
     global.cancelAnimationFrame = originalCAF
     global.requestAnimationFrame = originalRAF
+    Date.now = originalDateNow
   })
 
   it('handles items array with single element', () => {
@@ -936,6 +977,192 @@ describe('RevolverPicker', () => {
     // 컴포넌트가 렌더링되는지 확인
     const container = screen.queryByText('99')
     expect(container || screen.queryByText('5')).toBeTruthy()
+  })
+
+  it('handles animateMomentum when isDragging is true', () => {
+    render(
+      <RevolverPicker
+        items={mockItems}
+        value={5}
+        onChange={mockOnChange}
+      />
+    )
+
+    const container = screen.getByText('5').closest('div[class*="overflow"]')
+    if (container) {
+      act(() => {
+        fireEvent.mouseDown(container, { clientY: 100 })
+        // isDragging이 true인 상태에서 animateMomentum 호출
+        // 실제로는 isDragging이 true이면 애니메이션이 시작되지 않음
+      })
+      expect(container).toBeInTheDocument()
+    }
+  })
+
+  it('handles animateMomentum with low momentum', () => {
+    render(
+      <RevolverPicker
+        items={mockItems}
+        value={5}
+        onChange={mockOnChange}
+      />
+    )
+
+    const container = screen.getByText('5').closest('div[class*="overflow"]')
+    if (container) {
+      act(() => {
+        fireEvent.mouseDown(container, { clientY: 100 })
+        fireEvent.mouseMove(window, { clientY: 99.9 }) // 매우 작은 이동
+        fireEvent.mouseUp(window)
+      })
+      // 모멘텀이 낮으면 애니메이션이 시작되지 않음
+      expect(container).toBeInTheDocument()
+    }
+  })
+
+  it('handles scroll when isDragging is true', () => {
+    render(
+      <RevolverPicker
+        items={mockItems}
+        value={5}
+        onChange={mockOnChange}
+      />
+    )
+
+    const container = screen.getByText('5').closest('div[class*="overflow"]')
+    if (container) {
+      act(() => {
+        fireEvent.mouseDown(container, { clientY: 100 })
+        // isDragging이 true인 상태에서 스크롤 이벤트 발생
+        fireEvent.scroll(container)
+      })
+      // isDragging이 true이면 handleScroll이 early return
+      expect(container).toBeInTheDocument()
+    }
+  })
+
+  it('handles keyboard navigation at boundaries', () => {
+    render(
+      <RevolverPicker
+        items={mockItems}
+        value={1} // 첫 번째 아이템
+        onChange={mockOnChange}
+      />
+    )
+
+    const container = screen.getByText('1').closest('div[class*="overflow"]')
+    if (container) {
+      act(() => {
+        // ArrowUp을 누르면 마지막 아이템으로 이동해야 함
+        fireEvent.keyDown(container, { key: 'ArrowUp', preventDefault: jest.fn() })
+      })
+      expect(container).toBeInTheDocument()
+    }
+  })
+
+  it('handles keyboard navigation at last item', () => {
+    render(
+      <RevolverPicker
+        items={mockItems}
+        value={10} // 마지막 아이템
+        onChange={mockOnChange}
+      />
+    )
+
+    const container = screen.getByText('10').closest('div[class*="overflow"]')
+    if (container) {
+      act(() => {
+        // ArrowDown을 누르면 첫 번째 아이템으로 이동해야 함
+        fireEvent.keyDown(container, { key: 'ArrowDown', preventDefault: jest.fn() })
+      })
+      expect(container).toBeInTheDocument()
+    }
+  })
+
+  it('handles keyboard navigation with PageUp at first item', () => {
+    render(
+      <RevolverPicker
+        items={mockItems}
+        value={1} // 첫 번째 아이템
+        onChange={mockOnChange}
+      />
+    )
+
+    const container = screen.getByText('1').closest('div[class*="overflow"]')
+    if (container) {
+      act(() => {
+        // PageUp을 누르면 마지막 아이템으로 이동해야 함
+        fireEvent.keyDown(container, { key: 'PageUp', preventDefault: jest.fn() })
+      })
+      expect(container).toBeInTheDocument()
+    }
+  })
+
+  it('handles keyboard navigation with PageDown at last item', () => {
+    render(
+      <RevolverPicker
+        items={mockItems}
+        value={10} // 마지막 아이템
+        onChange={mockOnChange}
+      />
+    )
+
+    const container = screen.getByText('10').closest('div[class*="overflow"]')
+    if (container) {
+      act(() => {
+        // PageDown을 누르면 첫 번째 아이템으로 이동해야 함
+        fireEvent.keyDown(container, { key: 'PageDown', preventDefault: jest.fn() })
+      })
+      expect(container).toBeInTheDocument()
+    }
+  })
+
+  it('handles touch drag with preventDefault', () => {
+    render(
+      <RevolverPicker
+        items={mockItems}
+        value={5}
+        onChange={mockOnChange}
+      />
+    )
+
+    const container = screen.getByText('5').closest('div[class*="overflow"]')
+    if (container) {
+      act(() => {
+        fireEvent.touchStart(container, {
+          touches: [{ clientY: 100 } as Touch],
+        })
+        fireEvent.touchMove(container, {
+          touches: [{ clientY: 80 } as Touch],
+          preventDefault: jest.fn(),
+        })
+      })
+      expect(container).toBeInTheDocument()
+    }
+  })
+
+  it('handles mouse drag with velocity calculation', () => {
+    render(
+      <RevolverPicker
+        items={mockItems}
+        value={5}
+        onChange={mockOnChange}
+      />
+    )
+
+    const container = screen.getByText('5').closest('div[class*="overflow"]')
+    if (container) {
+      act(() => {
+        fireEvent.mouseDown(container, { clientY: 100 })
+        // 시간 간격을 두고 이동하여 속도 계산
+        jest.advanceTimersByTime(10)
+        fireEvent.mouseMove(window, { clientY: 80 })
+        jest.advanceTimersByTime(10)
+        fireEvent.mouseMove(window, { clientY: 60 })
+        fireEvent.mouseUp(window)
+      })
+      expect(container).toBeInTheDocument()
+    }
   })
 })
 

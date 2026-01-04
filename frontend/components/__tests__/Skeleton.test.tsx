@@ -80,6 +80,31 @@ describe('CardGridSkeleton', () => {
     render(<CardGridSkeleton count={5} />);
     const skeletons = screen.getAllByRole('generic', { hidden: true });
     expect(skeletons.length).toBeGreaterThan(0);
-  });
-});
+  })
+
+  it('handles string width and height', () => {
+    const { container } = render(<Skeleton width="50%" height="2rem" />)
+    const skeleton = container.querySelector('[aria-hidden="true"]')
+    expect(skeleton).toHaveStyle({ width: '50%', height: '2rem' })
+  })
+
+  it('handles circular variant with width', () => {
+    const { container } = render(<Skeleton variant="circular" width={40} />)
+    const skeleton = container.querySelector('[aria-hidden="true"]')
+    expect(skeleton).toHaveStyle({ width: '40px', height: '40px' })
+  })
+
+  it('handles text variant with single line', () => {
+    const { container } = render(<Skeleton variant="text" lines={1} />)
+    const skeletons = container.querySelectorAll('[aria-hidden="true"]')
+    expect(skeletons.length).toBe(1)
+  })
+
+  it('applies correct width for last line in multi-line text', () => {
+    const { container } = render(<Skeleton variant="text" lines={3} />)
+    const skeletons = container.querySelectorAll('[aria-hidden="true"]')
+    const lastLine = skeletons[skeletons.length - 1]
+    expect(lastLine).toHaveClass('w-3/4')
+  })
+})
 

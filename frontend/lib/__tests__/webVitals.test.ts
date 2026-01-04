@@ -278,6 +278,180 @@ describe('webVitals', () => {
         })
       }).not.toThrow()
     })
+
+    it('handles missing gtag and plausible', () => {
+      delete (window as any).gtag
+      delete (window as any).plausible
+
+      expect(() => {
+        reportWebVitals({
+          id: 'test-id',
+          name: 'LCP',
+          value: 2000,
+          rating: 'good',
+        })
+      }).not.toThrow()
+    })
+
+    it('handles missing performance.mark', () => {
+      Object.defineProperty(window, 'performance', {
+        value: {},
+        writable: true,
+        configurable: true,
+      })
+
+      expect(() => {
+        reportWebVitals({
+          id: 'test-id',
+          name: 'LCP',
+          value: 2000,
+          rating: 'good',
+        })
+      }).not.toThrow()
+    })
+  })
+
+  describe('initWebVitals - LCP observer', () => {
+    it('handles LCP observer callback errors', () => {
+      const mockObserve = jest.fn()
+      const mockObserver = jest.fn().mockImplementation((callback) => {
+        // callback에서 에러 발생 시뮬레이션
+        try {
+          callback({ getEntries: () => [] })
+        } catch (e) {
+          // 에러 무시
+        }
+        return { observe: mockObserve }
+      }) as any
+
+      global.PerformanceObserver = mockObserver
+      ;(PerformanceObserver as any).supportedEntryTypes = ['largest-contentful-paint']
+
+      expect(() => initWebVitals()).not.toThrow()
+    })
+
+    it('handles LCP entry without renderTime or loadTime', () => {
+      const mockObserve = jest.fn()
+      const mockObserver = jest.fn().mockImplementation((callback) => {
+        callback({
+          getEntries: () => [{
+            id: 'test-lcp',
+            renderTime: undefined,
+            loadTime: undefined,
+          }],
+        })
+        return { observe: mockObserve }
+      }) as any
+
+      global.PerformanceObserver = mockObserver
+      ;(PerformanceObserver as any).supportedEntryTypes = ['largest-contentful-paint']
+
+      expect(() => initWebVitals()).not.toThrow()
+    })
+  })
+
+  describe('initWebVitals - FID observer', () => {
+    it('handles FID observer callback errors', () => {
+      const mockObserve = jest.fn()
+      const mockObserver = jest.fn().mockImplementation((callback) => {
+        try {
+          callback({ getEntries: () => [] })
+        } catch (e) {
+          // 에러 무시
+        }
+        return { observe: mockObserve }
+      }) as any
+
+      global.PerformanceObserver = mockObserver
+      ;(PerformanceObserver as any).supportedEntryTypes = ['first-input']
+
+      expect(() => initWebVitals()).not.toThrow()
+    })
+
+    it('handles FID entry processing', () => {
+      const mockObserve = jest.fn()
+      const mockObserver = jest.fn().mockImplementation((callback) => {
+        callback({
+          getEntries: () => [{
+            id: 'test-fid',
+            startTime: 100,
+            processingStart: 150,
+          }],
+        })
+        return { observe: mockObserve }
+      }) as any
+
+      global.PerformanceObserver = mockObserver
+      ;(PerformanceObserver as any).supportedEntryTypes = ['first-input']
+
+      expect(() => initWebVitals()).not.toThrow()
+    })
+  })
+
+  describe('initWebVitals - FCP observer', () => {
+    it('handles FCP observer callback errors', () => {
+      const mockObserve = jest.fn()
+      const mockObserver = jest.fn().mockImplementation((callback) => {
+        try {
+          callback({ getEntries: () => [] })
+        } catch (e) {
+          // 에러 무시
+        }
+        return { observe: mockObserve }
+      }) as any
+
+      global.PerformanceObserver = mockObserver
+      ;(PerformanceObserver as any).supportedEntryTypes = ['paint']
+
+      expect(() => initWebVitals()).not.toThrow()
+    })
+
+    it('handles non-FCP paint entries', () => {
+      const mockObserve = jest.fn()
+      const mockObserver = jest.fn().mockImplementation((callback) => {
+        callback({
+          getEntries: () => [{
+            name: 'other-paint',
+            startTime: 100,
+          }],
+        })
+        return { observe: mockObserve }
+      }) as any
+
+      global.PerformanceObserver = mockObserver
+      ;(PerformanceObserver as any).supportedEntryTypes = ['paint']
+
+      expect(() => initWebVitals()).not.toThrow()
+    })
+  })
+
+  describe('initWebVitals - TTFB', () => {
+    it('handles TTFB calculation', () => {
+      Object.defineProperty(window, 'performance', {
+        value: {
+          getEntriesByType: jest.fn().mockReturnValue([{
+            responseStart: 200,
+            requestStart: 100,
+          }]),
+        },
+        writable: true,
+        configurable: true,
+      })
+
+      expect(() => initWebVitals()).not.toThrow()
+    })
+
+    it('handles missing navigation entry', () => {
+      Object.defineProperty(window, 'performance', {
+        value: {
+          getEntriesByType: jest.fn().mockReturnValue([]),
+        },
+        writable: true,
+        configurable: true,
+      })
+
+      expect(() => initWebVitals()).not.toThrow()
+    })
   })
 })
 

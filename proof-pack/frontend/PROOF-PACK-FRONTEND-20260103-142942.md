@@ -313,3 +313,4 @@ $ curl -s -X POST https://limen.kr/api/public/waitlist \
 ## 담당자
 Frontend+Envoy AI
 
+

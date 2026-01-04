@@ -106,5 +106,57 @@ describe('snapshotAPI', () => {
     })
     expect(result).toEqual(mockResponse)
   })
+
+  it('should handle list errors', async () => {
+    const error = new Error('Failed to list snapshots')
+    mockApiRequest.mockRejectedValue(error)
+
+    await expect(snapshotAPI.list('vm-uuid-123')).rejects.toThrow('Failed to list snapshots')
+  })
+
+  it('should handle create errors', async () => {
+    const error = new Error('Failed to create snapshot')
+    mockApiRequest.mockRejectedValue(error)
+
+    await expect(snapshotAPI.create('vm-uuid-123', 'snapshot-name')).rejects.toThrow('Failed to create snapshot')
+  })
+
+  it('should handle restore errors', async () => {
+    const error = new Error('Failed to restore snapshot')
+    mockApiRequest.mockRejectedValue(error)
+
+    await expect(snapshotAPI.restore(1)).rejects.toThrow('Failed to restore snapshot')
+  })
+
+  it('should handle delete errors', async () => {
+    const error = new Error('Failed to delete snapshot')
+    mockApiRequest.mockRejectedValue(error)
+
+    await expect(snapshotAPI.delete(1)).rejects.toThrow('Failed to delete snapshot')
+  })
+
+  it('should create snapshot with empty description', async () => {
+    const vmUuid = 'vm-uuid-123'
+    const name = 'new-snapshot'
+    const description = ''
+
+    const createdSnapshot = {
+      id: 1,
+      name,
+      description: '',
+      vm_uuid: vmUuid,
+    }
+
+    mockApiRequest.mockResolvedValue(createdSnapshot)
+
+    const result = await snapshotAPI.create(vmUuid, name, description)
+
+    expect(mockApiRequest).toHaveBeenCalledWith(`/vms/${vmUuid}/snapshots`, {
+      method: 'POST',
+      body: JSON.stringify({ name, description: '' }),
+    })
+    expect(result).toEqual(createdSnapshot)
+  })
 })
+
 

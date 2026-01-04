@@ -98,8 +98,33 @@ describe('StatusRow', () => {
   it('handles unknown status', () => {
     render(<StatusRow label="Status" value="Unknown" />);
     expect(screen.getByText('Unknown')).toBeInTheDocument();
-  });
-});
+  })
+
+  it('applies error status styling for non-standard values', () => {
+    render(<StatusRow label="Status" value="disconnected" />)
+    const valueElement = screen.getByText('disconnected')
+    expect(valueElement).toHaveClass('bg-red-100')
+  })
+
+  it('applies default styling for unknown values', () => {
+    render(<StatusRow label="Status" value="Unknown" />)
+    const valueElement = screen.getByText('Unknown')
+    expect(valueElement).toHaveClass('bg-gray-100')
+  })
+
+  it('applies error styling for non-standard non-unknown values', () => {
+    render(<StatusRow label="Status" value="custom-value" />)
+    const valueElement = screen.getByText('custom-value')
+    // custom-value는 Unknown이 아니므로 error 스타일 적용
+    expect(valueElement).toHaveClass('bg-red-100')
+  })
+
+  it('has proper ARIA attributes', () => {
+    render(<StatusRow label="Database" value="connected" />)
+    const valueElement = screen.getByLabelText('Database: connected')
+    expect(valueElement).toBeInTheDocument()
+  })
+})
 
 describe('ProgressBar', () => {
   it('renders progress bar with label and value', () => {

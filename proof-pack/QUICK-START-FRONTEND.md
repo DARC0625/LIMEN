@@ -69,3 +69,4 @@ proof-pack/frontend/screenshots/
 ## ❓ 질문이 있나요?
 
 백엔드 담당자에게 문의하세요.
+

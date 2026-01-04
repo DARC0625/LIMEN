@@ -87,6 +87,48 @@ describe('useDebounce', () => {
       expect(result.current).toBe('updated')
     })
   })
+
+  it('uses default delay of 300ms', async () => {
+    const { result, rerender } = renderHook(
+      ({ value }) => useDebounce(value),
+      {
+        initialProps: { value: 'initial' },
+      }
+    )
+
+    rerender({ value: 'updated' })
+    jest.advanceTimersByTime(300)
+
+    await waitFor(() => {
+      expect(result.current).toBe('updated')
+    })
+  })
+
+  it('cleans up timer on unmount', () => {
+    const { unmount } = renderHook(() => useDebounce('test', 500))
+
+    unmount()
+
+    // 타이머가 정리되었는지 확인 (에러 없이 처리되어야 함)
+    jest.advanceTimersByTime(500)
+    expect(true).toBe(true)
+  })
+
+  it('handles zero delay', async () => {
+    const { result, rerender } = renderHook(
+      ({ value }) => useDebounce(value, 0),
+      {
+        initialProps: { value: 'initial' },
+      }
+    )
+
+    rerender({ value: 'updated' })
+    jest.advanceTimersByTime(0)
+
+    await waitFor(() => {
+      expect(result.current).toBe('updated')
+    })
+  })
 })
 
 

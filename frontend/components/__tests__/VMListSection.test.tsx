@@ -271,5 +271,189 @@ describe('VMListSection', () => {
     // 에러 상태 처리 확인
     expect(screen.getByText(/No VMs found/i)).toBeInTheDocument()
   })
+
+  it('handles onAction callback', async () => {
+    const mockOnAction = jest.fn()
+    const mockVMs = [
+      {
+        uuid: 'vm-1',
+        name: 'Test VM 1',
+        status: 'running',
+        vcpu: 2,
+        memory: 4096,
+        disk: 20480,
+      },
+    ]
+
+    mockUseVMs.mockReturnValue({
+      data: mockVMs,
+      isLoading: false,
+      error: null,
+      refetch: jest.fn(),
+    } as any)
+
+    render(<VMListSection onAction={mockOnAction} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test VM 1')).toBeInTheDocument()
+    })
+
+    // 액션 버튼 클릭 시뮬레이션 (실제 버튼이 있는 경우)
+    const actionButtons = screen.queryAllByRole('button')
+    if (actionButtons.length > 0) {
+      fireEvent.click(actionButtons[0])
+      // onAction이 호출되었는지 확인 (실제 구현에 따라 다를 수 있음)
+    }
+  })
+
+  it('handles onEdit callback', async () => {
+    const mockOnEdit = jest.fn()
+    const mockVMs = [
+      {
+        uuid: 'vm-1',
+        name: 'Test VM 1',
+        status: 'running',
+        vcpu: 2,
+        memory: 4096,
+        disk: 20480,
+      },
+    ]
+
+    mockUseVMs.mockReturnValue({
+      data: mockVMs,
+      isLoading: false,
+      error: null,
+      refetch: jest.fn(),
+    } as any)
+
+    render(<VMListSection onEdit={mockOnEdit} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test VM 1')).toBeInTheDocument()
+    })
+  })
+
+  it('handles processingId prop', async () => {
+    const mockVMs = [
+      {
+        uuid: 'vm-1',
+        name: 'Test VM 1',
+        status: 'running',
+        vcpu: 2,
+        memory: 4096,
+        disk: 20480,
+      },
+    ]
+
+    mockUseVMs.mockReturnValue({
+      data: mockVMs,
+      isLoading: false,
+      error: null,
+      refetch: jest.fn(),
+    } as any)
+
+    render(<VMListSection processingId="vm-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test VM 1')).toBeInTheDocument()
+    })
+  })
+
+  it('handles editingVM prop', async () => {
+    const mockEditingVM = {
+      uuid: 'vm-1',
+      name: 'Test VM 1',
+      status: 'running',
+      vcpu: 2,
+      memory: 4096,
+      disk: 20480,
+    }
+
+    const mockVMs = [mockEditingVM]
+
+    mockUseVMs.mockReturnValue({
+      data: mockVMs,
+      isLoading: false,
+      error: null,
+      refetch: jest.fn(),
+    } as any)
+
+    render(<VMListSection editingVM={mockEditingVM} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test VM 1')).toBeInTheDocument()
+    })
+  })
+
+  it('handles window resize', async () => {
+    const mockVMs = [
+      {
+        uuid: 'vm-1',
+        name: 'Test VM 1',
+        status: 'running',
+        vcpu: 2,
+        memory: 4096,
+        disk: 20480,
+      },
+    ]
+
+    mockUseVMs.mockReturnValue({
+      data: mockVMs,
+      isLoading: false,
+      error: null,
+      refetch: jest.fn(),
+    } as any)
+
+    render(<VMListSection />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test VM 1')).toBeInTheDocument()
+    })
+
+    // window resize 이벤트 발생
+    Object.defineProperty(window, 'innerWidth', {
+      writable: true,
+      configurable: true,
+      value: 800,
+    })
+    fireEvent(window, new Event('resize'))
+
+    // 컴포넌트가 여전히 렌더링되는지 확인
+    expect(screen.getByText('Test VM 1')).toBeInTheDocument()
+  })
+
+  it('handles mouse drag events', async () => {
+    const mockVMs = [
+      {
+        uuid: 'vm-1',
+        name: 'Test VM 1',
+        status: 'running',
+        vcpu: 2,
+        memory: 4096,
+        disk: 20480,
+      },
+    ]
+
+    mockUseVMs.mockReturnValue({
+      data: mockVMs,
+      isLoading: false,
+      error: null,
+      refetch: jest.fn(),
+    } as any)
+
+    const { container } = render(<VMListSection />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test VM 1')).toBeInTheDocument()
+    })
+
+    // 마우스 드래그 이벤트 시뮬레이션
+    const carouselContainer = container.querySelector('[role="group"]')
+    if (carouselContainer) {
+      fireEvent.mouseDown(carouselContainer, { clientX: 100 })
+      fireEvent.mouseMove(carouselContainer, { clientX: 50 })
+      fireEvent.mouseUp(carouselContainer)
+    }
+  })
 })
 

@@ -175,4 +175,154 @@ describe('RegisterForm', () => {
       expect(mockRegister).not.toHaveBeenCalled()
     }, { timeout: 1000 })
   })
+
+  it('displays error when registration fails', async () => {
+    const mockRegister = authAPI.register as jest.MockedFunction<typeof authAPI.register>
+    mockRegister.mockRejectedValue(new Error('Registration failed'))
+
+    render(<RegisterForm />)
+
+    const usernameInput = screen.getByLabelText(/username/i)
+    const passwordFields = screen.getAllByLabelText(/password/i)
+    const confirmPasswordField = screen.getByLabelText(/confirm password|re-enter your password/i)
+    const buttons = screen.getAllByRole('button')
+    const submitButton = buttons.find(btn => 
+      btn.textContent?.toLowerCase().includes('create') || 
+      btn.getAttribute('aria-label')?.toLowerCase().includes('create')
+    )!
+
+    fireEvent.change(usernameInput, { target: { value: 'testuser' } })
+    fireEvent.change(passwordFields[0], { target: { value: 'Test1234!' } })
+    fireEvent.change(confirmPasswordField, { target: { value: 'Test1234!' } })
+
+    await act(async () => {
+      fireEvent.click(submitButton)
+    })
+
+    await waitFor(() => {
+      expect(mockRegister).toHaveBeenCalled()
+      expect(mockToast.error).toHaveBeenCalled()
+    }, { timeout: 3000 })
+  })
+
+  it('shows loading state during registration', async () => {
+    const mockRegister = authAPI.register as jest.MockedFunction<typeof authAPI.register>
+    mockRegister.mockImplementation(() => new Promise(() => {})) // 무한 대기
+
+    render(<RegisterForm />)
+
+    const usernameInput = screen.getByLabelText(/username/i)
+    const passwordFields = screen.getAllByLabelText(/password/i)
+    const confirmPasswordField = screen.getByLabelText(/confirm password|re-enter your password/i)
+    const buttons = screen.getAllByRole('button')
+    const submitButton = buttons.find(btn => 
+      btn.textContent?.toLowerCase().includes('create') || 
+      btn.getAttribute('aria-label')?.toLowerCase().includes('create')
+    )!
+
+    fireEvent.change(usernameInput, { target: { value: 'testuser' } })
+    fireEvent.change(passwordFields[0], { target: { value: 'Test1234!' } })
+    fireEvent.change(confirmPasswordField, { target: { value: 'Test1234!' } })
+
+    await act(async () => {
+      fireEvent.click(submitButton)
+    })
+
+    // 로딩 상태 확인 (버튼이 비활성화되었는지)
+    expect(submitButton).toBeDisabled()
+  })
+
+  it('redirects to login after successful registration', async () => {
+    const mockRegister = authAPI.register as jest.MockedFunction<typeof authAPI.register>
+    mockRegister.mockResolvedValue({
+      id: 1,
+      username: 'testuser',
+    } as any)
+
+    jest.useFakeTimers()
+
+    render(<RegisterForm />)
+
+    const usernameInput = screen.getByLabelText(/username/i)
+    const passwordFields = screen.getAllByLabelText(/password/i)
+    const confirmPasswordField = screen.getByLabelText(/confirm password|re-enter your password/i)
+    const buttons = screen.getAllByRole('button')
+    const submitButton = buttons.find(btn => 
+      btn.textContent?.toLowerCase().includes('create') || 
+      btn.getAttribute('aria-label')?.toLowerCase().includes('create')
+    )!
+
+    fireEvent.change(usernameInput, { target: { value: 'testuser' } })
+    fireEvent.change(passwordFields[0], { target: { value: 'Test1234!' } })
+    fireEvent.change(confirmPasswordField, { target: { value: 'Test1234!' } })
+
+    await act(async () => {
+      fireEvent.click(submitButton)
+    })
+
+    await waitFor(() => {
+      expect(mockRegister).toHaveBeenCalled()
+    }, { timeout: 3000 })
+
+    // 2초 후 리다이렉트
+    act(() => {
+      jest.advanceTimersByTime(2000)
+    })
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/login')
+    }, { timeout: 3000 })
+
+    jest.useRealTimers()
+  })
+
+  it('validates empty fields', async () => {
+    const mockRegister = authAPI.register as jest.MockedFunction<typeof authAPI.register>
+    
+    render(<RegisterForm />)
+
+    const buttons = screen.getAllByRole('button')
+    const submitButton = buttons.find(btn => 
+      btn.textContent?.toLowerCase().includes('create') || 
+      btn.getAttribute('aria-label')?.toLowerCase().includes('create')
+    )!
+
+    await act(async () => {
+      fireEvent.click(submitButton)
+    })
+
+    // HTML5 validation으로 인해 register가 호출되지 않았는지 확인
+    await waitFor(() => {
+      expect(mockRegister).not.toHaveBeenCalled()
+    }, { timeout: 1000 })
+  })
+
+  it('handles network errors', async () => {
+    const mockRegister = authAPI.register as jest.MockedFunction<typeof authAPI.register>
+    mockRegister.mockRejectedValue(new Error('Network error'))
+
+    render(<RegisterForm />)
+
+    const usernameInput = screen.getByLabelText(/username/i)
+    const passwordFields = screen.getAllByLabelText(/password/i)
+    const confirmPasswordField = screen.getByLabelText(/confirm password|re-enter your password/i)
+    const buttons = screen.getAllByRole('button')
+    const submitButton = buttons.find(btn => 
+      btn.textContent?.toLowerCase().includes('create') || 
+      btn.getAttribute('aria-label')?.toLowerCase().includes('create')
+    )!
+
+    fireEvent.change(usernameInput, { target: { value: 'testuser' } })
+    fireEvent.change(passwordFields[0], { target: { value: 'Test1234!' } })
+    fireEvent.change(confirmPasswordField, { target: { value: 'Test1234!' } })
+
+    await act(async () => {
+      fireEvent.click(submitButton)
+    })
+
+    await waitFor(() => {
+      expect(mockRegister).toHaveBeenCalled()
+      expect(mockToast.error).toHaveBeenCalled()
+    }, { timeout: 3000 })
+  })
 })

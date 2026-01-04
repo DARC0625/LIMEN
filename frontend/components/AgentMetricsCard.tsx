@@ -46,10 +46,16 @@ const AgentMetricsCard = memo(function AgentMetricsCard() {
   }
 
   // React Error #310 완전 해결: useMemo 제거, 직접 계산 (hydration mismatch 방지)
-  const cpuPercent = metrics ? metrics.cpu_usage : 0;
-  const memoryPercent = metrics ? (metrics.used_memory / metrics.total_memory) * 100 : 0;
-  const totalMemoryGB = metrics ? (metrics.total_memory / 1024 / 1024 / 1024).toFixed(2) : '0';
-  const cpuCores = metrics ? metrics.cpu_cores : 0;
+  // metrics는 이미 위에서 체크했으므로 여기서는 항상 truthy
+  // 하지만 브랜치 커버리지를 위해 명시적으로 처리
+  const cpuPercent = metrics?.cpu_usage ?? 0;
+  const memoryPercent = metrics?.used_memory && metrics?.total_memory 
+    ? (metrics.used_memory / metrics.total_memory) * 100 
+    : 0;
+  const totalMemoryGB = metrics?.total_memory 
+    ? (metrics.total_memory / 1024 / 1024 / 1024).toFixed(2) 
+    : '0';
+  const cpuCores = metrics?.cpu_cores ?? 0;
 
   return (
     <StatusCard title="Agent Metrics" status="ok">

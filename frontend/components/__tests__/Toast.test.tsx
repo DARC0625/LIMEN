@@ -102,6 +102,67 @@ describe('Toast', () => {
     await waitFor(() => {
       expect(onClose).toHaveBeenCalledWith('test-toast-1');
     });
-  });
-});
+  })
+
+  it('has proper ARIA attributes', () => {
+    const toast = createToast();
+    const onClose = jest.fn();
+    render(<ToastComponent toast={toast} onClose={onClose} />);
+    
+    const toastElement = screen.getByRole('alert');
+    expect(toastElement).toHaveAttribute('aria-live', 'assertive');
+    expect(toastElement).toHaveAttribute('aria-atomic', 'true');
+  })
+
+  it('displays correct icon for each type', () => {
+    const types: Array<'success' | 'error' | 'info' | 'warning'> = ['success', 'error', 'info', 'warning'];
+    
+    types.forEach(type => {
+      const toast = createToast({ type });
+      const onClose = jest.fn();
+      const { container } = render(<ToastComponent toast={toast} onClose={onClose} />);
+      
+      const icon = container.querySelector('svg');
+      expect(icon).toBeInTheDocument();
+    });
+  })
+
+  it('has accessible close button', () => {
+    const toast = createToast({ message: 'Test notification' });
+    const onClose = jest.fn();
+    render(<ToastComponent toast={toast} onClose={onClose} />);
+    
+    const closeButton = screen.getByLabelText(/close.*notification/i);
+    expect(closeButton).toBeInTheDocument();
+  })
+
+  it('cleans up timer on unmount', () => {
+    const toast = createToast();
+    const onClose = jest.fn();
+    const { unmount } = render(<ToastComponent toast={toast} onClose={onClose} />);
+    
+    unmount();
+    
+    // 타이머가 정리되었는지 확인 (onClose가 호출되지 않아야 함)
+    jest.advanceTimersByTime(3000);
+    expect(onClose).not.toHaveBeenCalled();
+  })
+
+  it('updates timer when duration changes', async () => {
+    const toast = createToast({ duration: 5000 });
+    const onClose = jest.fn();
+    const { rerender } = render(<ToastComponent toast={toast} onClose={onClose} />);
+    
+    // duration 변경
+    const newToast = createToast({ duration: 2000 });
+    rerender(<ToastComponent toast={newToast} onClose={onClose} />);
+    
+    // 새로운 duration으로 타이머가 설정되었는지 확인
+    jest.advanceTimersByTime(2000);
+    
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledWith('test-toast-1');
+    });
+  })
+})
 

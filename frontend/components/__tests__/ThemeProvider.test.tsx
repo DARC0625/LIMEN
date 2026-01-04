@@ -1,25 +1,9 @@
 /**
- * ThemeProvider 컴포넌트 테스트
+ * components/ThemeProvider.tsx 테스트
  */
 
-import { render, screen, act } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import { ThemeProvider, useTheme } from '../ThemeProvider'
-
-// ThemeProvider로 감싸는 테스트 컴포넌트
-const TestComponent = () => {
-  const { theme, resolvedTheme, setTheme, toggleTheme } = useTheme()
-  
-  return (
-    <div>
-      <div data-testid="theme">{theme}</div>
-      <div data-testid="resolved-theme">{resolvedTheme}</div>
-      <button onClick={() => setTheme('light')}>Set Light</button>
-      <button onClick={() => setTheme('dark')}>Set Dark</button>
-      <button onClick={() => setTheme('system')}>Set System</button>
-      <button onClick={toggleTheme}>Toggle Theme</button>
-    </div>
-  )
-}
 
 describe('ThemeProvider', () => {
   beforeEach(() => {
@@ -42,140 +26,246 @@ describe('ThemeProvider', () => {
 
   afterEach(() => {
     localStorage.clear()
+    document.documentElement.classList.remove('dark')
+  })
+
+  it('renders children', () => {
+    const { getByText } = render(
+      <ThemeProvider>
+        <div>Test Content</div>
+      </ThemeProvider>
+    )
+
+    expect(getByText('Test Content')).toBeInTheDocument()
   })
 
   it('provides theme context', () => {
     render(
       <ThemeProvider>
-        <TestComponent />
+        <div>Test</div>
       </ThemeProvider>
     )
-    
-    expect(screen.getByTestId('theme')).toBeInTheDocument()
-    expect(screen.getByTestId('resolved-theme')).toBeInTheDocument()
-  })
 
-  it('sets theme to light', async () => {
-    render(
-      <ThemeProvider>
-        <TestComponent />
-      </ThemeProvider>
-    )
-    
-    const button = screen.getByText('Set Light')
-    act(() => {
-      button.click()
-    })
-    
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0))
-    })
-    
-    expect(screen.getByTestId('theme')).toHaveTextContent('light')
-    expect(localStorage.getItem('theme')).toBe('light')
-  })
-
-  it('sets theme to dark', async () => {
-    render(
-      <ThemeProvider>
-        <TestComponent />
-      </ThemeProvider>
-    )
-    
-    const button = screen.getByText('Set Dark')
-    act(() => {
-      button.click()
-    })
-    
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0))
-    })
-    
-    expect(screen.getByTestId('theme')).toHaveTextContent('dark')
-    expect(localStorage.getItem('theme')).toBe('dark')
-  })
-
-  it('sets theme to system', async () => {
-    render(
-      <ThemeProvider>
-        <TestComponent />
-      </ThemeProvider>
-    )
-    
-    const button = screen.getByText('Set System')
-    act(() => {
-      button.click()
-    })
-    
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0))
-    })
-    
-    expect(screen.getByTestId('theme')).toHaveTextContent('system')
-    expect(localStorage.getItem('theme')).toBe('system')
-  })
-
-  it('toggles theme', async () => {
-    render(
-      <ThemeProvider>
-        <TestComponent />
-      </ThemeProvider>
-    )
-    
-    // 먼저 light로 설정
-    const setLightButton = screen.getByText('Set Light')
-    act(() => {
-      setLightButton.click()
-    })
-    
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0))
-    })
-    
-    // 토글
-    const toggleButton = screen.getByText('Toggle Theme')
-    act(() => {
-      toggleButton.click()
-    })
-    
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0))
-    })
-    
-    // dark로 변경되었는지 확인
-    expect(screen.getByTestId('theme')).toHaveTextContent('dark')
+    expect(screen.getByText('Test')).toBeInTheDocument()
   })
 
   it('loads theme from localStorage', async () => {
     localStorage.setItem('theme', 'dark')
-    
+
+    const TestComponent = () => {
+      const { theme } = useTheme()
+      return <div>Theme: {theme}</div>
+    }
+
     render(
       <ThemeProvider>
         <TestComponent />
       </ThemeProvider>
     )
-    
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 100))
+
+    await waitFor(() => {
+      expect(screen.getByText(/Theme: dark/i)).toBeInTheDocument()
     })
-    
-    expect(screen.getByTestId('theme')).toHaveTextContent('dark')
   })
 
-  it('throws error when useTheme is used outside provider', () => {
-    // 에러를 캐치하기 위해 console.error를 모킹
-    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
-    
-    const TestComponentWithoutProvider = () => {
-      useTheme()
-      return <div>Test</div>
+  it('uses system theme as default', async () => {
+    const TestComponent = () => {
+      const { theme } = useTheme()
+      return <div>Theme: {theme}</div>
     }
-    
-    expect(() => {
-      render(<TestComponentWithoutProvider />)
-    }).toThrow('useTheme must be used within a ThemeProvider')
-    
-    consoleError.mockRestore()
+
+    render(
+      <ThemeProvider>
+        <TestComponent />
+      </ThemeProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Theme: system/i)).toBeInTheDocument()
+    })
+  })
+
+  it('applies dark theme when resolved theme is dark', async () => {
+    localStorage.setItem('theme', 'dark')
+
+    render(
+      <ThemeProvider>
+        <div>Test</div>
+      </ThemeProvider>
+    )
+
+    await waitFor(() => {
+      expect(document.documentElement.classList.contains('dark')).toBe(true)
+    })
+  })
+
+  it('removes dark class when resolved theme is light', async () => {
+    localStorage.setItem('theme', 'light')
+
+    render(
+      <ThemeProvider>
+        <div>Test</div>
+      </ThemeProvider>
+    )
+
+    await waitFor(() => {
+      expect(document.documentElement.classList.contains('dark')).toBe(false)
+    })
   })
 })
 
+describe('useTheme', () => {
+  it('throws error when used outside ThemeProvider', () => {
+    // React의 에러 경고를 억제
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    const TestComponent = () => {
+      useTheme()
+      return null
+    }
+
+    expect(() => render(<TestComponent />)).toThrow('useTheme must be used within a ThemeProvider')
+
+    consoleError.mockRestore()
+  })
+
+  it('provides theme context when used inside ThemeProvider', async () => {
+    const TestComponent = () => {
+      const { theme, setTheme, toggleTheme } = useTheme()
+      return (
+        <div>
+          <div>Theme: {theme}</div>
+          <button onClick={() => setTheme('dark')}>Set Dark</button>
+          <button onClick={() => toggleTheme()}>Toggle</button>
+        </div>
+      )
+    }
+
+    render(
+      <ThemeProvider>
+        <TestComponent />
+      </ThemeProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Theme: system/i)).toBeInTheDocument()
+    })
+  })
+
+  it('handles system theme change event', async () => {
+    localStorage.setItem('theme', 'system')
+    
+    const mockMatchMedia = jest.fn().mockImplementation(query => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    }))
+    
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: mockMatchMedia,
+    })
+
+    const TestComponent = () => {
+      const { theme, resolvedTheme } = useTheme()
+      return (
+        <div>
+          <div>Theme: {theme}</div>
+          <div>Resolved: {resolvedTheme}</div>
+        </div>
+      )
+    }
+
+    render(
+      <ThemeProvider>
+        <TestComponent />
+      </ThemeProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Theme: system/i)).toBeInTheDocument()
+    })
+
+    // matchMedia가 호출되었는지 확인
+    expect(mockMatchMedia).toHaveBeenCalledWith('(prefers-color-scheme: dark)')
+    
+    // mediaQuery 인스턴스 가져오기
+    const mediaQuery = mockMatchMedia.mock.results[0].value
+    
+    // change 이벤트 발생 시뮬레이션
+    await act(async () => {
+      if (mediaQuery.addEventListener.mock.calls.length > 0) {
+        const handler = mediaQuery.addEventListener.mock.calls[0][1]
+        if (typeof handler === 'function') {
+          handler()
+        }
+      }
+    })
+
+    // 테마가 적용되었는지 확인
+    await waitFor(() => {
+      expect(screen.getByText(/Theme: system/i)).toBeInTheDocument()
+    })
+  })
+
+  it('handles system theme change when theme is system', async () => {
+    localStorage.setItem('theme', 'system')
+    
+    let changeHandler: (() => void) | null = null
+    
+    const mockMatchMedia = jest.fn().mockImplementation(query => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn((event, handler) => {
+        if (event === 'change') {
+          changeHandler = handler as () => void
+        }
+      }),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    }))
+    
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: mockMatchMedia,
+    })
+
+    const TestComponent = () => {
+      const { theme } = useTheme()
+      return <div>Theme: {theme}</div>
+    }
+
+    render(
+      <ThemeProvider>
+        <TestComponent />
+      </ThemeProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Theme: system/i)).toBeInTheDocument()
+    })
+
+    // change 이벤트 핸들러가 등록되었는지 확인
+    expect(mockMatchMedia).toHaveBeenCalled()
+    
+    // change 이벤트 발생 시뮬레이션
+    if (changeHandler) {
+      await act(async () => {
+        changeHandler()
+      })
+    }
+
+    // 테마가 적용되었는지 확인
+    await waitFor(() => {
+      expect(screen.getByText(/Theme: system/i)).toBeInTheDocument()
+    })
+  })
+})

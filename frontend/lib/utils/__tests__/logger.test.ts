@@ -126,6 +126,28 @@ describe('logger', () => {
       );
     });
 
+    it('should send warnings with multiple arguments to error tracking in production', () => {
+      const { logger } = require('../logger');
+      logger.warn('warning', 'message', { key: 'value' });
+      expect(console.warn).not.toHaveBeenCalled();
+      expect(mockTrackError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('Warning:'),
+        }),
+        expect.objectContaining({
+          type: 'WARNING',
+          source: 'logger',
+        })
+      );
+    });
+
+    it('should send warnings with object arguments to error tracking in production', () => {
+      const { logger } = require('../logger');
+      logger.warn({ error: 'test' });
+      expect(console.warn).not.toHaveBeenCalled();
+      expect(mockTrackError).toHaveBeenCalled();
+    });
+
     it('should send errors to error tracking in production', () => {
       const { logger } = require('../logger');
       const error = new Error('test error');

@@ -144,5 +144,59 @@ describe('adminAPI', () => {
     })
     expect(result).toEqual(approvedUser)
   })
+
+  it('should handle listUsers errors', async () => {
+    const error = new Error('Failed to list users')
+    mockApiRequest.mockRejectedValue(error)
+
+    await expect(adminAPI.listUsers()).rejects.toThrow('Failed to list users')
+  })
+
+  it('should handle getUser errors', async () => {
+    const error = new Error('Failed to get user')
+    mockApiRequest.mockRejectedValue(error)
+
+    await expect(adminAPI.getUser(1)).rejects.toThrow('Failed to get user')
+  })
+
+  it('should handle createUser errors', async () => {
+    const error = new Error('Failed to create user')
+    mockApiRequest.mockRejectedValue(error)
+
+    await expect(adminAPI.createUser({
+      username: 'newuser',
+      password: 'password',
+      role: 'user',
+    })).rejects.toThrow('Failed to create user')
+  })
+
+  it('should handle updateUser errors', async () => {
+    const error = new Error('Failed to update user')
+    mockApiRequest.mockRejectedValue(error)
+
+    await expect(adminAPI.updateUser(1, { role: 'admin' })).rejects.toThrow('Failed to update user')
+  })
+
+  it('should handle deleteUser errors', async () => {
+    const error = new Error('Failed to delete user')
+    mockApiRequest.mockRejectedValue(error)
+
+    await expect(adminAPI.deleteUser(1)).rejects.toThrow('Failed to delete user')
+  })
+
+  it('should handle updateUserRole errors', async () => {
+    const error = new Error('Failed to update user role')
+    mockApiRequest.mockRejectedValue(error)
+
+    await expect(adminAPI.updateUserRole(1, 'admin')).rejects.toThrow('Failed to update user role')
+  })
+
+  it('should handle approveUser errors', async () => {
+    const error = new Error('Failed to approve user')
+    mockApiRequest.mockRejectedValue(error)
+
+    await expect(adminAPI.approveUser(1)).rejects.toThrow('Failed to approve user')
+  })
 })
+
 

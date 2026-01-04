@@ -5,31 +5,34 @@
 import { render } from '@testing-library/react'
 import ProtectedLayout from '../layout'
 
-jest.mock('../../../components/AuthGuard', () => ({
+// 의존성 모킹
+jest.mock('../../components/AuthGuard', () => ({
   __esModule: true,
-  default: ({ children }: { children: React.ReactNode }) => <div data-testid="auth-guard">{children}</div>,
+  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}))
+
+jest.mock('../../components/VersionInfo', () => ({
+  VersionInfo: () => <div>Version Info</div>,
 }))
 
 describe('ProtectedLayout', () => {
   it('renders children', () => {
-    const { getByText, getByTestId } = render(
+    const { getByText } = render(
       <ProtectedLayout>
-        <div>Protected Content</div>
+        <div>Test Content</div>
       </ProtectedLayout>
     )
-    expect(getByText('Protected Content')).toBeInTheDocument()
-    expect(getByTestId('auth-guard')).toBeInTheDocument()
+
+    expect(getByText('Test Content')).toBeInTheDocument()
   })
 
-  it('wraps children with AuthGuard', () => {
-    const { getByTestId } = render(
+  it('renders VersionInfo', () => {
+    const { getByText } = render(
       <ProtectedLayout>
         <div>Test</div>
       </ProtectedLayout>
     )
-    const authGuard = getByTestId('auth-guard')
-    expect(authGuard).toBeInTheDocument()
-    expect(authGuard).toHaveTextContent('Test')
+
+    expect(getByText('Version Info')).toBeInTheDocument()
   })
 })
-

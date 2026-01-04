@@ -74,6 +74,7 @@ export function setToken(token: string): void {
   
   // 하위 호환성: localStorage에 저장
   localStorage.setItem('auth_token', token);
+  localStorage.setItem('auth_token_timestamp', Date.now().toString());
   
   // 백엔드 세션 생성 요청
   const csrfToken = tokenManager.getCSRFToken();

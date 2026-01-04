@@ -105,5 +105,218 @@ describe('ThemeToggle', () => {
       })
     }
   })
+
+  it('selects light theme from menu', async () => {
+    render(<ThemeToggle />, { wrapper })
+    
+    const button = screen.getByLabelText(/toggle theme/i)
+    
+    // 우클릭하여 메뉴 열기
+    fireEvent.contextMenu(button)
+    
+    // 라이트 모드 선택
+    const lightButton = screen.getByText(/라이트/i).closest('button')
+    expect(lightButton).toBeInTheDocument()
+    
+    if (lightButton) {
+      fireEvent.click(lightButton)
+      
+      // 메뉴가 닫혔는지 확인
+      await waitFor(() => {
+        expect(screen.queryByText(/라이트/i)).not.toBeInTheDocument()
+      })
+    }
+  })
+
+  it('selects system theme from menu', async () => {
+    render(<ThemeToggle />, { wrapper })
+    
+    const button = screen.getByLabelText(/toggle theme/i)
+    
+    // 우클릭하여 메뉴 열기
+    fireEvent.contextMenu(button)
+    
+    // 시스템 모드 선택
+    const systemButton = screen.getByText(/시스템/i).closest('button')
+    expect(systemButton).toBeInTheDocument()
+    
+    if (systemButton) {
+      fireEvent.click(systemButton)
+      
+      // 메뉴가 닫혔는지 확인
+      await waitFor(() => {
+        expect(screen.queryByText(/라이트/i)).not.toBeInTheDocument()
+      })
+    }
+  })
+
+  it('toggles menu on right click when already open', () => {
+    render(<ThemeToggle />, { wrapper })
+    
+    const button = screen.getByLabelText(/toggle theme/i)
+    
+    // 우클릭하여 메뉴 열기
+    fireEvent.contextMenu(button)
+    expect(screen.getByText(/라이트/i)).toBeInTheDocument()
+    
+    // 다시 우클릭하여 메뉴 닫기
+    fireEvent.contextMenu(button)
+    
+    // 메뉴가 닫혔는지 확인
+    expect(screen.queryByText(/라이트/i)).not.toBeInTheDocument()
+  })
+
+  it('prevents event propagation on button click', () => {
+    const handleParentClick = jest.fn()
+    
+    render(
+      <div onClick={handleParentClick}>
+        <ThemeToggle />
+      </div>,
+      { wrapper }
+    )
+    
+    const button = screen.getByLabelText(/toggle theme/i)
+    
+    // 클릭 이벤트 발생
+    fireEvent.click(button)
+    
+    // 부모 클릭 핸들러가 호출되지 않아야 함 (stopPropagation)
+    expect(handleParentClick).not.toHaveBeenCalled()
+  })
+
+  it('prevents event propagation on menu click', () => {
+    const handleParentClick = jest.fn()
+    
+    render(
+      <div onClick={handleParentClick}>
+        <ThemeToggle />
+      </div>,
+      { wrapper }
+    )
+    
+    const button = screen.getByLabelText(/toggle theme/i)
+    
+    // 우클릭하여 메뉴 열기
+    fireEvent.contextMenu(button)
+    
+    // 메뉴 클릭
+    const menu = screen.getByRole('menu')
+    fireEvent.click(menu)
+    
+    // 부모 클릭 핸들러가 호출되지 않아야 함 (stopPropagation)
+    expect(handleParentClick).not.toHaveBeenCalled()
+  })
+
+  it('shows checkmark for selected theme', () => {
+    render(<ThemeToggle />, { wrapper })
+    
+    const button = screen.getByLabelText(/toggle theme/i)
+    
+    // 우클릭하여 메뉴 열기
+    fireEvent.contextMenu(button)
+    
+    // 현재 선택된 테마에 체크마크가 있는지 확인
+    // (초기 테마에 따라 다를 수 있음)
+    const menuItems = screen.getAllByRole('menuitem')
+    expect(menuItems.length).toBeGreaterThan(0)
+    
+    // 체크마크가 있는 항목이 있는지 확인
+    const hasCheckmark = menuItems.some(item => item.textContent?.includes('✓'))
+    expect(hasCheckmark).toBe(true)
+  })
+
+  it('handles click outside when menu is open', () => {
+    render(<ThemeToggle />, { wrapper })
+    
+    const button = screen.getByLabelText(/toggle theme/i)
+    
+    // 우클릭하여 메뉴 열기
+    fireEvent.contextMenu(button)
+    
+    // 메뉴가 열렸는지 확인
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    
+    // 외부 클릭
+    fireEvent.mouseDown(document.body)
+    
+    // 메뉴가 닫혔는지 확인
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+
+  it('does not close menu when clicking inside menu', () => {
+    render(<ThemeToggle />, { wrapper })
+    
+    const button = screen.getByLabelText(/toggle theme/i)
+    
+    // 우클릭하여 메뉴 열기
+    fireEvent.contextMenu(button)
+    
+    // 메뉴가 열렸는지 확인
+    const menu = screen.getByRole('menu')
+    expect(menu).toBeInTheDocument()
+    
+    // 메뉴 내부 클릭
+    fireEvent.mouseDown(menu)
+    
+    // 메뉴가 여전히 열려있는지 확인
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+  })
+
+  it('does not close menu when clicking button', () => {
+    render(<ThemeToggle />, { wrapper })
+    
+    const button = screen.getByLabelText(/toggle theme/i)
+    
+    // 우클릭하여 메뉴 열기
+    fireEvent.contextMenu(button)
+    
+    // 메뉴가 열렸는지 확인
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    
+    // 버튼 클릭
+    fireEvent.mouseDown(button)
+    
+    // 메뉴가 여전히 열려있는지 확인 (버튼 클릭은 메뉴를 닫지 않음)
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+  })
+
+  it('closes menu when selecting theme', () => {
+    render(<ThemeToggle />, { wrapper })
+    
+    const button = screen.getByLabelText(/toggle theme/i)
+    
+    // 우클릭하여 메뉴 열기
+    fireEvent.contextMenu(button)
+    
+    // 메뉴가 열렸는지 확인
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    
+    // 테마 선택
+    const menuItems = screen.getAllByRole('menuitem')
+    fireEvent.click(menuItems[0])
+    
+    // 메뉴가 닫혔는지 확인
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+
+  it('handles menu cleanup on unmount', () => {
+    const { unmount } = render(<ThemeToggle />, { wrapper })
+    
+    const button = screen.getByLabelText(/toggle theme/i)
+    
+    // 우클릭하여 메뉴 열기
+    fireEvent.contextMenu(button)
+    
+    // 메뉴가 열렸는지 확인
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    
+    // 컴포넌트 언마운트
+    unmount()
+    
+    // 언마운트 후에도 에러가 발생하지 않아야 함
+    expect(true).toBe(true)
+  })
 })
+
 

@@ -137,5 +137,79 @@ describe('ToastContainer', () => {
     
     consoleError.mockRestore()
   })
+
+  it('removes toast when closed', async () => {
+    render(
+      <ToastProvider>
+        <TestComponent />
+      </ToastProvider>
+    )
+    
+    const button = screen.getByText('Show Success')
+    act(() => {
+      button.click()
+    })
+    
+    await waitFor(() => {
+      expect(screen.getByText('Success message')).toBeInTheDocument()
+    })
+    
+    const closeButton = screen.getByLabelText(/close.*notification/i)
+    act(() => {
+      closeButton.click()
+    })
+    
+    await waitFor(() => {
+      expect(screen.queryByText('Success message')).not.toBeInTheDocument()
+    })
+  })
+
+  it('shows multiple toasts', async () => {
+    render(
+      <ToastProvider>
+        <TestComponent />
+      </ToastProvider>
+    )
+    
+    const successButton = screen.getByText('Show Success')
+    const errorButton = screen.getByText('Show Error')
+    
+    act(() => {
+      successButton.click()
+      errorButton.click()
+    })
+    
+    await waitFor(() => {
+      expect(screen.getByText('Success message')).toBeInTheDocument()
+      expect(screen.getByText('Error message')).toBeInTheDocument()
+    })
+  })
+
+  it('handles custom duration', async () => {
+    render(
+      <ToastProvider>
+        <TestComponent />
+      </ToastProvider>
+    )
+    
+    const button = screen.getByText('Show Custom')
+    act(() => {
+      button.click()
+    })
+    
+    await waitFor(() => {
+      expect(screen.getByText('Custom message')).toBeInTheDocument()
+    })
+    
+    // 커스텀 duration(1000ms) 후 자동으로 닫히는지 확인
+    act(() => {
+      jest.advanceTimersByTime(1000)
+    })
+    
+    await waitFor(() => {
+      expect(screen.queryByText('Custom message')).not.toBeInTheDocument()
+    })
+  })
 })
+
 

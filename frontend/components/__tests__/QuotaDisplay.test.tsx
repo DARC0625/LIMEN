@@ -159,5 +159,107 @@ describe('QuotaDisplay', () => {
     const offlineTexts = screen.getAllByText(/offline/i)
     expect(offlineTexts.length).toBeGreaterThan(0)
   })
+
+  it('displays normal status when usage is below 70%', () => {
+    const mockQuota = {
+      usage: {
+        vms: 3,
+        cpu: 5,
+        memory: 1000,
+      },
+      quota: {
+        max_vms: 10,
+        max_cpu: 20,
+        max_memory: 4096,
+      },
+    }
+
+    mockUseQuota.mockReturnValue({
+      data: mockQuota,
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as any)
+
+    render(<QuotaDisplay />, { wrapper: createWrapper() })
+    
+    const statusIndicator = screen.getByRole('status')
+    expect(statusIndicator).toHaveClass('bg-green-500')
+  })
+
+  it('displays correct memory in GB', () => {
+    const mockQuota = {
+      usage: {
+        vms: 5,
+        cpu: 10,
+        memory: 2048, // 2GB
+      },
+      quota: {
+        max_vms: 10,
+        max_cpu: 20,
+        max_memory: 4096, // 4GB
+      },
+    }
+
+    mockUseQuota.mockReturnValue({
+      data: mockQuota,
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as any)
+
+    render(<QuotaDisplay />, { wrapper: createWrapper() })
+    
+    expect(screen.getByText(/2\.0 \/ 4\.0 GB/i)).toBeInTheDocument()
+  })
+
+  it('handles missing usage or quota properties', () => {
+    // usage나 quota가 없는 경우는 null로 처리
+    mockUseQuota.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as any)
+
+    render(<QuotaDisplay />, { wrapper: createWrapper() })
+    
+    // 에러 없이 렌더링되어야 함
+    expect(screen.getByText(/resource quota/i)).toBeInTheDocument()
+  })
+
+  it('displays correct progress bar values', () => {
+    const mockQuota = {
+      usage: {
+        vms: 5,
+        cpu: 10,
+        memory: 2048,
+      },
+      quota: {
+        max_vms: 10,
+        max_cpu: 20,
+        max_memory: 4096,
+      },
+    }
+
+    mockUseQuota.mockReturnValue({
+      data: mockQuota,
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as any)
+
+    render(<QuotaDisplay />, { wrapper: createWrapper() })
+    
+    // Progress bar들이 올바른 ARIA 속성을 가지고 있는지 확인
+    const progressBars = screen.getAllByRole('progressbar')
+    expect(progressBars.length).toBe(3) // VMs, CPU, Memory
+    
+    // 각 progress bar가 올바른 값을 가지고 있는지 확인
+    progressBars.forEach(bar => {
+      expect(bar).toHaveAttribute('aria-valuemin', '0')
+      expect(bar).toHaveAttribute('aria-valuemax', '100')
+    })
+  })
 })
 

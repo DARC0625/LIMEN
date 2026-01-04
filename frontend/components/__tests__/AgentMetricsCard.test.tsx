@@ -145,5 +145,146 @@ describe('AgentMetricsCard', () => {
     const cpuCoresElements = screen.getAllByText(/^16$/)
     expect(cpuCoresElements.length).toBeGreaterThan(0)
   })
+
+  it('handles metrics with zero values', () => {
+    const mockMetrics = {
+      cpu_usage: 0,
+      total_memory: 1073741824, // 1GB (0이면 나누기 에러)
+      used_memory: 0,
+      free_memory: 1073741824,
+      cpu_cores: 0,
+    }
+
+    mockUseAgentMetrics.mockReturnValue({
+      data: mockMetrics,
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as any)
+
+    render(<AgentMetricsCard />, { wrapper: createWrapper() })
+    
+    expect(screen.getByText(/agent metrics/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/cpu usage: 0.0%/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/memory usage: 0.0%/i)).toBeInTheDocument()
+  })
+
+  it('handles division by zero for memory percentage', () => {
+    const mockMetrics = {
+      cpu_usage: 50,
+      total_memory: 0, // 0으로 나누기
+      used_memory: 0,
+      free_memory: 0,
+      cpu_cores: 4,
+    }
+
+    mockUseAgentMetrics.mockReturnValue({
+      data: mockMetrics,
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as any)
+
+    render(<AgentMetricsCard />, { wrapper: createWrapper() })
+    
+    // 0으로 나누면 Infinity가 되지만, 컴포넌트는 렌더링되어야 함
+    expect(screen.getByText(/agent metrics/i)).toBeInTheDocument()
+    // memoryPercent는 Infinity가 될 수 있음 (NaN 또는 Infinity)
+    // 컴포넌트가 렌더링되는지만 확인
+    expect(screen.getByText(/cpu cores:/i)).toBeInTheDocument()
+  })
+
+  it('handles very large memory values', () => {
+    const mockMetrics = {
+      cpu_usage: 75,
+      total_memory: 1099511627776, // 1TB
+      used_memory: 549755813888, // 512GB
+      free_memory: 549755813888,
+      cpu_cores: 32,
+    }
+
+    mockUseAgentMetrics.mockReturnValue({
+      data: mockMetrics,
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as any)
+
+    render(<AgentMetricsCard />, { wrapper: createWrapper() })
+    
+    expect(screen.getByText(/agent metrics/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/cpu usage: 75.0%/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/memory usage: 50.0%/i)).toBeInTheDocument()
+  })
+
+  it('handles fractional CPU usage values', () => {
+    const mockMetrics = {
+      cpu_usage: 33.333,
+      total_memory: 4294967296,
+      used_memory: 2147483648,
+      free_memory: 2147483648,
+      cpu_cores: 2,
+    }
+
+    mockUseAgentMetrics.mockReturnValue({
+      data: mockMetrics,
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as any)
+
+    render(<AgentMetricsCard />, { wrapper: createWrapper() })
+    
+    expect(screen.getByText(/agent metrics/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/cpu usage: 33.3%/i)).toBeInTheDocument()
+  })
+
+  it('handles metrics with undefined cpu_usage (optional chaining)', () => {
+    // metrics 객체는 있지만 cpu_usage가 undefined인 경우
+    const mockMetrics = {
+      cpu_usage: undefined as any,
+      total_memory: 4294967296,
+      used_memory: 2147483648,
+      free_memory: 2147483648,
+      cpu_cores: 2,
+    }
+
+    mockUseAgentMetrics.mockReturnValue({
+      data: mockMetrics,
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as any)
+
+    render(<AgentMetricsCard />, { wrapper: createWrapper() })
+    
+    // optional chaining으로 인해 cpuPercent는 0이 됨
+    expect(screen.getByText(/agent metrics/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/cpu usage: 0.0%/i)).toBeInTheDocument()
+  })
+
+  it('handles metrics with undefined cpu_cores (optional chaining)', () => {
+    // metrics 객체는 있지만 cpu_cores가 undefined인 경우
+    const mockMetrics = {
+      cpu_usage: 50,
+      total_memory: 4294967296,
+      used_memory: 2147483648,
+      free_memory: 2147483648,
+      cpu_cores: undefined as any,
+    }
+
+    mockUseAgentMetrics.mockReturnValue({
+      data: mockMetrics,
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as any)
+
+    render(<AgentMetricsCard />, { wrapper: createWrapper() })
+    
+    // optional chaining으로 인해 cpuCores는 0이 됨
+    expect(screen.getByText(/agent metrics/i)).toBeInTheDocument()
+    expect(screen.getByText(/cpu cores:/i)).toBeInTheDocument()
+  })
 })
 

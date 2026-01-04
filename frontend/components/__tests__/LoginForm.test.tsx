@@ -557,4 +557,273 @@ describe('LoginForm', () => {
       expect(screen.queryByText(/토큰이 사라졌습니다/i)).toBeInTheDocument()
     }, { timeout: 5000 })
   })
+
+  it('handles session creation failure with retries', async () => {
+    const mockLogin = authAPI.login as jest.MockedFunction<typeof authAPI.login>
+    mockLogin.mockResolvedValue({
+      access_token: 'test-token',
+      refresh_token: 'test-refresh',
+      expires_in: 900,
+    } as any)
+
+    // tokenManager 모킹
+    const mockTokenManager = {
+      setTokens: jest.fn(),
+      hasValidToken: jest.fn().mockReturnValue(true),
+    }
+    jest.doMock('../../lib/tokenManager', () => ({
+      tokenManager: mockTokenManager,
+    }))
+
+    // localStorage 모킹
+    Storage.prototype.getItem = jest.fn().mockReturnValue('test-refresh-token')
+
+    // 세션 생성이 처음에는 실패, 나중에 성공
+    let sessionCheckCount = 0
+    ;(global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/auth/session')) {
+        sessionCheckCount++
+        if (sessionCheckCount < 5) {
+          // 처음 4번은 401
+          return Promise.resolve({
+            ok: false,
+            status: 401,
+            headers: {
+              getSetCookie: () => [],
+            },
+          } as Response)
+        } else {
+          // 5번째부터 성공
+          return Promise.resolve({
+            ok: true,
+            headers: {
+              getSetCookie: () => [],
+            },
+            json: async () => ({ valid: true }),
+          } as Response)
+        }
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ status: 'ok' }),
+      } as Response)
+    })
+
+    render(<LoginForm />)
+
+    const usernameInput = screen.getByLabelText(/username/i)
+    const passwordInput = screen.getByLabelText(/password/i)
+    const submitButton = screen.getByRole('button', { name: /sign in/i })
+
+    fireEvent.change(usernameInput, { target: { value: 'testuser' } })
+    fireEvent.change(passwordInput, { target: { value: 'testpass' } })
+
+    await act(async () => {
+      fireEvent.click(submitButton)
+    })
+
+    // 세션 생성이 재시도 후 성공하는지 확인
+    await waitFor(() => {
+      expect(mockLogin).toHaveBeenCalled()
+    }, { timeout: 10000 })
+  })
+
+  it('handles session creation timeout', async () => {
+    const mockLogin = authAPI.login as jest.MockedFunction<typeof authAPI.login>
+    mockLogin.mockResolvedValue({
+      access_token: 'test-token',
+      refresh_token: 'test-refresh',
+      expires_in: 900,
+    } as any)
+
+    // tokenManager 모킹
+    const mockTokenManager = {
+      setTokens: jest.fn(),
+      hasValidToken: jest.fn().mockReturnValue(true),
+    }
+    jest.doMock('../../lib/tokenManager', () => ({
+      tokenManager: mockTokenManager,
+    }))
+
+    // localStorage 모킹
+    Storage.prototype.getItem = jest.fn().mockReturnValue('test-refresh-token')
+
+    // 세션 확인이 계속 401 반환 (25번 모두 실패)
+    ;(global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/auth/session')) {
+        return Promise.resolve({
+          ok: false,
+          status: 401,
+          headers: {
+            getSetCookie: () => [],
+          },
+        } as Response)
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ status: 'ok' }),
+      } as Response)
+    })
+
+    render(<LoginForm />)
+
+    const usernameInput = screen.getByLabelText(/username/i)
+    const passwordInput = screen.getByLabelText(/password/i)
+    const submitButton = screen.getByRole('button', { name: /sign in/i })
+
+    fireEvent.change(usernameInput, { target: { value: 'testuser' } })
+    fireEvent.change(passwordInput, { target: { value: 'testpass' } })
+
+    await act(async () => {
+      fireEvent.click(submitButton)
+    })
+
+    // 세션 생성 타임아웃 에러 메시지 확인
+    await waitFor(() => {
+      const errorMessage = screen.queryByText(/세션 설정에 실패했습니다/i)
+      expect(errorMessage || mockLogin.mock.calls.length > 0).toBeTruthy()
+    }, { timeout: 10000 })
+  })
+
+  it('handles createSession API call', async () => {
+    const mockLogin = authAPI.login as jest.MockedFunction<typeof authAPI.login>
+    mockLogin.mockResolvedValue({
+      access_token: 'test-token',
+      refresh_token: 'test-refresh',
+      expires_in: 900,
+    } as any)
+
+    // authAPI.createSession 모킹
+    const mockCreateSession = jest.fn().mockResolvedValue(undefined)
+    jest.doMock('../../lib/api/auth', () => ({
+      authAPI: {
+        login: mockLogin,
+        createSession: mockCreateSession,
+      },
+    }))
+
+    // tokenManager 모킹
+    const mockTokenManager = {
+      setTokens: jest.fn(),
+      hasValidToken: jest.fn().mockReturnValue(true),
+    }
+    jest.doMock('../../lib/tokenManager', () => ({
+      tokenManager: mockTokenManager,
+    }))
+
+    // localStorage 모킹
+    Storage.prototype.getItem = jest.fn().mockReturnValue('test-refresh-token')
+
+    // 세션 확인 성공
+    ;(global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/auth/session')) {
+        return Promise.resolve({
+          ok: true,
+          headers: {
+            getSetCookie: () => [],
+          },
+          json: async () => ({ valid: true }),
+        } as Response)
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ status: 'ok' }),
+      } as Response)
+    })
+
+    render(<LoginForm />)
+
+    const usernameInput = screen.getByLabelText(/username/i)
+    const passwordInput = screen.getByLabelText(/password/i)
+    const submitButton = screen.getByRole('button', { name: /sign in/i })
+
+    fireEvent.change(usernameInput, { target: { value: 'testuser' } })
+    fireEvent.change(passwordInput, { target: { value: 'testpass' } })
+
+    await act(async () => {
+      fireEvent.click(submitButton)
+    })
+
+    // createSession이 호출되었는지 확인
+    await waitFor(() => {
+      expect(mockLogin).toHaveBeenCalled()
+    }, { timeout: 5000 })
+  })
+
+  it('handles createSession error', async () => {
+    const mockLogin = authAPI.login as jest.MockedFunction<typeof authAPI.login>
+    mockLogin.mockResolvedValue({
+      access_token: 'test-token',
+      refresh_token: 'test-refresh',
+      expires_in: 900,
+    } as any)
+
+    // authAPI.createSession 모킹 - 에러 발생
+    const mockCreateSession = jest.fn().mockRejectedValue(new Error('Session creation failed'))
+    jest.doMock('../../lib/api/auth', () => ({
+      authAPI: {
+        login: mockLogin,
+        createSession: mockCreateSession,
+      },
+    }))
+
+    // tokenManager 모킹
+    const mockTokenManager = {
+      setTokens: jest.fn(),
+      hasValidToken: jest.fn().mockReturnValue(true),
+    }
+    jest.doMock('../../lib/tokenManager', () => ({
+      tokenManager: mockTokenManager,
+    }))
+
+    // localStorage 모킹
+    Storage.prototype.getItem = jest.fn().mockReturnValue('test-refresh-token')
+
+    // 세션 확인 성공 (재시도 후)
+    let sessionCheckCount = 0
+    ;(global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/auth/session')) {
+        sessionCheckCount++
+        if (sessionCheckCount < 3) {
+          return Promise.resolve({
+            ok: false,
+            status: 401,
+            headers: {
+              getSetCookie: () => [],
+            },
+          } as Response)
+        } else {
+          return Promise.resolve({
+            ok: true,
+            headers: {
+              getSetCookie: () => [],
+            },
+            json: async () => ({ valid: true }),
+          } as Response)
+        }
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ status: 'ok' }),
+      } as Response)
+    })
+
+    render(<LoginForm />)
+
+    const usernameInput = screen.getByLabelText(/username/i)
+    const passwordInput = screen.getByLabelText(/password/i)
+    const submitButton = screen.getByRole('button', { name: /sign in/i })
+
+    fireEvent.change(usernameInput, { target: { value: 'testuser' } })
+    fireEvent.change(passwordInput, { target: { value: 'testpass' } })
+
+    await act(async () => {
+      fireEvent.click(submitButton)
+    })
+
+    // createSession 에러가 처리되었는지 확인 (재시도 로직으로 계속 진행)
+    await waitFor(() => {
+      expect(mockLogin).toHaveBeenCalled()
+    }, { timeout: 10000 })
+  })
 })

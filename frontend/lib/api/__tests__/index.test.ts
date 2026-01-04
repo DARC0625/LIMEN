@@ -1,12 +1,20 @@
 /**
- * lib/api/index.ts 테스트
+ * api/index.ts 테스트
  */
 
-import { getUserRole, isApproved, isAdmin, setToken, removeToken, setTokens } from '../index'
+import {
+  getUserRole,
+  isApproved,
+  isAdmin,
+  setToken,
+  removeToken,
+  setTokens,
+} from '../index'
 import { tokenManager } from '../../tokenManager'
+import { getUserRoleFromToken, isUserApprovedFromToken } from '../../utils/token'
 import { authAPI } from '../auth'
 
-// 의존성 모킹
+// Mock dependencies
 jest.mock('../../tokenManager', () => ({
   tokenManager: {
     getAccessToken: jest.fn(),
@@ -16,132 +24,244 @@ jest.mock('../../tokenManager', () => ({
   },
 }))
 
+jest.mock('../../utils/token', () => ({
+  getUserRoleFromToken: jest.fn(),
+  isUserApprovedFromToken: jest.fn(),
+}))
+
 jest.mock('../auth', () => ({
   authAPI: {
     createSession: jest.fn(),
   },
 }))
 
-jest.mock('../../utils/token', () => ({
-  getUserRoleFromToken: jest.fn((token: string) => token ? 'user' : null),
-  isUserApprovedFromToken: jest.fn((token: string) => !!token),
+jest.mock('../../utils/logger', () => ({
+  logger: {
+    error: jest.fn(),
+  },
 }))
 
 const mockTokenManager = tokenManager as jest.Mocked<typeof tokenManager>
+const mockGetUserRoleFromToken = getUserRoleFromToken as jest.MockedFunction<typeof getUserRoleFromToken>
+const mockIsUserApprovedFromToken = isUserApprovedFromToken as jest.MockedFunction<typeof isUserApprovedFromToken>
 const mockAuthAPI = authAPI as jest.Mocked<typeof authAPI>
 
-// window 모킹 (전역)
-const mockLocalStorage = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-}
+// Mock fetch
+global.fetch = jest.fn()
 
-Object.defineProperty(window, 'localStorage', {
-  value: mockLocalStorage,
-  writable: true,
-})
-
-describe('lib/api/index', () => {
+describe('api/index', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    global.fetch = jest.fn()
-    mockLocalStorage.getItem.mockClear()
-    mockLocalStorage.setItem.mockClear()
-    mockLocalStorage.removeItem.mockClear()
+    localStorage.clear()
+    mockTokenManager.getCSRFToken.mockReturnValue('test-csrf-token')
   })
 
   describe('getUserRole', () => {
-    it('returns user role when token exists', async () => {
+    it('should return user role from token', async () => {
       mockTokenManager.getAccessToken.mockResolvedValue('test-token')
+      mockGetUserRoleFromToken.mockReturnValue('admin')
 
-      const role = await getUserRole()
+      const result = await getUserRole()
 
-      expect(role).toBe('user')
+      expect(result).toBe('admin')
+      expect(mockTokenManager.getAccessToken).toHaveBeenCalled()
+      expect(mockGetUserRoleFromToken).toHaveBeenCalledWith('test-token')
     })
 
-    it('returns null when no token', async () => {
-      mockTokenManager.getAccessToken.mockResolvedValue('')
+    it('should return null when token is null', async () => {
+      mockTokenManager.getAccessToken.mockResolvedValue(null as any)
+      mockGetUserRoleFromToken.mockReturnValue(null)
 
-      const role = await getUserRole()
+      const result = await getUserRole()
 
-      expect(role).toBeNull()
+      expect(result).toBeNull()
+    })
+
+    it('should return null when token access fails', async () => {
+      mockTokenManager.getAccessToken.mockRejectedValue(new Error('Token error'))
+
+      const result = await getUserRole()
+
+      expect(result).toBeNull()
     })
   })
 
   describe('isApproved', () => {
-    it('returns true when user is approved', async () => {
+    it('should return approval status from token', async () => {
       mockTokenManager.getAccessToken.mockResolvedValue('test-token')
+      mockIsUserApprovedFromToken.mockReturnValue(true)
 
-      const approved = await isApproved()
+      const result = await isApproved()
 
-      expect(approved).toBe(true)
+      expect(result).toBe(true)
+      expect(mockTokenManager.getAccessToken).toHaveBeenCalled()
+      expect(mockIsUserApprovedFromToken).toHaveBeenCalledWith('test-token')
     })
 
-    it('returns false when no token', async () => {
-      mockTokenManager.getAccessToken.mockResolvedValue('')
+    it('should return false when token is null', async () => {
+      mockTokenManager.getAccessToken.mockResolvedValue(null as any)
+      mockIsUserApprovedFromToken.mockReturnValue(false)
 
-      const approved = await isApproved()
+      const result = await isApproved()
 
-      expect(approved).toBe(false)
+      expect(result).toBe(false)
+    })
+
+    it('should return false when token access fails', async () => {
+      mockTokenManager.getAccessToken.mockRejectedValue(new Error('Token error'))
+
+      const result = await isApproved()
+
+      expect(result).toBe(false)
     })
   })
 
   describe('isAdmin', () => {
-    it('returns true when user is admin', async () => {
-      const tokenUtils = require('../../utils/token')
-      tokenUtils.getUserRoleFromToken.mockReturnValueOnce('admin')
-      mockTokenManager.getAccessToken.mockResolvedValue('admin-token')
+    it('should return true for admin role', async () => {
+      mockTokenManager.getAccessToken.mockResolvedValue('test-token')
+      mockGetUserRoleFromToken.mockReturnValue('admin')
 
-      const admin = await isAdmin()
+      const result = await isAdmin()
 
-      expect(admin).toBe(true)
+      expect(result).toBe(true)
     })
 
-    it('returns false when user is not admin', async () => {
-      const tokenUtils = require('../../utils/token')
-      tokenUtils.getUserRoleFromToken.mockReturnValueOnce('user')
-      mockTokenManager.getAccessToken.mockResolvedValue('user-token')
+    it('should return false for non-admin role', async () => {
+      mockTokenManager.getAccessToken.mockResolvedValue('test-token')
+      mockGetUserRoleFromToken.mockReturnValue('user')
 
-      const admin = await isAdmin()
+      const result = await isAdmin()
 
-      expect(admin).toBe(false)
+      expect(result).toBe(false)
+    })
+
+    it('should return false when role is null', async () => {
+      mockTokenManager.getAccessToken.mockResolvedValue('test-token')
+      mockGetUserRoleFromToken.mockReturnValue(null)
+
+      const result = await isAdmin()
+
+      expect(result).toBe(false)
     })
   })
 
   describe('setToken', () => {
-    it('sets token in localStorage', () => {
-      mockTokenManager.getCSRFToken.mockReturnValue('csrf-token')
+    it('should set token in localStorage and create session', async () => {
       ;(global.fetch as jest.Mock).mockResolvedValue({ ok: true })
 
       setToken('test-token')
 
-      expect(mockLocalStorage.setItem).toHaveBeenCalledWith('auth_token', 'test-token')
+      expect(localStorage.getItem('auth_token')).toBe('test-token')
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/auth/session',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token',
+            'X-CSRF-Token': 'test-csrf-token',
+          }),
+        })
+      )
+    })
+
+    it('should set token even when fetch fails', async () => {
+      ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
+
+      setToken('test-token')
+
+      // localStorage에는 저장되어야 함
+      expect(localStorage.getItem('auth_token')).toBe('test-token')
+    })
+
+    it('should handle session creation failure gracefully', async () => {
+      ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
+
+      expect(() => setToken('test-token')).not.toThrow()
+    })
+
+    it('should work without CSRF token', () => {
+      mockTokenManager.getCSRFToken.mockReturnValue(null)
+      ;(global.fetch as jest.Mock).mockResolvedValue({ ok: true })
+
+      setToken('test-token')
+
+      const fetchCall = (global.fetch as jest.Mock).mock.calls[0][1]
+      expect(fetchCall.headers['X-CSRF-Token']).toBeUndefined()
     })
   })
 
   describe('removeToken', () => {
-    it('removes token from localStorage', () => {
-      mockTokenManager.getCSRFToken.mockReturnValue('csrf-token')
-      mockTokenManager.clearTokens.mockImplementation(() => {})
+    it('should clear tokens and delete session', async () => {
+      localStorage.setItem('auth_token', 'test-token')
+      localStorage.setItem('auth_token_timestamp', '123456')
       ;(global.fetch as jest.Mock).mockResolvedValue({ ok: true })
 
       removeToken()
 
       expect(mockTokenManager.clearTokens).toHaveBeenCalled()
-      expect(mockLocalStorage.removeItem).toHaveBeenCalledWith('auth_token')
+      expect(localStorage.getItem('auth_token')).toBeNull()
+      expect(localStorage.getItem('auth_token_timestamp')).toBeNull()
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/auth/session',
+        expect.objectContaining({
+          method: 'DELETE',
+        })
+      )
+    })
+
+    it('should clear tokens even when fetch fails', async () => {
+      ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
+      localStorage.setItem('auth_token', 'test-token')
+
+      removeToken()
+
+      expect(mockTokenManager.clearTokens).toHaveBeenCalled()
+      expect(localStorage.getItem('auth_token')).toBeNull()
+    })
+
+    it('should handle session deletion failure gracefully', async () => {
+      ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
+
+      expect(() => removeToken()).not.toThrow()
+    })
+
+    it('should work without CSRF token', () => {
+      mockTokenManager.getCSRFToken.mockReturnValue(null)
+      ;(global.fetch as jest.Mock).mockResolvedValue({ ok: true })
+
+      removeToken()
+
+      const fetchCall = (global.fetch as jest.Mock).mock.calls[0][1]
+      expect(fetchCall.headers['X-CSRF-Token']).toBeUndefined()
     })
   })
 
   describe('setTokens', () => {
-    it('sets tokens using tokenManager', async () => {
-      mockAuthAPI.createSession.mockResolvedValue(undefined)
-      mockTokenManager.setTokens.mockImplementation(() => {})
+    it('should set tokens and create session', async () => {
+      mockAuthAPI.createSession.mockResolvedValue()
 
-      await setTokens('access-token', 'refresh-token', 3600)
+      await setTokens('access-token', 'refresh-token', 900)
 
-      expect(mockTokenManager.setTokens).toHaveBeenCalledWith('access-token', 'refresh-token', 3600)
+      expect(mockTokenManager.setTokens).toHaveBeenCalledWith('access-token', 'refresh-token', 900)
+      expect(mockAuthAPI.createSession).toHaveBeenCalledWith('access-token', 'refresh-token')
+    })
+
+    it('should set tokens even when session creation fails', async () => {
+      mockAuthAPI.createSession.mockRejectedValue(new Error('Session error'))
+
+      await setTokens('access-token', 'refresh-token', 900)
+
+      // 토큰은 설정되어야 함
+      expect(mockTokenManager.setTokens).toHaveBeenCalledWith('access-token', 'refresh-token', 900)
+    })
+
+    it('should handle session creation failure gracefully', async () => {
+      mockAuthAPI.createSession.mockRejectedValue(new Error('Session error'))
+
+      await setTokens('access-token', 'refresh-token', 900)
+
+      expect(mockTokenManager.setTokens).toHaveBeenCalled()
+      // 에러가 로깅되어야 함
     })
   })
 })
-

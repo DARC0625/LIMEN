@@ -5,17 +5,16 @@
 import { render, screen } from '@testing-library/react'
 import RegisterPage from '../page'
 
-// 의존성 모킹
+// RegisterForm 모킹
 jest.mock('../../../components/RegisterForm', () => ({
   __esModule: true,
-  default: () => <div>RegisterForm</div>,
+  default: () => <div>Register Form</div>,
 }))
 
-describe('Register Page', () => {
+describe('RegisterPage', () => {
   it('renders register form', () => {
     render(<RegisterPage />)
 
-    expect(screen.getByText('RegisterForm')).toBeInTheDocument()
+    expect(screen.getByText('Register Form')).toBeInTheDocument()
   })
 })
-

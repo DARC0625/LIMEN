@@ -20,6 +20,8 @@ describe('isValidEmail', () => {
   it('should validate correct email addresses', () => {
     expect(isValidEmail('user@example.com')).toBe(true);
     expect(isValidEmail('test.email@domain.co.uk')).toBe(true);
+    expect(isValidEmail('user+tag@example.com')).toBe(true);
+    expect(isValidEmail('user_name@example.com')).toBe(true);
   });
 
   it('should reject invalid email addresses', () => {
@@ -27,6 +29,19 @@ describe('isValidEmail', () => {
     expect(isValidEmail('@example.com')).toBe(false);
     expect(isValidEmail('user@')).toBe(false);
     expect(isValidEmail('')).toBe(false);
+    expect(isValidEmail('user@domain')).toBe(false); // no TLD
+    expect(isValidEmail('user space@example.com')).toBe(false); // space
+  });
+
+  it('should handle non-string inputs', () => {
+    expect(isValidEmail(null as any)).toBe(false);
+    expect(isValidEmail(123 as any)).toBe(false);
+    expect(isValidEmail(undefined as any)).toBe(false);
+  });
+
+  it('should trim whitespace', () => {
+    expect(isValidEmail('  user@example.com  ')).toBe(true);
+    expect(isValidEmail(' user@example.com')).toBe(true);
   });
 });
 
@@ -83,11 +98,20 @@ describe('isValidURL', () => {
     expect(isValidURL('https://example.com')).toBe(true);
     expect(isValidURL('http://localhost:3000')).toBe(true);
     expect(isValidURL('https://example.com/path?query=value')).toBe(true);
+    expect(isValidURL('https://example.com:8080/path')).toBe(true);
+    expect(isValidURL('ftp://example.com')).toBe(true);
   });
 
   it('should reject invalid URLs', () => {
     expect(isValidURL('not-a-url')).toBe(false);
     expect(isValidURL('')).toBe(false);
+    expect(isValidURL('example.com')).toBe(false); // no protocol
+  });
+
+  it('should handle non-string inputs', () => {
+    expect(isValidURL(null as any)).toBe(false);
+    expect(isValidURL(123 as any)).toBe(false);
+    expect(isValidURL(undefined as any)).toBe(false);
   });
 });
 
@@ -96,11 +120,19 @@ describe('isInRange', () => {
     expect(isInRange(5, 1, 10)).toBe(true);
     expect(isInRange(1, 1, 10)).toBe(true);
     expect(isInRange(10, 1, 10)).toBe(true);
+    expect(isInRange(0, 0, 0)).toBe(true);
   });
 
   it('should reject numbers out of range', () => {
     expect(isInRange(0, 1, 10)).toBe(false);
     expect(isInRange(11, 1, 10)).toBe(false);
+    expect(isInRange(-1, 0, 10)).toBe(false);
+  });
+
+  it('should handle non-number inputs', () => {
+    expect(isInRange('5' as any, 1, 10)).toBe(false);
+    expect(isInRange(null as any, 1, 10)).toBe(false);
+    expect(isInRange(undefined as any, 1, 10)).toBe(false);
   });
 });
 
@@ -120,6 +152,13 @@ describe('isEmpty', () => {
     expect(isEmpty({ key: 'value' })).toBe(false);
     expect(isEmpty(0)).toBe(false);
     expect(isEmpty(false)).toBe(false);
+    expect(isEmpty(true)).toBe(false);
+    expect(isEmpty(NaN)).toBe(false);
+  });
+
+  it('should handle arrays with whitespace strings', () => {
+    expect(isEmpty([''])).toBe(false); // 배열에 요소가 있으면 비어있지 않음
+    expect(isEmpty(['   '])).toBe(false);
   });
 });
 
