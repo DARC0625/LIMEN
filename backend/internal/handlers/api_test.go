@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/DARC0625/LIMEN/backend/internal/cache"
 	"github.com/DARC0625/LIMEN/backend/internal/config"
 	"github.com/DARC0625/LIMEN/backend/internal/middleware"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
@@ -42,11 +44,13 @@ func setupTestHandler(t *testing.T) (*Handler, *config.Config) {
 	}
 
 	// Create handler without VMService for basic tests
+	vmCache := cache.NewInMemoryCache(5 * time.Minute)
 	handler := &Handler{
 		DB:                  db,
 		VMService:           nil, // Will be nil for basic tests
 		VMStatusBroadcaster: NewVMStatusBroadcaster(),
 		Config:              cfg,
+		Cache:               vmCache,
 	}
 
 	return handler, cfg

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestSanitizeString(t *testing.T) {
+func TestSanitizeString_ZeroTrust(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
@@ -108,7 +108,7 @@ func TestSanitizeForLog(t *testing.T) {
 	}
 }
 
-func TestValidateInput(t *testing.T) {
+func TestValidateInput_ZeroTrust(t *testing.T) {
 	tests := []struct {
 		name      string
 		input     string

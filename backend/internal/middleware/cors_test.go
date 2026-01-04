@@ -13,7 +13,7 @@ func TestCORSMiddleware_AllowedOrigin(t *testing.T) {
 		AllowedOrigins: []string{"https://limen.kr", "https://app.limen.kr"},
 	}
 
-	handler := CORSMiddleware(cfg)
+	handler := CORS(cfg.AllowedOrigins)
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -39,7 +39,7 @@ func TestCORSMiddleware_DisallowedOrigin(t *testing.T) {
 		AllowedOrigins: []string{"https://limen.kr"},
 	}
 
-	handler := CORSMiddleware(cfg)
+	handler := CORS(cfg.AllowedOrigins)
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -62,7 +62,7 @@ func TestCORSMiddleware_OptionsRequest(t *testing.T) {
 		AllowedOrigins: []string{"https://limen.kr"},
 	}
 
-	handler := CORSMiddleware(cfg)
+	handler := CORS(cfg.AllowedOrigins)
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -85,7 +85,7 @@ func TestCORSMiddleware_NoOrigin(t *testing.T) {
 		AllowedOrigins: []string{"https://limen.kr"},
 	}
 
-	handler := CORSMiddleware(cfg)
+	handler := CORS(cfg.AllowedOrigins)
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -106,7 +106,7 @@ func TestCORSMiddleware_Credentials(t *testing.T) {
 		AllowedOrigins: []string{"https://limen.kr"},
 	}
 
-	handler := CORSMiddleware(cfg)
+	handler := CORS(cfg.AllowedOrigins)
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
