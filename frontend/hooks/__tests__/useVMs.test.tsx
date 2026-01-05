@@ -103,13 +103,17 @@ describe('useVMs', () => {
     expect(result.current.data).toEqual([])
   })
 
-  it('does not fetch when not authenticated', () => {
+  it('does not fetch when not authenticated', async () => {
     mockUseAuth.mockReturnValue({ isAuthenticated: false } as any)
 
     const { result } = renderHook(() => useVMs(), { wrapper })
 
-    expect(result.current.isPending).toBe(false)
-    expect(result.current.data).toBeUndefined()
+    // 인증되지 않은 경우 enabled가 false이므로 쿼리가 실행되지 않음
+    // React Query의 버전에 따라 isPending이 true일 수 있으므로, data와 API 호출만 확인
+    await waitFor(() => {
+      expect(result.current.data).toBeUndefined()
+      expect(mockVmAPI.list).not.toHaveBeenCalled()
+    })
   })
 })
 

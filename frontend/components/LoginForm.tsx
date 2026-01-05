@@ -303,8 +303,25 @@ export default function LoginForm() {
           return;
         }
         
-        // 클라이언트 사이드 네비게이션 (페이지 새로고침 없음)
-        router.push('/dashboard');
+        // 승인 여부 확인 후 적절한 페이지로 이동
+        try {
+          const { isUserApproved } = await import('../lib/auth');
+          const approved = await isUserApproved();
+          
+          if (approved) {
+            // 승인된 사용자는 대시보드로 이동
+            logger.log('[LoginForm] User is approved, redirecting to dashboard');
+            router.push('/dashboard');
+          } else {
+            // 승인되지 않은 사용자는 대기 페이지로 이동
+            logger.log('[LoginForm] User is not approved, redirecting to waiting page');
+            router.push('/waiting');
+          }
+        } catch (approvalError) {
+          // 승인 확인 실패 시에도 대시보드로 이동 (기존 동작 유지)
+          logger.warn('[LoginForm] Failed to check approval status, redirecting to dashboard', approvalError);
+          router.push('/dashboard');
+        }
       }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : String(err);

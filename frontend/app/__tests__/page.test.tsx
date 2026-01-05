@@ -153,7 +153,9 @@ describe('Home Page', () => {
 
     render(<Home />)
 
-    const scrollButton = screen.getByText('대기자 등록')
+    // "대기자 등록" 버튼 찾기 (여러 개가 있을 수 있으므로 role로 찾기)
+    const scrollButtons = screen.getAllByText('대기자 등록')
+    const scrollButton = scrollButtons.find(btn => btn.tagName === 'BUTTON') || scrollButtons[0]
     fireEvent.click(scrollButton)
 
     expect(mockGetElementById).toHaveBeenCalledWith('waitlist-form')

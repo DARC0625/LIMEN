@@ -7,8 +7,13 @@ import { trackPageView, trackEvent, trackPerformanceMetric, trackWebVitals } fro
 describe('analytics', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    delete (window as any).gtag
-    delete (window as any).plausible
+    // gtag와 plausible을 완전히 삭제
+    if ((window as any).gtag) {
+      delete (window as any).gtag
+    }
+    if ((window as any).plausible) {
+      delete (window as any).plausible
+    }
     delete process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
     delete process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN
   })
@@ -43,7 +48,8 @@ describe('analytics', () => {
 
       trackPageView('/test')
 
-      expect(mockPlausible).toHaveBeenCalledWith('pageview', { path: '/test' })
+      // trackPlausible은 props를 사용하므로 호출 방식이 다름
+      expect(mockPlausible).toHaveBeenCalledWith('pageview', { props: { path: '/test' } })
     })
 
     it('does nothing on server side', () => {
@@ -84,7 +90,8 @@ describe('analytics', () => {
 
       trackEvent('test-event', { key: 'value' })
 
-      expect(mockPlausible).toHaveBeenCalledWith('test-event', { key: 'value' })
+      // trackPlausible은 props를 사용하므로 호출 방식이 다름
+      expect(mockPlausible).toHaveBeenCalledWith('test-event', { props: { key: 'value' } })
     })
 
     it('includes timestamp and url in event data', () => {
@@ -229,11 +236,13 @@ describe('analytics', () => {
     it('handles production environment with gtag', () => {
       const originalEnv = process.env.NODE_ENV
       process.env.NODE_ENV = 'production'
+      process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID = 'GA-123'
       delete process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN
 
       const mockGtag = jest.fn()
       Object.defineProperty(window, 'gtag', {
         writable: true,
+        configurable: true,
         value: mockGtag,
       })
 
@@ -244,7 +253,9 @@ describe('analytics', () => {
       expect(mockGtag).toHaveBeenCalled()
       expect(consoleSpy).not.toHaveBeenCalled()
 
+      consoleSpy.mockRestore()
       process.env.NODE_ENV = originalEnv
+      delete process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
     })
   })
 
@@ -253,6 +264,7 @@ describe('analytics', () => {
       const originalEnv = process.env.NODE_ENV
       process.env.NODE_ENV = 'production'
       delete process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN
+      delete (window as any).gtag
 
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
 
@@ -286,6 +298,14 @@ describe('analytics', () => {
     })
 
     it('handles trackEvent with no properties', () => {
+      // 이전 테스트에서 gtag가 정의되었을 수 있으므로 삭제 후 재정의
+      if ((window as any).gtag) {
+        delete (window as any).gtag
+      }
+      const mockGtag = jest.fn()
+      // Object.defineProperty 대신 직접 할당 사용
+      ;(window as any).gtag = mockGtag
+
       trackEvent('test-event')
 
       expect(mockGtag).toHaveBeenCalledWith('event', 'test-event', {})

@@ -41,7 +41,10 @@ describe('StatusPage', () => {
     render(<StatusPage />)
 
     await waitFor(() => {
-      expect(screen.getByText(/정상/i)).toBeInTheDocument()
+      // "정상" 텍스트가 여러 곳에 있으므로 getAllByText 사용
+      expect(screen.getByText(/시스템 상태/i)).toBeInTheDocument()
+      const normalElements = screen.getAllByText(/정상/i)
+      expect(normalElements.length).toBeGreaterThan(0)
     })
 
     expect(screen.getByText(/모든 시스템이 정상 작동 중입니다/i)).toBeInTheDocument()

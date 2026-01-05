@@ -71,39 +71,52 @@ export default function Home() {
           
           {/* 핵심 가치 3개 */}
           <div className="grid md:grid-cols-3 gap-6 mb-12">
-            <div className="bg-white p-6 rounded-lg shadow-md">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
               <div className="text-3xl mb-3">🌐</div>
-              <h3 className="font-semibold text-lg mb-2">웹 기반 접근</h3>
-              <p className="text-gray-600 text-sm">
+              <h3 className="font-semibold text-lg mb-2 text-gray-900 dark:text-gray-100">웹 기반 접근</h3>
+              <p className="text-gray-700 dark:text-gray-300 text-sm">
                 별도 클라이언트 설치 없이 브라우저에서 바로 사용
               </p>
             </div>
-            <div className="bg-white p-6 rounded-lg shadow-md">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
               <div className="text-3xl mb-3">⚡</div>
-              <h3 className="font-semibold text-lg mb-2">실시간 환경</h3>
-              <p className="text-gray-600 text-sm">
+              <h3 className="font-semibold text-lg mb-2 text-gray-900 dark:text-gray-100">실시간 환경</h3>
+              <p className="text-gray-700 dark:text-gray-300 text-sm">
                 즉시 생성되는 가상 머신으로 빠른 실습 환경 제공
               </p>
             </div>
-            <div className="bg-white p-6 rounded-lg shadow-md">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
               <div className="text-3xl mb-3">🔒</div>
-              <h3 className="font-semibold text-lg mb-2">안전한 격리</h3>
-              <p className="text-gray-600 text-sm">
+              <h3 className="font-semibold text-lg mb-2 text-gray-900 dark:text-gray-100">안전한 격리</h3>
+              <p className="text-gray-700 dark:text-gray-300 text-sm">
                 사용자별 독립된 환경으로 안전한 실습 보장
               </p>
             </div>
           </div>
 
-          {/* 대기자 등록 버튼 */}
-          <button
-            onClick={() => {
-              const formSection = document.getElementById('waitlist-form');
-              formSection?.scrollIntoView({ behavior: 'smooth' });
-            }}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-3 rounded-lg text-lg transition-colors shadow-lg"
-          >
-            대기자 등록
-          </button>
+          {/* 액션 버튼들 */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8">
+            <button
+              onClick={() => {
+                const formSection = document.getElementById('waitlist-form');
+                formSection?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-3 rounded-lg text-lg transition-colors shadow-lg w-full sm:w-auto"
+            >
+              대기자 등록
+            </button>
+            <Link
+              href="/login"
+              className="bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold px-8 py-3 rounded-lg text-lg transition-colors shadow-lg w-full sm:w-auto text-center"
+            >
+              로그인
+            </Link>
+          </div>
+          
+          {/* 이미 등록하신 분들을 위한 안내 */}
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            이미 등록하셨나요? <Link href="/login" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">로그인하기</Link>
+          </p>
         </div>
       </section>
 
@@ -129,32 +142,32 @@ export default function Home() {
       </section>
 
       {/* 보안/운영 신뢰 Section */}
-      <section className="container mx-auto px-4 py-16 bg-gray-50">
+      <section className="container mx-auto px-4 py-16 bg-gray-50 dark:bg-gray-800">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-8 text-gray-900">
+          <h2 className="text-3xl font-bold text-center mb-8 text-gray-900 dark:text-gray-100">
             보안 및 운영 정책
           </h2>
           <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h3 className="font-semibold text-lg mb-2 text-gray-900">권한 관리</h3>
-              <p className="text-gray-700 text-sm">
+            <div className="bg-white dark:bg-gray-700 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600">
+              <h3 className="font-semibold text-lg mb-2 text-gray-900 dark:text-gray-100">권한 관리</h3>
+              <p className="text-gray-800 dark:text-gray-200 text-sm">
                 역할 기반 접근 제어(RBAC)를 통해 사용자 권한을 세밀하게 관리합니다.
                 모든 사용자 활동은 감사 로그에 기록됩니다.
               </p>
             </div>
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h3 className="font-semibold text-lg mb-2 text-gray-900">기록 및 감사</h3>
-              <p className="text-gray-700 text-sm">
+            <div className="bg-white dark:bg-gray-700 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600">
+              <h3 className="font-semibold text-lg mb-2 text-gray-900 dark:text-gray-100">기록 및 감사</h3>
+              <p className="text-gray-800 dark:text-gray-200 text-sm">
                 모든 VM 작업, 로그인 시도, 리소스 사용 등이 감사 로그에 기록됩니다.
                 보안 및 운영 모니터링을 위해 정기적으로 검토됩니다.
               </p>
             </div>
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h3 className="font-semibold text-lg mb-2 text-gray-900">제한 정책</h3>
-              <p className="text-gray-700 text-sm">
+            <div className="bg-white dark:bg-gray-700 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600">
+              <h3 className="font-semibold text-lg mb-2 text-gray-900 dark:text-gray-100">제한 정책</h3>
+              <p className="text-gray-800 dark:text-gray-200 text-sm">
                 서비스 안정성을 위해 다음과 같은 제한이 적용됩니다:
               </p>
-              <ul className="list-disc list-inside text-gray-700 text-sm mt-2 space-y-1">
+              <ul className="list-disc list-inside text-gray-800 dark:text-gray-200 text-sm mt-2 space-y-1">
                 <li>세션 시간 제한: 유휴 상태 시 자동 종료</li>
                 <li>동시 접속 제한: 사용자별 동시 VM 접속 수 제한</li>
                 <li>리소스 할당량: VM 개수, CPU, 메모리 사용량 제한</li>
@@ -165,20 +178,36 @@ export default function Home() {
       </section>
 
       {/* 대기자 등록 Form Section */}
-      <section id="waitlist-form" className="container mx-auto px-4 py-16 bg-white">
+      <section id="waitlist-form" className="container mx-auto px-4 py-16 bg-white dark:bg-gray-900">
         <div className="max-w-2xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-8 text-gray-900">
+          <h2 className="text-3xl font-bold text-center mb-8 text-gray-900 dark:text-gray-100">
             대기자 등록
           </h2>
           
+          {/* 이미 등록하신 분들을 위한 안내 */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6 text-center">
+            <p className="text-gray-800 dark:text-gray-200 text-sm">
+              이미 등록하셨거나 승인을 받으셨나요?{' '}
+              <Link href="/login" className="text-blue-600 dark:text-blue-400 hover:underline font-semibold">
+                로그인 페이지로 이동
+              </Link>
+            </p>
+          </div>
+          
           {submitStatus === 'success' ? (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-              <div className="text-green-600 text-lg font-semibold mb-2">
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6 text-center">
+              <div className="text-green-600 dark:text-green-400 text-lg font-semibold mb-2">
                 등록이 완료되었습니다
               </div>
-              <p className="text-gray-700 text-sm">
+              <p className="text-gray-800 dark:text-gray-200 text-sm mb-4">
                 검토 후 초대 안내를 이메일로 보내드리겠습니다.
               </p>
+              <Link
+                href="/login"
+                className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg text-sm transition-colors"
+              >
+                로그인 페이지로 이동
+              </Link>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -242,8 +271,8 @@ export default function Home() {
               </div>
 
               {submitStatus === 'error' && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <p className="text-red-600 text-sm">{errorMessage}</p>
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                  <p className="text-red-600 dark:text-red-400 text-sm">{errorMessage}</p>
                 </div>
               )}
 
@@ -260,38 +289,38 @@ export default function Home() {
       </section>
 
       {/* 문의/연락 Section */}
-      <section className="container mx-auto px-4 py-16 bg-gray-50">
+      <section className="container mx-auto px-4 py-16 bg-gray-50 dark:bg-gray-800">
         <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-3xl font-bold mb-6 text-gray-900">문의하기</h2>
-          <p className="text-gray-700 mb-4">
+          <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-gray-100">문의하기</h2>
+          <p className="text-gray-800 dark:text-gray-200 mb-4">
             서비스에 대한 문의사항이 있으시면 아래 채널로 연락해주세요.
           </p>
           <div className="space-y-2">
-            <p className="text-gray-600">
-              이메일: <a href="mailto:support@limen.example.com" className="text-blue-600 hover:underline">support@limen.example.com</a>
+            <p className="text-gray-700 dark:text-gray-300">
+              이메일: <a href="mailto:support@limen.example.com" className="text-blue-600 dark:text-blue-400 hover:underline">support@limen.example.com</a>
             </p>
-            <p className="text-gray-600">
-              GitHub: <a href="https://github.com/DARC0625/LIMEN" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">DARC0625/LIMEN</a>
+            <p className="text-gray-700 dark:text-gray-300">
+              GitHub: <a href="https://github.com/DARC0625/LIMEN" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">DARC0625/LIMEN</a>
             </p>
           </div>
         </div>
       </section>
 
       {/* 약관/개인정보 처리방침 Section */}
-      <footer className="container mx-auto px-4 py-8 border-t border-gray-200">
-        <div className="max-w-3xl mx-auto text-center text-sm text-gray-600">
+      <footer className="container mx-auto px-4 py-8 border-t border-gray-200 dark:border-gray-700">
+        <div className="max-w-3xl mx-auto text-center text-sm text-gray-700 dark:text-gray-300">
           <div className="flex flex-wrap justify-center gap-4 mb-4">
-            <Link href="/terms" className="hover:text-blue-600 hover:underline">
+            <Link href="/terms" className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline">
               이용약관
             </Link>
-            <Link href="/privacy" className="hover:text-blue-600 hover:underline">
+            <Link href="/privacy" className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline">
               개인정보 처리방침
             </Link>
-            <Link href="/status" className="hover:text-blue-600 hover:underline">
+            <Link href="/status" className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline">
               서비스 상태
             </Link>
           </div>
-          <p className="text-gray-500">
+          <p className="text-gray-600 dark:text-gray-400">
             © 2025 LIMEN. All rights reserved.
           </p>
         </div>

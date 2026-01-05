@@ -62,9 +62,10 @@ export default function RootLayout({
                       removed++;
                     }
                   });
-                  if (removed > 0 && process.env.NODE_ENV === 'development') {
-                    console.log('[rfb.css] Removed', removed, 'link(s)');
-                  }
+                  // 개발 환경 체크는 서버 사이드에서만 가능하므로 제거
+                  // if (removed > 0 && process.env.NODE_ENV === 'development') {
+                  //   console.log('[rfb.css] Removed', removed, 'link(s)');
+                  // }
                 };
                 // 즉시 실행 (서버 사이드에서 추가된 링크 제거)
                 if (typeof document !== 'undefined' && document.head) {
@@ -84,9 +85,10 @@ export default function RootLayout({
                     observer.observe(document.head, { childList: true, subtree: true });
                     observer.observe(document.body, { childList: true, subtree: true });
                   } catch (e) {
-                    if (process.env.NODE_ENV === 'development') {
-                      console.warn('[rfb.css] MutationObserver setup failed:', e);
-                    }
+                    // 개발 환경 체크는 서버 사이드에서만 가능하므로 제거
+                    // if (process.env.NODE_ENV === 'development') {
+                    //   console.warn('[rfb.css] MutationObserver setup failed:', e);
+                    // }
                   }
                 }
                 
@@ -192,14 +194,16 @@ export default function RootLayout({
                       }
                     }
                   } catch(e) {
-                    if (process.env.NODE_ENV === 'development') {
-                      console.warn('[noVNC Setup] Failed to set exports/module:', e);
-                    }
+                    // 개발 환경 체크는 서버 사이드에서만 가능하므로 제거
+                    // if (process.env.NODE_ENV === 'development') {
+                    //   console.warn('[noVNC Setup] Failed to set exports/module:', e);
+                    // }
                   }
                   
-                  if (process.env.NODE_ENV === 'development') {
-                    console.log('[noVNC Setup] Initialized with Turbopack');
-                  }
+                  // 개발 환경 체크는 서버 사이드에서만 가능하므로 제거
+                  // if (process.env.NODE_ENV === 'development') {
+                  //   console.log('[noVNC Setup] Initialized with Turbopack');
+                  // }
                 }
               })();
             `,
@@ -254,18 +258,20 @@ export default function RootLayout({
                   const links = document.querySelectorAll('link[href*="rfb.css"], link[href*="@novnc/novnc"][href*="rfb.css"]');
                   links.forEach(link => {
                     link.remove();
-                    if (process.env.NODE_ENV === 'development') {
-                      console.log('[rfb.css] Removed:', link.href);
-                    }
+                    // 개발 환경 체크는 서버 사이드에서만 가능하므로 제거
+                    // if (process.env.NODE_ENV === 'development') {
+                    //   console.log('[rfb.css] Removed:', link.href);
+                    // }
                   });
                   
                   // preload 링크도 제거
                   const preloads = document.querySelectorAll('link[rel="preload"][href*="rfb.css"]');
                   preloads.forEach(link => {
                     link.remove();
-                    if (process.env.NODE_ENV === 'development') {
-                      console.log('[rfb.css] Removed preload:', link.href);
-                    }
+                    // 개발 환경 체크는 서버 사이드에서만 가능하므로 제거
+                    // if (process.env.NODE_ENV === 'development') {
+                    //   console.log('[rfb.css] Removed preload:', link.href);
+                    // }
                   });
                 };
                 
@@ -285,9 +291,10 @@ export default function RootLayout({
                         const href = node.href || node.getAttribute('href') || '';
                         if (href.includes('rfb.css')) {
                           node.remove();
-                          if (process.env.NODE_ENV === 'development') {
-                            console.log('[rfb.css] Removed dynamically added:', href);
-                          }
+                          // 개발 환경 체크는 서버 사이드에서만 가능하므로 제거
+                          // if (process.env.NODE_ENV === 'development') {
+                          //   console.log('[rfb.css] Removed dynamically added:', href);
+                          // }
                         }
                       }
                     });
@@ -302,13 +309,8 @@ export default function RootLayout({
                     const src = e.target.src;
                     if (src.includes('/_next/static/chunks/') || src.includes('/next/static/chunks/')) {
                       // 경로 문제 감지 (프록시 설정 문제일 수 있음)
-                      if (process.env.NODE_ENV === 'development') {
-                        if (src.includes('/next/static/') && !src.includes('/_next/static/')) {
-                          console.warn('[Script Load] 잘못된 경로 감지 (프록시 설정 확인 필요):', src);
-                        } else {
-                          console.warn('[Script Load] 청크 파일 로드 실패 (빌드 버전 불일치 가능):', src);
-                        }
-                      }
+                      // 개발 환경 체크는 서버 사이드에서만 가능하므로 제거
+                      console.warn('[Script Load] 청크 파일 로드 실패 (빌드 버전 불일치 가능):', src);
                       // 에러는 무시 (프록시 문제 또는 빌드 버전 불일치)
                       e.preventDefault();
                       return false;

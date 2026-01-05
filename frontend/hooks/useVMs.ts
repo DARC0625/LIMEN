@@ -229,6 +229,9 @@ export function useCreateVM() {
  * VM 액션 Mutation (start, stop, delete, update)
  * Optimistic Updates 적용: 즉시 UI 업데이트, 실패 시 롤백
  */
+// 중복 요청 방지를 위한 Map (UUID + action 조합)
+const pendingActions = new Map<string, boolean>();
+
 export function useVMAction() {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -240,7 +243,23 @@ export function useVMAction() {
       cpu?: number;
       memory?: number;
       name?: string;
-    }) => vmAPI.action(uuid, action, { cpu, memory, name }),
+    }) => {
+      // 중복 요청 방지: 같은 UUID + action 조합이 이미 진행 중이면 에러
+      const actionKey = `${uuid}:${action}`;
+      if (pendingActions.get(actionKey)) {
+        throw new Error('This request was recently processed. Please wait a moment before retrying.');
+      }
+      
+      // 요청 시작 표시
+      pendingActions.set(actionKey, true);
+      
+      return vmAPI.action(uuid, action, { cpu, memory, name }).finally(() => {
+        // 요청 완료 후 제거 (성공/실패 관계없이)
+        setTimeout(() => {
+          pendingActions.delete(actionKey);
+        }, 2000); // 2초 후 제거 (백엔드의 중복 방지 시간과 맞춤)
+      });
+    },
     
     // 낙관적 업데이트: 서버 응답 전에 UI 즉시 업데이트
     onMutate: async ({ uuid, action, cpu, memory }) => {
@@ -340,6 +359,26 @@ export function useVMAction() {
     
     // 서버 응답 성공: 최종 데이터로 업데이트
     onSuccess: (updatedVM, variables) => {
+      logger.log('[useVMAction] onSuccess called:', {
+        action: variables.action,
+        uuid: variables.uuid,
+        updatedVMStatus: updatedVM.status,
+        updatedVM: updatedVM,
+      });
+      
+      // start 액션 실패 여부를 먼저 확인 (queueMicrotask 밖에서)
+      const startFailed = variables.action === 'start' && updatedVM.status === 'Stopped';
+      // stop 액션 실패 여부 확인 (서버가 Running을 반환하면 stop 실패)
+      const stopFailed = variables.action === 'stop' && updatedVM.status === 'Running';
+      
+      logger.log('[useVMAction] Action result check:', {
+        action: variables.action,
+        expectedStatus: variables.action === 'start' ? 'Running' : variables.action === 'stop' ? 'Stopped' : 'any',
+        actualStatus: updatedVM.status,
+        startFailed,
+        stopFailed,
+      });
+      
       queueMicrotask(() => {
         startTransition(() => {
         if (variables.action === 'delete') {
@@ -353,7 +392,7 @@ export function useVMAction() {
           // 서버 응답으로 최종 업데이트
           // 중요: start 액션의 경우 서버 응답 상태를 확인
           // 만약 서버가 'Stopped'를 반환하면 VM이 시작 실패한 것
-          if (variables.action === 'start' && updatedVM.status === 'Stopped') {
+          if (startFailed) {
             // VM 시작 실패: 상태를 원래대로 되돌리고 에러 메시지 표시
             logger.warn('[useVMAction] VM start failed, status is Stopped', {
               uuid: variables.uuid,
@@ -375,9 +414,46 @@ export function useVMAction() {
             return; // 조기 반환하여 성공 토스트 방지
           }
           
+          // stop 액션 실패 처리
+          if (stopFailed) {
+            logger.warn('[useVMAction] VM stop failed, status is Running', {
+              uuid: variables.uuid,
+              vm: updatedVM,
+            });
+            queryClient.setQueryData<VM[]>(['vms'], (old) => {
+              if (!old) return [];
+              return old.map(v => {
+                if (v.uuid === variables.uuid) {
+                  return { ...v, status: 'Running' };
+                }
+                return v;
+              });
+            });
+            queueMicrotask(() => {
+              toast.error('VM failed to stop. Please check VM configuration or logs.');
+            });
+            return; // 조기 반환하여 성공 토스트 방지
+          }
+          
+          // 정상적인 경우: 서버 응답으로 업데이트 (무조건 서버 상태로 덮어쓰기)
+          logger.log('[useVMAction] Updating VM with server response:', {
+            uuid: variables.uuid,
+            action: variables.action,
+            newStatus: updatedVM.status,
+          });
           queryClient.setQueryData<VM[]>(['vms'], (old) => {
             if (!old) return [];
-            return old.map(v => v.uuid === variables.uuid ? updatedVM : v);
+            return old.map(v => {
+              if (v.uuid === variables.uuid) {
+                logger.log('[useVMAction] VM status update:', {
+                  uuid: v.uuid,
+                  oldStatus: v.status,
+                  newStatus: updatedVM.status,
+                });
+                return updatedVM; // 서버 응답으로 완전히 교체
+              }
+              return v;
+            });
           });
           
           // CPU/Memory 변경 시 할당량 무효화
@@ -388,8 +464,8 @@ export function useVMAction() {
         });
       });
       
-      // start 액션이 실패한 경우(위에서 조기 반환)는 토스트를 표시하지 않음
-      if (variables.action === 'start' && updatedVM.status === 'Stopped') {
+      // start 또는 stop 액션이 실패한 경우는 토스트를 표시하지 않음
+      if (startFailed || stopFailed) {
         return;
       }
       
