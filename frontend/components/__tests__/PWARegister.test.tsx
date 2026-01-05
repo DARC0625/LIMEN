@@ -20,6 +20,12 @@ describe('PWARegister', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    // window.location.reload 모킹
+    delete (window as any).location
+    ;(window as any).location = {
+      reload: jest.fn(),
+    }
+    
     // matchMedia 모킹
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
@@ -523,16 +529,15 @@ describe('PWARegister', () => {
       userChoice: mockUserChoice,
     }
 
-    Object.defineProperty(window, 'beforeinstallprompt', {
-      writable: true,
-      value: mockEvent,
-    })
-
     render(<PWARegister />)
 
-    // beforeinstallprompt 이벤트 발생
+    // beforeinstallprompt 이벤트 발생 - 커스텀 이벤트 객체 전달
     await act(async () => {
-      window.dispatchEvent(new Event('beforeinstallprompt'))
+      const customEvent = new Event('beforeinstallprompt') as any
+      customEvent.preventDefault = mockEvent.preventDefault
+      customEvent.prompt = mockEvent.prompt
+      customEvent.userChoice = mockEvent.userChoice
+      window.dispatchEvent(customEvent)
     })
 
     // 설치 버튼이 나타났는지 확인
@@ -562,16 +567,15 @@ describe('PWARegister', () => {
       userChoice: mockUserChoice,
     }
 
-    Object.defineProperty(window, 'beforeinstallprompt', {
-      writable: true,
-      value: mockEvent,
-    })
-
     render(<PWARegister />)
 
-    // beforeinstallprompt 이벤트 발생
+    // beforeinstallprompt 이벤트 발생 - 커스텀 이벤트 객체 전달
     await act(async () => {
-      window.dispatchEvent(new Event('beforeinstallprompt'))
+      const customEvent = new Event('beforeinstallprompt') as any
+      customEvent.preventDefault = mockEvent.preventDefault
+      customEvent.prompt = mockEvent.prompt
+      customEvent.userChoice = mockEvent.userChoice
+      window.dispatchEvent(customEvent)
     })
 
     // 설치 버튼이 나타났는지 확인

@@ -340,6 +340,9 @@ export function useVMAction() {
     
     // 서버 응답 성공: 최종 데이터로 업데이트
     onSuccess: (updatedVM, variables) => {
+      // start 액션 실패 여부를 먼저 확인 (queueMicrotask 밖에서)
+      const startFailed = variables.action === 'start' && updatedVM.status === 'Stopped';
+      
       queueMicrotask(() => {
         startTransition(() => {
         if (variables.action === 'delete') {
@@ -353,7 +356,7 @@ export function useVMAction() {
           // 서버 응답으로 최종 업데이트
           // 중요: start 액션의 경우 서버 응답 상태를 확인
           // 만약 서버가 'Stopped'를 반환하면 VM이 시작 실패한 것
-          if (variables.action === 'start' && updatedVM.status === 'Stopped') {
+          if (startFailed) {
             // VM 시작 실패: 상태를 원래대로 되돌리고 에러 메시지 표시
             logger.warn('[useVMAction] VM start failed, status is Stopped', {
               uuid: variables.uuid,
@@ -388,8 +391,8 @@ export function useVMAction() {
         });
       });
       
-      // start 액션이 실패한 경우(위에서 조기 반환)는 토스트를 표시하지 않음
-      if (variables.action === 'start' && updatedVM.status === 'Stopped') {
+      // start 액션이 실패한 경우는 토스트를 표시하지 않음
+      if (startFailed) {
         return;
       }
       

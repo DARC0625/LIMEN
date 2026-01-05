@@ -2,7 +2,9 @@
 
 import { useState, useEffect, startTransition } from 'react';
 import dynamicImport from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import { removeToken, isAdmin } from '../../../lib/api';
+import { isUserApproved } from '../../../lib/auth';
 import { useToast } from '../../../components/ToastContainer';
 import { useCreateVM, useVMAction } from '../../../hooks/useVMs';
 import { useAuth } from '../../../components/AuthGuard';
@@ -48,6 +50,7 @@ type BackendHealth = {
 // VM type is now imported from api.ts
 
 export default function Home() {
+  const router = useRouter();
   const { isAuthenticated } = useAuth();
   const toast = useToast();
   const createVMMutation = useCreateVM();
@@ -55,6 +58,25 @@ export default function Home() {
   
   // Phase 4: isAdmin()이 비동기로 변경되어 useState로 관리
   const [isUserAdmin, setIsUserAdmin] = useState(false);
+  
+  // 승인 여부 확인
+  useEffect(() => {
+    const checkApproval = async () => {
+      try {
+        const approved = await isUserApproved();
+        if (!approved) {
+          // 승인되지 않은 사용자는 대기 페이지로 이동
+          router.replace('/waiting');
+        }
+      } catch (error) {
+        console.error('Approval check failed:', error);
+        // 에러 발생 시에도 대기 페이지로 이동 (안전하게)
+        router.replace('/waiting');
+      }
+    };
+    
+    checkApproval();
+  }, [router]);
   
   // Don't render if not authenticated (prevents hydration mismatch)
   // AuthGuard already protects, but this is an additional safety measure

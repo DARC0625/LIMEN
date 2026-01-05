@@ -6,12 +6,12 @@ import { render } from '@testing-library/react'
 import ProtectedLayout from '../layout'
 
 // 의존성 모킹
-jest.mock('../../components/AuthGuard', () => ({
+jest.mock('@/components/AuthGuard', () => ({
   __esModule: true,
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }))
 
-jest.mock('../../components/VersionInfo', () => ({
+jest.mock('@/components/VersionInfo', () => ({
   VersionInfo: () => <div>Version Info</div>,
 }))
 
