@@ -57,12 +57,9 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 			if r.Method == "OPTIONS" {
+				// Only log blocked requests, skip allowed preflight logs for performance
 				if !originAllowed {
 					logger.Log.Warn("CORS preflight blocked",
-						zap.String("origin", origin),
-						zap.String("path", r.URL.Path))
-				} else {
-					logger.Log.Debug("CORS preflight allowed",
 						zap.String("origin", origin),
 						zap.String("path", r.URL.Path))
 				}
@@ -326,8 +323,9 @@ func Compression(next http.Handler) http.Handler {
 			return
 		}
 
-		// Create gzip writer
-		gz := gzip.NewWriter(w)
+		// Create gzip writer with optimized compression level
+		// Level 6 provides good balance between compression and speed
+		gz, _ := gzip.NewWriterLevel(w, gzip.DefaultCompression)
 		defer gz.Close()
 
 		// Set headers

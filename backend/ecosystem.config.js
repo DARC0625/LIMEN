@@ -22,7 +22,7 @@ module.exports = {
       }
     },
     {
-      name: 'limen',
+      name: 'limen-agent',
       script: './target/release/agent',
       cwd: '/home/darc0/LIMEN/backend/agent',
       instances: 1,

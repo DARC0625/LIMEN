@@ -123,3 +123,5 @@ echo "- Screenshot: Prometheus alerts (firing state)"
 echo "- Screenshot: Alertmanager UI (firing alerts)"
 echo "- Log: Webhook receiver (if configured)"
 
+
+

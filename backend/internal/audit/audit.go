@@ -33,11 +33,15 @@ func LogEvent(ctx context.Context, action, resource, resourceID string, result s
 
 	// Serialize metadata to JSON
 	var metadataJSON string
-	if metadata != nil {
+	if metadata != nil && len(metadata) > 0 {
 		jsonBytes, err := json.Marshal(metadata)
 		if err == nil {
 			metadataJSON = string(jsonBytes)
 		}
+	}
+	// If metadataJSON is empty, set to null JSON value for database
+	if metadataJSON == "" {
+		metadataJSON = "null"
 	}
 
 	// Create audit log entry

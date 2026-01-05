@@ -84,6 +84,11 @@ coverage/
 *.backup
 *_backup/
 
+# 중복 폴더 방지 (대소문자 혼동 방지)
+limen/
+/home/darc0/limen/
+/home/darc0/projects/LIMEN/
+
 # 프론트엔드 빌드 아티팩트만 제외 (소스 코드는 포함)
 frontend/.next/
 frontend/out/

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -47,6 +48,13 @@ func Deduplication() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Skip deduplication for GET requests (idempotent)
 			if r.Method == "GET" || r.Method == "HEAD" || r.Method == "OPTIONS" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			
+			// Skip deduplication for VM action endpoints (they have their own idempotency checks)
+			// VM actions may be retried quickly and should not be blocked
+			if strings.HasPrefix(r.URL.Path, "/api/vms/") && strings.HasSuffix(r.URL.Path, "/action") {
 				next.ServeHTTP(w, r)
 				return
 			}

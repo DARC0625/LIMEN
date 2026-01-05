@@ -486,19 +486,60 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 	sessionStore := auth.GetSessionStore()
 	session, exists := sessionStore.GetSessionByRefreshToken(refreshToken)
 	if !exists {
-		// Passive monitoring: Log session not found (for security awareness)
-		logger.Log.Warn("Session not found in store",
+		// Session not found in store, but refresh token is valid
+		// This can happen after server restart (memory session store was cleared)
+		// Auto-recover session from valid refresh token
+		logger.Log.Info("Session not found in store, but refresh token is valid - recovering session",
 			zap.String("remote_addr", r.RemoteAddr),
 			zap.String("origin", r.Header.Get("Origin")),
 			zap.Uint("user_id", refreshClaims.UserID),
+			zap.String("username", refreshClaims.Username),
+			zap.String("token_id", refreshClaims.TokenID))
+		
+		// Generate new access token
+		newAccessToken, err := auth.GenerateAccessToken(refreshClaims.UserID, refreshClaims.Username, refreshClaims.Role, refreshClaims.Approved, cfg.JWTSecret)
+		if err != nil {
+			logger.Log.Error("Failed to generate access token during session recovery", zap.Error(err))
+			errors.WriteInternalError(w, err, false)
+			return
+		}
+		
+		// Generate new CSRF token
+		csrfToken, err := security.GenerateCSRFToken()
+		if err != nil {
+			logger.Log.Error("Failed to generate CSRF token during session recovery", zap.Error(err))
+			errors.WriteInternalError(w, err, false)
+			return
+		}
+		
+		// Create new session with existing refresh token
+		var expiresAt time.Time
+		if refreshClaims.ExpiresAt != nil {
+			expiresAt = refreshClaims.ExpiresAt.Time
+		} else {
+			// Fallback to 7 days from now if ExpiresAt is nil
+			expiresAt = time.Now().Add(7 * 24 * time.Hour)
+		}
+		session, err = sessionStore.CreateSession(
+			newAccessToken,
+			refreshToken, // Keep existing refresh token
+			refreshClaims.TokenID,
+			csrfToken,
+			refreshClaims.UserID,
+			refreshClaims.Username,
+			refreshClaims.Role,
+			expiresAt,
+		)
+		if err != nil {
+			logger.Log.Error("Failed to create session during recovery", zap.Error(err))
+			errors.WriteInternalError(w, err, false)
+			return
+		}
+		
+		logger.Log.Info("Session recovered successfully",
+			zap.String("session_id", session.ID),
+			zap.Uint("user_id", refreshClaims.UserID),
 			zap.String("username", refreshClaims.Username))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(SessionResponse{
-			Valid:  false,
-			Reason: "세션이 만료되었습니다.",
-		})
-		return
 	}
 
 	// Validate CSRF token if provided (optional for GET, but recommended)

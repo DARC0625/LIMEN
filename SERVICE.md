@@ -64,12 +64,26 @@ make build-all
 
 ### 4. 서비스 실행
 
-#### 방법 1: 직접 실행 (개발/테스트)
+#### 방법 1: PM2로 실행 (권장)
+
+```bash
+cd /home/darc0/LIMEN/backend
+pm2 start ecosystem.config.js
+pm2 save
+```
+
+또는 제어 스크립트 사용:
 
 ```bash
 cd /home/darc0/LIMEN
-./scripts/start-LIMEN.sh start
+./scripts/pm2-control.sh start
 ```
+
+PM2 명령어:
+- `pm2 list` - 서비스 상태 확인
+- `pm2 logs` - 로그 확인
+- `pm2 restart all` - 재시작
+- `pm2 stop all` - 중지
 
 #### 방법 2: systemd 서비스로 실행 (프로덕션)
 

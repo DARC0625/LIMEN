@@ -32,14 +32,24 @@ type WebhookPayload struct {
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
-// NewWebhookChannel creates a new webhook channel.
+// NewWebhookChannel creates a new webhook channel with optimized HTTP client.
 func NewWebhookChannel(url string, logger *zap.Logger) *WebhookChannel {
+	// Optimize HTTP client for connection reuse and better network performance
+	transport := &http.Transport{
+		MaxIdleConns:        100,              // Maximum idle connections in pool
+		MaxIdleConnsPerHost: 10,               // Maximum idle connections per host
+		IdleConnTimeout:     90 * time.Second, // How long idle connections are kept
+		DisableKeepAlives:   false,             // Enable connection reuse
+		DisableCompression:  false,             // Enable compression
+	}
+	
 	return &WebhookChannel{
 		url:     url,
 		logger:  logger,
 		timeout: 10 * time.Second,
 		client: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout:   10 * time.Second,
+			Transport: transport, // Use optimized transport
 		},
 	}
 }

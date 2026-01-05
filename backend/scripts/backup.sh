@@ -77,3 +77,5 @@ find "${BACKUP_DIR}" -name "limen_backup_*.tar.gz" -mtime +7 -delete 2>/dev/null
 
 echo "Backup completed successfully at $(date)"
 
+
+

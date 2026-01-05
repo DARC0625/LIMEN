@@ -103,7 +103,8 @@ func TestValidateInput_MaxLength(t *testing.T) {
 }
 
 func TestValidateInput_ControlCharacters(t *testing.T) {
-	controlChars := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F}
+	// Control characters that should be rejected (excluding newline 0x0A and tab 0x09 which are allowed)
+	controlChars := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F}
 
 	for _, char := range controlChars {
 		t.Run(string(rune(char)), func(t *testing.T) {
@@ -111,6 +112,18 @@ func TestValidateInput_ControlCharacters(t *testing.T) {
 			err := ValidateInput(input, 20)
 			if err == nil {
 				t.Errorf("ValidateInput should reject control character 0x%02X", char)
+			}
+		})
+	}
+
+	// Test that newline and tab are allowed
+	allowedChars := []byte{0x09, 0x0A} // tab and newline
+	for _, char := range allowedChars {
+		t.Run(string(rune(char)), func(t *testing.T) {
+			input := "hello" + string(char) + "world"
+			err := ValidateInput(input, 20)
+			if err != nil {
+				t.Errorf("ValidateInput should allow control character 0x%02X (newline/tab), got error: %v", char, err)
 			}
 		})
 	}

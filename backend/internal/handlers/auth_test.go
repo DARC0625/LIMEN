@@ -11,6 +11,7 @@ import (
 
 	"github.com/DARC0625/LIMEN/backend/internal/auth"
 	"github.com/DARC0625/LIMEN/backend/internal/config"
+	"github.com/DARC0625/LIMEN/backend/internal/database"
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
 	"github.com/DARC0625/LIMEN/backend/internal/security"
@@ -30,9 +31,12 @@ func setupTestAuthHandler(t *testing.T) (*Handler, *config.Config) {
 		t.Fatalf("Failed to open test database: %v", err)
 	}
 
-	if err := db.AutoMigrate(&models.User{}, &models.VM{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}, &models.VM{}, &models.AuditLog{}); err != nil {
 		t.Fatalf("Failed to migrate test database: %v", err)
 	}
+
+	// Set database.DB for audit package
+	database.DB = db
 
 	cfg := &config.Config{
 		Env:           "test",

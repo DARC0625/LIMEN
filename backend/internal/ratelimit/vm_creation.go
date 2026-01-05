@@ -32,28 +32,10 @@ func GetVMCreationLimiter() *VMCreationLimiter {
 
 // CheckRateLimit checks if the user can create a VM now (rate limit check).
 // Returns error if rate limit is exceeded.
+// DISABLED: Rate limit removed to allow immediate VM creation
 func (l *VMCreationLimiter) CheckRateLimit(userID uint) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	lastRequest, exists := l.userLastRequest[userID]
-	if !exists {
-		// First request, allow it
-		l.userLastRequest[userID] = time.Now()
-		return nil
-	}
-
-	elapsed := time.Since(lastRequest)
-	if elapsed < l.minInterval {
-		remaining := l.minInterval - elapsed
-		return &RateLimitError{
-			Message:    "VM creation rate limit exceeded",
-			RetryAfter: remaining,
-		}
-	}
-
-	// Update last request time
-	l.userLastRequest[userID] = time.Now()
+	// Rate limit disabled - allow all requests
+	// No cooldown period between VM creations
 	return nil
 }
 

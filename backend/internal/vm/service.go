@@ -423,8 +423,10 @@ func (s *VMService) StartVM(name string) error {
 	}
 
 	// Ensure VNC graphics is configured before starting
+	// Note: This must be done before starting the VM, as DomainDefineXML cannot modify running VMs
 	if err := s.ensureVNCGraphics(name); err != nil {
 		logger.Log.Warn("Failed to ensure VNC graphics, VM may not have VNC access", zap.String("vm_name", name), zap.Error(err))
+		// Continue anyway - VNC might already be configured or VM might start without it
 	}
 
 	// Start VM
@@ -435,26 +437,61 @@ func (s *VMService) StartVM(name string) error {
 			// Extract ISO path from error
 			return fmt.Errorf("ISO file not found. Please check VM configuration. Original error: %w", err)
 		}
+		// Check for other common errors
+		if strings.Contains(errStr, "already exists") || strings.Contains(errStr, "already active") {
+			// VM might have been started by another process, verify status
+			active, checkErr := dom.IsActive()
+			if checkErr == nil && active {
+				logger.Log.Info("VM was already started by another process", zap.String("vm_name", name))
+				return nil
+			}
+		}
 		return fmt.Errorf("failed to start VM: %w", err)
 	}
 
 	// Optimized: Use context with timeout instead of fixed sleep
-	// Wait for VM to fully start and VNC to initialize (max 5 seconds)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Wait for VM to fully start and VNC to initialize (max 10 seconds for slow systems)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	
 	vmStarted := false
+	var lastErr error
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Warn("Timeout waiting for VM to start", zap.String("vm_name", name))
+			// Check one more time before giving up
+			active, err := dom.IsActive()
+			if err == nil && active {
+				vmStarted = true
+				break
+			}
+			if !vmStarted {
+				// Get more detailed error information
+				state, reason, stateErr := dom.GetState()
+				if stateErr == nil {
+					logger.Log.Error("Timeout waiting for VM to start", 
+						zap.String("vm_name", name),
+						zap.Int("state", int(state)),
+						zap.Int("reason", int(reason)))
+					return fmt.Errorf("VM failed to start within timeout period (state: %d, reason: %d)", state, reason)
+				}
+				logger.Log.Error("Timeout waiting for VM to start", 
+					zap.String("vm_name", name),
+					zap.Error(lastErr))
+				return fmt.Errorf("VM failed to start within timeout period: %w", lastErr)
+			}
 			break
 		case <-ticker.C:
 			active, err := dom.IsActive()
-			if err == nil && active {
+			if err != nil {
+				lastErr = err
+				// Continue checking - might be transient
+				continue
+			}
+			if active {
 				vmStarted = true
 				break
 			}
@@ -464,6 +501,16 @@ func (s *VMService) StartVM(name string) error {
 		}
 	}
 
+	if !vmStarted {
+		// Get final state for better error message
+		state, reason, stateErr := dom.GetState()
+		if stateErr == nil {
+			return fmt.Errorf("VM failed to start: domain is not active after start command (state: %d, reason: %d)", state, reason)
+		}
+		return fmt.Errorf("VM failed to start: domain is not active after start command: %w", lastErr)
+	}
+
+	logger.Log.Info("VM successfully started and verified", zap.String("vm_name", name))
 	return nil
 }
 
@@ -955,6 +1002,7 @@ func (s *VMService) verifyVNCPort(port int) bool {
 
 // ensureVNCGraphics ensures VNC graphics is configured in VM XML
 // If VNC graphics is missing, it will be added automatically
+// Note: This function should be called before starting the VM, as DomainDefineXML cannot modify running VMs
 func (s *VMService) ensureVNCGraphics(name string) error {
 	dom, err := s.conn.LookupDomainByName(name)
 	if err != nil {
@@ -962,7 +1010,28 @@ func (s *VMService) ensureVNCGraphics(name string) error {
 	}
 	defer dom.Free()
 
-	// Get current XML
+	// Check if VM is running - if so, we cannot modify the domain definition
+	active, err := dom.IsActive()
+	if err != nil {
+		return fmt.Errorf("failed to check VM status: %w", err)
+	}
+	if active {
+		// VM is running, check if VNC is already configured
+		// We cannot modify running VMs, so just verify VNC exists
+		xmlDesc, err := dom.GetXMLDesc(0)
+		if err != nil {
+			return fmt.Errorf("failed to get VM XML: %w", err)
+		}
+		if strings.Contains(xmlDesc, "type='vnc'") {
+			// VNC already configured
+			return nil
+		}
+		// VNC not configured but VM is running - cannot modify
+		logger.Log.Warn("VM is running but VNC graphics is not configured, cannot modify running VM", zap.String("vm_name", name))
+		return nil // Don't fail, just log warning
+	}
+
+	// Get current XML (VM is not running, so we can modify it)
 	xmlDesc, err := dom.GetXMLDesc(0)
 	if err != nil {
 		return fmt.Errorf("failed to get VM XML: %w", err)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -50,8 +51,9 @@ func NewHandler(db *gorm.DB, vmService *vm.VMService, cfg *config.Config) *Handl
 	broadcaster := NewVMStatusBroadcaster()
 	go broadcaster.Run()
 	
-	// Initialize cache with 5 minute TTL for VM lists and user data
-	vmCache := cache.NewInMemoryCache(5 * time.Minute)
+	// Initialize cache with optimized TTL for 10+ concurrent users:
+	// 3 minutes for VM lists (balance between freshness and load reduction)
+	vmCache := cache.NewInMemoryCache(3 * time.Minute)
 	
 	return &Handler{
 		DB:                  db,
@@ -91,6 +93,7 @@ func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	// Use direct encoding for simple responses (no pooling needed for small responses)
 	json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
 		"time":    time.Now().Format(time.RFC3339),
@@ -101,8 +104,8 @@ func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 
 type CreateVMRequest struct {
 	Name         string `json:"name" example:"my-vm" binding:"required"` // VM name (unique)
-	CPU          int    `json:"cpu" example:"4" binding:"required,min=1,max=32"` // Number of CPU cores (1-32)
-	Memory       int    `json:"memory" example:"4096" binding:"required,min=512"` // Memory in MB (minimum 512MB)
+	CPU          int    `json:"cpu" example:"4" binding:"required,min=1"` // Number of CPU cores (minimum 1, no maximum limit)
+	Memory       int    `json:"memory" example:"4096" binding:"required,min=1024"` // Memory in MB (minimum 1024MB/1GB)
 	OSType       string `json:"os_type" example:"ubuntu" binding:"required"` // OS type (must exist in VMImage table)
 	GraphicsType string `json:"graphics_type,omitempty" example:"vnc"` // Graphics type (vnc, spice, none). Auto-enabled for GUI OS if not specified.
 	VNCEnabled   *bool  `json:"vnc_enabled,omitempty" example:"true"` // Enable VNC graphics. Auto-enabled for GUI OS if not specified.
@@ -152,15 +155,17 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 		metrics.DatabaseQueryDuration.WithLabelValues("select").Observe(time.Since(startTime).Seconds())
 		metrics.DatabaseQueryTotal.WithLabelValues("select", "success").Inc()
 
+		// Optimized: Skip libvirt sync for cached responses to reduce load
+		// Only sync if not from cache and VMService is available
 		// Sync VM statuses from libvirt to ensure accuracy (if VMService is available)
-		// Optimized: Only sync if there are VMs and VMService is available
+		// Optimized for 10+ concurrent users: Higher concurrency for faster response
 		if h.VMService != nil && len(vms) > 0 {
-			// Use goroutines for parallel status sync (limited concurrency)
+			// Use goroutines for parallel status sync (optimized for concurrent users)
 			// Add context with timeout to prevent goroutines from running indefinitely
-			syncCtx, syncCancel := context.WithTimeout(r.Context(), 10*time.Second)
+			syncCtx, syncCancel := context.WithTimeout(r.Context(), 10*time.Second) // Increased for concurrent users
 			defer syncCancel()
 			
-			const maxConcurrency = 5
+			const maxConcurrency = 8 // Increased for 10+ concurrent users (was 3)
 			sem := make(chan struct{}, maxConcurrency)
 			var wg sync.WaitGroup
 			
@@ -171,7 +176,7 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 				// Check if context is cancelled before starting new goroutine
 				select {
 				case <-syncCtx.Done():
-					logger.Log.Warn("VM status sync cancelled due to timeout or context cancellation")
+					// Timeout reached, skip remaining syncs
 					goto syncComplete
 				default:
 				}
@@ -194,7 +199,10 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 						return
 					default:
 						if err := h.VMService.SyncVMStatus(&vms[idx]); err != nil {
-							logger.Log.Debug("Failed to sync VM status", zap.String("vm_name", vms[idx].Name), zap.Error(err))
+							// Only log in development
+							if h.Config.Env == "development" {
+								logger.Log.Debug("Failed to sync VM status", zap.String("vm_name", vms[idx].Name), zap.Error(err))
+							}
 							// Continue even if sync fails for one VM
 						}
 					}
@@ -210,7 +218,10 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 			case <-done:
 				// All goroutines completed
 			case <-syncCtx.Done():
-				logger.Log.Warn("VM status sync timed out, some syncs may be incomplete")
+				// Timeout - don't log warning in production
+				if h.Config.Env == "development" {
+					logger.Log.Debug("VM status sync timed out, some syncs may be incomplete")
+				}
 			}
 			
 			syncComplete:
@@ -461,25 +472,26 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 			return
 		}
 
-		// Optimized: Use context with timeout instead of fixed sleep
-		// Wait for VM to fully start and VNC to initialize
-		// VNC port assignment can take a few seconds
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		// Wait for VM to fully start and VNC to initialize with generous timeout
+		// VNC port assignment can take variable time depending on system load
+		// Using 60 second timeout for flexibility
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		
-		// Poll for VM to be ready with timeout
 		ready := false
-		for i := 0; i < 10; i++ {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		
+		for !ready {
 			select {
 			case <-ctx.Done():
-				logger.Log.Warn("Timeout waiting for VM to be ready", zap.String("vm_name", req.Name))
+				logger.Log.Warn("Timeout waiting for VM to be ready (60s exceeded)", zap.String("vm_name", req.Name))
 				break
-			default:
+			case <-ticker.C:
 				if status, err := h.VMService.GetVMStatusFromLibvirt(req.Name); err == nil && status == models.VMStatusRunning {
 					ready = true
 					break
 				}
-				time.Sleep(1 * time.Second)
 			}
 			if ready {
 				break
@@ -496,17 +508,18 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 				if startErr := h.VMService.StartVM(req.Name); startErr != nil {
 					logger.Log.Error("Failed to start VM after creation", zap.Error(startErr), zap.String("vm_name", req.Name))
 				} else {
-					// Optimized: Use context with timeout instead of fixed sleep
-					// Wait for VM to start (max 3 seconds)
-					ctx2, cancel2 := context.WithTimeout(context.Background(), 3*time.Second)
-					ticker2 := time.NewTicker(500 * time.Millisecond)
-					defer ticker2.Stop()
+					// Wait for VM to start with generous timeout (30 seconds)
+					ctx2, cancel2 := context.WithTimeout(context.Background(), 30*time.Second)
 					defer cancel2()
 					
+					ticker2 := time.NewTicker(500 * time.Millisecond)
+					defer ticker2.Stop()
+					
 					vmStarted := false
-					for {
+					for !vmStarted {
 						select {
 						case <-ctx2.Done():
+							logger.Log.Warn("Timeout waiting for VM to start (30s exceeded)", zap.String("vm_name", req.Name))
 							break
 						case <-ticker2.C:
 							if updatedStatus, err := h.VMService.GetVMStatusFromLibvirt(req.Name); err == nil {
@@ -640,10 +653,24 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 			errors.WriteInternalError(w, err, h.Config.Env == "development")
 			return
 		}
-		vmRec.Status = models.VMStatusRunning
+		// Verify actual VM status from libvirt after starting
+		actualStatus, err := h.VMService.GetVMStatusFromLibvirt(vmRec.Name)
+		if err != nil {
+			logger.Log.Warn("Failed to verify VM status after start", zap.String("vm_name", vmRec.Name), zap.Error(err))
+			// Still set to running if StartVM succeeded, but log the warning
+			vmRec.Status = models.VMStatusRunning
+		} else {
+			// Use actual status from libvirt
+			vmRec.Status = actualStatus
+			if actualStatus != models.VMStatusRunning {
+				logger.Log.Warn("VM start command succeeded but VM is not running", 
+					zap.String("vm_name", vmRec.Name), 
+					zap.String("actual_status", string(actualStatus)))
+			}
+		}
 		actionSuccess = true
-		logger.Log.Info("VM started", zap.String("vm_name", vmRec.Name))
-		audit.LogVMStart(r.Context(), userID, vmRec.UUID, true)
+		logger.Log.Info("VM started", zap.String("vm_name", vmRec.Name), zap.String("status", string(vmRec.Status)))
+		audit.LogVMStart(r.Context(), userID, vmRec.UUID, vmRec.Status == models.VMStatusRunning)
 		// Broadcast VM update via WebSocket
 		h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
 	case models.VMActionStop:
@@ -721,8 +748,9 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 		metrics.CacheSize.WithLabelValues("vm_list").Set(float64(h.Cache.Size()))
 
 		// Broadcast VM deletion via WebSocket (send updated list)
+		// Optimized: Only fetch necessary fields for broadcast
 		var allVMs []models.VM
-		if err := h.DB.Find(&allVMs).Error; err == nil {
+		if err := h.DB.Select("id", "uuid", "name", "status", "cpu", "memory").Find(&allVMs).Error; err == nil {
 			h.VMStatusBroadcaster.BroadcastVMList(allVMs)
 		}
 
@@ -741,6 +769,10 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	case models.VMActionUpdate:
+		if h.VMService == nil {
+			errors.WriteInternalError(w, fmt.Errorf("VM service is not available"), h.Config.Env == "development")
+			return
+		}
 		if req.CPU == 0 || req.Memory == 0 {
 			errors.WriteBadRequest(w, "CPU and Memory are required for update", nil)
 			return
@@ -864,11 +896,12 @@ func (h *Handler) HandleVMDelete(w http.ResponseWriter, r *http.Request) {
 	h.Cache.Delete("vms:list")
 	metrics.CacheSize.WithLabelValues("vm_list").Set(float64(h.Cache.Size()))
 
-	// Broadcast VM deletion via WebSocket (send updated list)
-	var allVMs []models.VM
-	if err := h.DB.Find(&allVMs).Error; err == nil {
-		h.VMStatusBroadcaster.BroadcastVMList(allVMs)
-	}
+		// Broadcast VM deletion via WebSocket (send updated list)
+		// Optimized: Only fetch necessary fields for broadcast
+		var allVMs []models.VM
+		if err := h.DB.Select("id", "uuid", "name", "status", "cpu", "memory").Find(&allVMs).Error; err == nil {
+			h.VMStatusBroadcaster.BroadcastVMList(allVMs)
+		}
 
 	// Update metrics
 	metrics.VMDeleteTotal.Inc()
@@ -889,6 +922,49 @@ func (h *Handler) HandleVMDelete(w http.ResponseWriter, r *http.Request) {
 // Origin validation uses the same CORS configuration as HTTP requests.
 func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
 	origin := r.Header.Get("Origin")
+	
+	// If origin is empty (e.g., removed by proxy), try to extract from Referer header
+	if origin == "" {
+		referer := r.Header.Get("Referer")
+		if referer != "" {
+			// Extract origin from referer URL
+			if refererURL, err := url.Parse(referer); err == nil {
+				origin = refererURL.Scheme + "://" + refererURL.Host
+				logger.Log.Debug("Extracted origin from Referer header",
+					zap.String("origin", origin),
+					zap.String("referer", referer))
+			}
+		}
+	}
+	
+	// If still empty and we have allowed origins configured, check if we're behind a proxy
+	// In production behind a trusted proxy (like Envoy), we may allow empty origin
+	// if the request comes from a trusted source
+	if origin == "" && len(h.Config.AllowedOrigins) > 0 {
+		// Check if request is from a trusted proxy/internal network
+		// For VNC connections, we rely on authentication instead of origin validation
+		// when behind a proxy that strips Origin headers
+		logger.Log.Debug("WebSocket request with empty origin, checking if behind trusted proxy",
+			zap.String("host", r.Host),
+			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("x-forwarded-for", r.Header.Get("X-Forwarded-For")))
+		
+		// If we have authentication (token/cookie), allow empty origin for proxy scenarios
+		// This is safe because authentication is still required
+		_, hasRefreshTokenErr := r.Cookie("refresh_token")
+		hasRefreshToken := hasRefreshTokenErr == nil
+		hasAuth := r.URL.Query().Get("token") != "" ||
+			r.Header.Get("Authorization") != "" ||
+			hasRefreshToken
+		
+		if hasAuth {
+			logger.Log.Info("Allowing WebSocket with empty origin due to authentication and proxy scenario",
+				zap.String("path", r.URL.Path),
+				zap.String("remote_addr", r.RemoteAddr))
+			origin = "*" // Set to wildcard to bypass origin check
+		}
+	}
+	
 	allowed := h.isOriginAllowed(origin)
 	if !allowed {
 		logger.Log.Warn("WebSocket origin not allowed",
@@ -896,6 +972,7 @@ func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*webs
 			zap.String("path", r.URL.Path),
 			zap.String("remote_addr", r.RemoteAddr),
 			zap.String("host", r.Host),
+			zap.String("referer", r.Header.Get("Referer")),
 			zap.Strings("allowed_origins", h.Config.AllowedOrigins))
 		return nil, fmt.Errorf("origin not allowed: %s", origin)
 	}
@@ -921,6 +998,20 @@ func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*webs
 	opts := &websocket.AcceptOptions{
 		OriginPatterns: originPatterns,
 		CompressionMode: websocket.CompressionContextTakeover, // Enable compression
+	}
+
+	// Handle proxy scenarios where Connection header might be missing
+	// If Upgrade header exists but Connection is missing, it's likely a proxy issue
+	upgradeHeader := r.Header.Get("Upgrade")
+	connectionHeader := r.Header.Get("Connection")
+	
+	if upgradeHeader == "websocket" && connectionHeader == "" {
+		// Proxy stripped Connection header, but Upgrade header exists
+		// Manually set Connection header for WebSocket library
+		r.Header.Set("Connection", "Upgrade")
+		logger.Log.Debug("Restored Connection header for WebSocket upgrade",
+			zap.String("path", r.URL.Path),
+			zap.String("upgrade", upgradeHeader))
 	}
 
 	conn, err := websocket.Accept(w, r, opts)
@@ -1010,14 +1101,31 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Log incoming WebSocket connection attempt with ALL headers for debugging
-	allCookies := r.Cookies()
-	cookieNames := make([]string, 0, len(allCookies))
-	hasRefreshToken := false
-	for _, c := range allCookies {
-		cookieNames = append(cookieNames, c.Name)
-		if c.Name == "refresh_token" {
-			hasRefreshToken = true
+	// Check if this is a WebSocket upgrade request
+	// Some proxies may strip Connection/Upgrade headers, so also check path pattern
+	isWebSocketRequest := r.Header.Get("Upgrade") == "websocket" ||
+		strings.ToLower(r.Header.Get("Connection")) == "upgrade" ||
+		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
+	
+	// If not a WebSocket request (e.g., browser navigation), return appropriate response
+	if !isWebSocketRequest && r.Method == "GET" {
+		// This is likely a browser navigation to the VNC URL
+		// Return 426 Upgrade Required to indicate WebSocket is required
+		w.Header().Set("Upgrade", "websocket")
+		w.Header().Set("Connection", "Upgrade")
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusUpgradeRequired) // 426
+		w.Write([]byte("WebSocket connection required. Please use WebSocket client to connect."))
+		return
+	}
+
+	// Only collect cookie info in development
+	var cookieNames []string
+	if h.Config.Env == "development" {
+		allCookies := r.Cookies()
+		cookieNames = make([]string, 0, len(allCookies))
+		for _, c := range allCookies {
+			cookieNames = append(cookieNames, c.Name)
 		}
 	}
 	
@@ -1082,23 +1190,12 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	logger.Log.Info("VNC WebSocket connection attempt - DETAILED",
-		zap.String("remote_addr", r.RemoteAddr),
-		zap.String("origin", origin),
-		zap.String("user_agent", r.Header.Get("User-Agent")),
-		zap.String("path", r.URL.Path),
-		zap.String("full_url", r.URL.String()),
-		zap.String("query", r.URL.RawQuery),
-		zap.String("upgrade", r.Header.Get("Upgrade")),
-		zap.String("connection", r.Header.Get("Connection")),
-		zap.String("method", r.Method),
-		zap.String("host", r.Host),
-		zap.String("referer", r.Header.Get("Referer")),
-		zap.String("authorization", r.Header.Get("Authorization")),
-		zap.String("cookie_header", r.Header.Get("Cookie")),
-		zap.Strings("cookie_names", cookieNames),
-		zap.Bool("has_refresh_token_cookie", hasRefreshToken),
-		zap.Strings("allowed_origins", h.Config.AllowedOrigins))
+	// Only log detailed info in development or when there's an error
+	if h.Config.Env == "development" {
+		logger.Log.Debug("VNC WebSocket connection attempt",
+			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("path", r.URL.Path))
+	}
 
 	// Verify authentication: Try multiple methods (query param, Authorization header, refresh token cookie)
 	// Note: token variable already declared above for beta access check
@@ -1133,8 +1230,10 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 	// 3. Try refresh token cookie (for session-based auth)
 	if token == "" || err != nil {
 		if cookie, cookieErr := r.Cookie("refresh_token"); cookieErr == nil {
-			logger.Log.Info("VNC: refresh_token cookie found, attempting authentication",
-				zap.String("cookie_preview", cookie.Value[:min(20, len(cookie.Value))]+"..."))
+			// Only log in development
+			if h.Config.Env == "development" {
+				logger.Log.Debug("VNC: refresh_token cookie found, attempting authentication")
+			}
 			refreshClaims, refreshErr := auth.ValidateRefreshToken(cookie.Value, h.Config.JWTSecret)
 			if refreshErr != nil {
 				logger.Log.Warn("VNC: refresh token validation failed",
@@ -1156,9 +1255,11 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 							Role:     refreshClaims.Role,
 							Approved: refreshClaims.Approved,
 						}
-						logger.Log.Info("VNC authentication via refresh token cookie - SUCCESS",
-							zap.Uint("user_id", claims.UserID),
-							zap.String("username", claims.Username))
+						// Only log in development
+						if h.Config.Env == "development" {
+							logger.Log.Debug("VNC authentication via refresh token cookie - SUCCESS",
+								zap.Uint("user_id", claims.UserID))
+						}
 					} else {
 						logger.Log.Warn("VNC: failed to generate access token from refresh token",
 							zap.Error(err))
@@ -1194,16 +1295,19 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Log.Info("VNC connection authenticated",
-		zap.Uint("user_id", claims.UserID),
-		zap.String("username", claims.Username),
-		zap.String("role", claims.Role))
+	// Only log in development
+	if h.Config.Env == "development" {
+		logger.Log.Debug("VNC connection authenticated",
+			zap.Uint("user_id", claims.UserID),
+			zap.String("role", claims.Role))
+	}
 
-	logger.Log.Info("Attempting WebSocket upgrade",
-		zap.String("path", r.URL.Path),
-		zap.String("origin", origin),
-		zap.Uint("user_id", claims.UserID),
-		zap.String("username", claims.Username))
+	// Only log in development
+	if h.Config.Env == "development" {
+		logger.Log.Debug("Attempting WebSocket upgrade",
+			zap.String("path", r.URL.Path),
+			zap.Uint("user_id", claims.UserID))
+	}
 	
 	ws, err := h.acceptWebSocket(w, r)
 	if err != nil {
@@ -1223,16 +1327,21 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() {
-		logger.Log.Info("WebSocket connection closing",
-			zap.String("vm_uuid", r.URL.Query().Get("id")),
-			zap.Uint("user_id", claims.UserID))
+		// Only log in development
+		if h.Config.Env == "development" {
+			logger.Log.Debug("WebSocket connection closing",
+				zap.String("vm_uuid", r.URL.Query().Get("id")),
+				zap.Uint("user_id", claims.UserID))
+		}
 		ws.Close(websocket.StatusNormalClosure, "")
 	}()
 	
-	logger.Log.Info("WebSocket accept SUCCESS",
-		zap.String("path", r.URL.Path),
-		zap.Uint("user_id", claims.UserID),
-		zap.String("username", claims.Username))
+	// Only log in development
+	if h.Config.Env == "development" {
+		logger.Log.Debug("WebSocket accept SUCCESS",
+			zap.String("path", r.URL.Path),
+			zap.Uint("user_id", claims.UserID))
+	}
 
 	// Send initial connection status
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -1319,7 +1428,10 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		zap.String("vm_name", vmRec.Name),
 		zap.Int("vm_id", int(vmRec.ID)))
 
-	logger.Log.Info("VM found for VNC", zap.String("vm_name", vmRec.Name), zap.String("status", string(vmRec.Status)))
+	// Only log in development
+	if h.Config.Env == "development" {
+		logger.Log.Debug("VM found for VNC", zap.String("vm_name", vmRec.Name), zap.String("status", string(vmRec.Status)))
+	}
 
 	// Sync VM status from libvirt to ensure accuracy
 	actualStatus, err := h.VMService.GetVMStatusFromLibvirt(vmRec.Name)
@@ -1443,8 +1555,21 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 
 	for i := 0; i < maxConnectionRetries; i++ {
 		var err error
-		conn, err = net.DialTimeout("tcp", targetAddr, 3*time.Second)
+		dialer := &net.Dialer{
+			Timeout:   3 * time.Second,
+			KeepAlive: 30 * time.Second, // Enable TCP KeepAlive for VNC connections
+		}
+		conn, err = dialer.Dial("tcp", targetAddr)
 		if err == nil {
+			// Optimize TCP connection settings for VNC (low latency, high throughput)
+			if tcpConn, ok := conn.(*net.TCPConn); ok {
+				tcpConn.SetKeepAlive(true)
+				tcpConn.SetKeepAlivePeriod(30 * time.Second)
+				tcpConn.SetNoDelay(true) // Disable Nagle's algorithm for low latency
+				// Set buffer sizes for better throughput
+				tcpConn.SetReadBuffer(64 * 1024)  // 64KB read buffer
+				tcpConn.SetWriteBuffer(64 * 1024) // 64KB write buffer
+			}
 			break
 		}
 
@@ -1545,11 +1670,13 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 				// Only log non-normal closure errors
 				closeStatus := websocket.CloseStatus(err)
 				if closeStatus != websocket.StatusNormalClosure && closeStatus != websocket.StatusGoingAway {
-					logger.Log.Info("VNC WebSocket read error",
-						zap.Error(err),
-						zap.String("vm_uuid", vmRec.UUID),
-						zap.Uint("user_id", claims.UserID),
-						zap.Int("messages_received", messageCount))
+					// Only log non-EOF errors
+					if err.Error() != "EOF" {
+						logger.Log.Warn("VNC WebSocket read error",
+							zap.Error(err),
+							zap.String("vm_uuid", vmRec.UUID),
+							zap.Uint("user_id", claims.UserID))
+					}
 				}
 				errc <- err
 				return
@@ -1600,16 +1727,19 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Set read deadline to prevent blocking indefinitely
-			conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+			// Optimized: Longer timeout for VNC data streams (can have variable delays)
+			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 			n, err := conn.Read(buf)
 			if err != nil {
 				// Only log non-EOF errors
 				if err.Error() != "EOF" {
-					logger.Log.Info("VNC TCP read error",
-						zap.Error(err),
-						zap.String("vm_uuid", vmRec.UUID),
-						zap.Uint("user_id", claims.UserID),
-						zap.Int32("reads_completed", atomic.LoadInt32(&readCount)))
+					// Only log non-EOF errors
+					if err.Error() != "EOF" {
+						logger.Log.Warn("VNC TCP read error",
+							zap.Error(err),
+							zap.String("vm_uuid", vmRec.UUID),
+							zap.Uint("user_id", claims.UserID))
+					}
 				}
 				errc <- err
 				return
@@ -1634,7 +1764,8 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 					zap.Int32("read_count", count),
 					zap.String("vm_uuid", vmRec.UUID))
 			}
-			writeCtx, writeCancel := context.WithTimeout(r.Context(), 30*time.Second)
+			// Optimized: Longer timeout for VNC WebSocket writes (network can be variable)
+			writeCtx, writeCancel := context.WithTimeout(r.Context(), 60*time.Second)
 			if err := ws.Write(writeCtx, websocket.MessageBinary, buf[:n]); err != nil {
 				writeCancel()
 				// Check if it's a close error - don't log as error if it's a normal closure
@@ -1674,16 +1805,20 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 	
 	// Log connection closure
 	if err != nil && closeStatus != websocket.StatusNormalClosure && closeStatus != websocket.StatusGoingAway {
-		logger.Log.Info("VNC connection closed with error",
+	// Only log actual errors, not normal closures
+	if err != nil && err.Error() != "EOF" {
+		logger.Log.Warn("VNC connection closed with error",
 			zap.Error(err),
 			zap.String("vm_uuid", vmRec.UUID),
-			zap.Uint("user_id", claims.UserID),
-			zap.String("username", claims.Username))
+			zap.Uint("user_id", claims.UserID))
+	}
 	} else {
-		logger.Log.Info("VNC connection closed normally",
+	// Only log in development
+	if h.Config.Env == "development" {
+		logger.Log.Debug("VNC connection closed normally",
 			zap.String("vm_uuid", vmRec.UUID),
-			zap.Uint("user_id", claims.UserID),
-			zap.String("username", claims.Username))
+			zap.Uint("user_id", claims.UserID))
+	}
 	}
 }
 

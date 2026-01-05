@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/config"
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
+	"github.com/DARC0625/LIMEN/backend/internal/utils"
 	"nhooyr.io/websocket"
 	"go.uber.org/zap"
 )
@@ -81,36 +83,53 @@ func (b *VMStatusBroadcaster) Run() {
 
 		case message := <-b.broadcast:
 			b.mu.RLock()
+			// Optimized: Batch write operations and use longer timeout for network stability
+			clients := make([]*websocket.Conn, 0, len(b.clients))
 			for conn := range b.clients {
-				// Use context with timeout for broadcast
-				writeCtx, writeCancel := context.WithTimeout(ctx, 5*time.Second)
+				clients = append(clients, conn)
+			}
+			b.mu.RUnlock()
+			
+			// Write to all clients with optimized timeout
+			for _, conn := range clients {
+				// Use longer timeout for network stability (10 seconds)
+				writeCtx, writeCancel := context.WithTimeout(ctx, 10*time.Second)
 				err := conn.Write(writeCtx, websocket.MessageText, message)
 				writeCancel()
 				if err != nil {
 					logger.Log.Warn("Failed to send message to WebSocket client", zap.Error(err))
-					b.mu.RUnlock()
 					b.mu.Lock()
-					delete(b.clients, conn)
-					conn.Close(websocket.StatusInternalError, "Write failed")
+					if _, exists := b.clients[conn]; exists {
+						delete(b.clients, conn)
+						conn.Close(websocket.StatusInternalError, "Write failed")
+					}
 					b.mu.Unlock()
-					b.mu.RLock()
 				}
 			}
-			b.mu.RUnlock()
 		}
 	}
 }
 
 // BroadcastVMUpdate broadcasts a VM update to all connected clients
+// Optimized: Reuse buffer for JSON marshaling
 func (b *VMStatusBroadcaster) BroadcastVMUpdate(vm models.VM) {
-	message, err := json.Marshal(map[string]interface{}{
+	// Use buffer pool for JSON marshaling to reduce allocations
+	buf := utils.BufferPool.Get().(*bytes.Buffer)
+	defer utils.BufferPool.Put(buf)
+	defer buf.Reset()
+	
+	encoder := json.NewEncoder(buf)
+	if err := encoder.Encode(map[string]interface{}{
 		"type": "vm_update",
 		"vm":   vm,
-	})
-	if err != nil {
+	}); err != nil {
 		logger.Log.Error("Failed to marshal VM update", zap.Error(err))
 		return
 	}
+	
+	// Copy buffer contents to avoid holding reference
+	message := make([]byte, buf.Len())
+	copy(message, buf.Bytes())
 
 	select {
 	case b.broadcast <- message:
@@ -120,15 +139,25 @@ func (b *VMStatusBroadcaster) BroadcastVMUpdate(vm models.VM) {
 }
 
 // BroadcastVMList broadcasts the entire VM list to all connected clients
+// Optimized: Reuse buffer for JSON marshaling
 func (b *VMStatusBroadcaster) BroadcastVMList(vms []models.VM) {
-	message, err := json.Marshal(map[string]interface{}{
+	// Use buffer pool for JSON marshaling to reduce allocations
+	buf := utils.BufferPool.Get().(*bytes.Buffer)
+	defer utils.BufferPool.Put(buf)
+	defer buf.Reset()
+	
+	encoder := json.NewEncoder(buf)
+	if err := encoder.Encode(map[string]interface{}{
 		"type": "vm_list",
 		"vms":  vms,
-	})
-	if err != nil {
+	}); err != nil {
 		logger.Log.Error("Failed to marshal VM list", zap.Error(err))
 		return
 	}
+	
+	// Copy buffer contents to avoid holding reference
+	message := make([]byte, buf.Len())
+	copy(message, buf.Bytes())
 
 	select {
 	case b.broadcast <- message:
