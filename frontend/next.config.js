@@ -26,8 +26,15 @@ const nextConfig = {
   transpilePackages: ['@novnc/novnc'],
   
   // Bundle optimization: Split large chunks
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, webpack }) => {
     if (!isServer) {
+      // 클라이언트 사이드에서 process 객체 정의
+      // Next.js는 기본적으로 process.env.NODE_ENV를 치환하지만, process 객체 자체가 필요할 수 있음
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        process: 'process/browser',
+      };
+      
       // Optimize chunk splitting for better caching
       config.optimization = {
         ...config.optimization,

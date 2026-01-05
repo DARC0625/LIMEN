@@ -9,6 +9,7 @@ import { ReactNode } from 'react';
 type ReactQueryDevtoolsType = React.ComponentType<{ initialIsOpen?: boolean }> | null;
 
 // React Query Devtools는 개발 환경에서만 동적 로드 (번들 크기 최적화)
+// Next.js는 빌드 시점에 process.env.NODE_ENV를 치환
 const ReactQueryDevtools = process.env.NODE_ENV === 'development'
   ? dynamicImport(
       () => import('@tanstack/react-query-devtools').then((mod) => ({ default: mod.ReactQueryDevtools })),

@@ -158,6 +158,11 @@ export default function Home() {
   };
 
   const handleAction = async (uuid: string, action: 'start' | 'stop' | 'restart' | 'delete') => {
+    // 중복 요청 방지: 이미 처리 중이면 무시
+    if (vmActionMutation.isPending || processingId === uuid) {
+      return;
+    }
+    
     if (action === 'delete' && !confirm('Are you sure you want to delete this VM?')) return;
     if (action === 'restart' && !confirm('Are you sure you want to restart this VM? The VM will be stopped and then started.')) return;
     

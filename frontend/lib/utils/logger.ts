@@ -7,6 +7,8 @@
 
 import { trackError } from '../errorTracking';
 
+// 클라이언트 사이드에서 process.env 접근 시 안전하게 처리
+// Next.js는 빌드 시점에 process.env.NODE_ENV를 치환하므로, 직접 값으로 설정
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 /**
