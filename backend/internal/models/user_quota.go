@@ -1,8 +1,6 @@
 package models
 
 import (
-	"fmt"
-
 	"gorm.io/gorm"
 )
 
@@ -14,10 +12,10 @@ func GetOrCreateUserQuota(db *gorm.DB, userID uint) (*UserQuota, error) {
 		// Create default user quota
 		quota = UserQuota{
 			UserID:    userID,
-			MaxVMs:    3,    // Default: 3 VMs per user
-			MaxCPU:    4,    // Default: 4 vCPU total
-			MaxMemory: 4096, // Default: 4GB total
-			MaxDisk:   100,  // Default: 100GB total
+			MaxVMs:    32,     // Default: 32 VMs per user
+			MaxCPU:    128,    // Default: 128 vCPU total (increased from 4)
+			MaxMemory: 524288, // Default: 512GB total (increased from 4GB)
+			MaxDisk:   10000,  // Default: 10TB total (increased from 100GB)
 		}
 		if err := db.Create(&quota).Error; err != nil {
 			return nil, err
@@ -27,6 +25,32 @@ func GetOrCreateUserQuota(db *gorm.DB, userID uint) (*UserQuota, error) {
 	if err != nil {
 		return nil, err
 	}
+	
+	// Update existing quota if it's lower than new defaults (migration)
+	updated := false
+	if quota.MaxVMs < 32 {
+		quota.MaxVMs = 32
+		updated = true
+	}
+	if quota.MaxCPU < 128 {
+		quota.MaxCPU = 128
+		updated = true
+	}
+	if quota.MaxMemory < 524288 {
+		quota.MaxMemory = 524288
+		updated = true
+	}
+	if quota.MaxDisk < 10000 {
+		quota.MaxDisk = 10000
+		updated = true
+	}
+	
+	if updated {
+		if err := db.Save(&quota).Error; err != nil {
+			return nil, err
+		}
+	}
+	
 	return &quota, nil
 }
 
@@ -98,18 +122,8 @@ func (q *UserQuota) CheckUserQuota(db *gorm.DB, cpu, memory, disk int) error {
 
 // CheckVMResourceLimits checks if the requested VM specs exceed user's limits.
 func (q *UserQuota) CheckVMResourceLimits(cpu, memory int) error {
-	// Check individual VM resource limits (max per VM)
-	maxCPUPerVM := 4    // Max 4 vCPU per VM
-	maxMemoryPerVM := 8192 // Max 8GB per VM
-
-	if cpu > maxCPUPerVM {
-		return fmt.Errorf("CPU limit exceeded: requested %d, max %d per VM", cpu, maxCPUPerVM)
-	}
-
-	if memory > maxMemoryPerVM {
-		return fmt.Errorf("Memory limit exceeded: requested %d MB, max %d MB per VM", memory, maxMemoryPerVM)
-	}
-
+	// Individual VM resource limits removed - only user quota limits apply
+	// No per-VM CPU or memory limits
 	return nil
 }
 

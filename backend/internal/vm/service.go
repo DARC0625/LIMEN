@@ -514,60 +514,6 @@ func (s *VMService) StartVM(name string) error {
 	return nil
 }
 
-// RestartVM restarts a VM (stops and starts)
-// Media is not automatically detached - user must manually detach if needed
-func (s *VMService) RestartVM(name string) error {
-	// Ensure VNC graphics is configured before restarting
-	if err := s.ensureVNCGraphics(name); err != nil {
-		logger.Log.Warn("Failed to ensure VNC graphics before restart, VM may not have VNC access", zap.String("vm_name", name), zap.Error(err))
-	}
-
-	// Stop VM first
-	if err := s.StopVM(name); err != nil {
-		return fmt.Errorf("failed to stop VM: %w", err)
-	}
-	
-	// Optimized: Use context with timeout instead of fixed sleep
-	// Wait for VM to fully stop (max 5 seconds)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-	
-	vmStopped := false
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Log.Warn("Timeout waiting for VM to stop", zap.String("vm_name", name))
-			break
-		case <-ticker.C:
-			dom, err := s.conn.LookupDomainByName(name)
-			if err != nil {
-				// VM might not exist, try to start anyway
-				vmStopped = true
-				break
-			}
-			active, _ := dom.IsActive()
-			dom.Free() // Free libvirt domain resource immediately after use
-			if !active {
-				vmStopped = true
-				break
-			}
-		}
-		if vmStopped {
-			break
-		}
-	}
-	
-	// Start VM
-	if err := s.StartVM(name); err != nil {
-		return fmt.Errorf("failed to start VM: %w", err)
-	}
-	
-	return nil
-}
-
 // parseDomainXML parses VM XML and extracts disk information
 func (s *VMService) parseDomainXML(xmlDesc string) (struct {
 	Devices struct {

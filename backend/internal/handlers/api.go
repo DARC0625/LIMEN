@@ -21,7 +21,6 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/metrics"
 	"github.com/DARC0625/LIMEN/backend/internal/middleware"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
-	"github.com/DARC0625/LIMEN/backend/internal/ratelimit"
 	"github.com/DARC0625/LIMEN/backend/internal/session"
 	"github.com/DARC0625/LIMEN/backend/internal/validator"
 	"github.com/DARC0625/LIMEN/backend/internal/vm"
@@ -316,16 +315,8 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 			}
 		}
 
-		// Check VM creation rate limit
-		vmLimiter := ratelimit.GetVMCreationLimiter()
-		if err := vmLimiter.CheckRateLimit(userID); err != nil {
-			logger.Log.Warn("VM creation rate limit exceeded",
-				zap.Uint("user_id", userID),
-				zap.String("vm_name", req.Name),
-				zap.Error(err))
-			errors.WriteTooManyRequests(w, err.Error())
-			return
-		}
+		// VM creation rate limit disabled - allow immediate VM creation
+		// No cooldown period between VM creations
 
 		// Check user-specific quota
 		userQuota, err := models.GetOrCreateUserQuota(h.DB, userID)
@@ -570,14 +561,14 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 }
 
 type VMActionRequest struct {
-	Action string `json:"action" example:"start"` // Valid actions: start, stop, restart, delete, update
+	Action string `json:"action" example:"start"` // Valid actions: start, stop, delete, update
 	CPU    int    `json:"cpu,omitempty" example:"4"` // Required for update action
 	Memory int    `json:"memory,omitempty" example:"4096"` // Required for update action (in MB)
 }
 
-// HandleVMAction handles VM actions (start, stop, restart, delete, update)
+// HandleVMAction handles VM actions (start, stop, delete, update)
 // @Summary Perform VM action
-// @Description Execute an action on a VM (start, stop, restart, delete, or update resources)
+// @Description Execute an action on a VM (start, stop, delete, or update resources)
 // @Tags vms
 // @Accept json
 // @Produce json
@@ -622,12 +613,12 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 
 	action := models.VMAction(req.Action)
 	if !action.IsValid() {
-		errors.WriteBadRequest(w, fmt.Sprintf("Invalid action: %s. Valid actions: start, stop, restart, delete, update", req.Action), nil)
+		errors.WriteBadRequest(w, fmt.Sprintf("Invalid action: %s. Valid actions: start, stop, delete, update", req.Action), nil)
 		return
 	}
 
 	// Check if VMService is available for actions that require it
-	if h.VMService == nil && (action == models.VMActionStart || action == models.VMActionStop || action == models.VMActionRestart) {
+	if h.VMService == nil && (action == models.VMActionStart || action == models.VMActionStop) {
 		errors.WriteInternalError(w, fmt.Errorf("VM service is not available"), h.Config.Env == "development")
 		return
 	}
@@ -718,19 +709,6 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 			// Broadcast VM update via WebSocket
 			h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
 		}
-	case models.VMActionRestart:
-		// Restart VM (stop and start)
-		// Media is NOT automatically detached - user must manually detach if needed
-		if err := h.VMService.RestartVM(vmRec.Name); err != nil {
-			logger.Log.Error("Failed to restart VM", zap.Error(err), zap.String("vm_name", vmRec.Name))
-			errors.WriteInternalError(w, err, h.Config.Env == "development")
-			return
-		}
-		vmRec.Status = models.VMStatusRunning
-		actionSuccess = true
-		logger.Log.Info("VM restarted", zap.String("vm_name", vmRec.Name))
-		// Broadcast VM update via WebSocket
-		h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
 	case models.VMActionDelete:
 		if err := h.VMService.DeleteVM(vmRec.Name); err != nil {
 			logger.Log.Error("Failed to delete VM", zap.Error(err), zap.String("vm_name", vmRec.Name))

@@ -110,10 +110,10 @@ type UserQuota struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`
 	UserID    uint           `gorm:"uniqueIndex;not null" json:"user_id"` // Foreign key to User (one quota per user)
 	User      User           `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	MaxVMs    int            `gorm:"default:3" json:"max_vms"`        // Maximum number of VMs
-	MaxCPU    int            `gorm:"default:4" json:"max_cpu"`        // Maximum total vCPU
-	MaxMemory int            `gorm:"default:4096" json:"max_memory"`  // Maximum total memory (MB)
-	MaxDisk   int            `gorm:"default:100" json:"max_disk"`     // Maximum total disk (GB)
+	MaxVMs    int            `gorm:"default:32" json:"max_vms"`        // Maximum number of VMs
+	MaxCPU    int            `gorm:"default:128" json:"max_cpu"`        // Maximum total vCPU (increased from 4)
+	MaxMemory int            `gorm:"default:524288" json:"max_memory"`  // Maximum total memory (MB) - 512GB (increased from 4GB)
+	MaxDisk   int            `gorm:"default:10000" json:"max_disk"`     // Maximum total disk (GB) - 10TB (increased from 100GB)
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"` // Soft delete

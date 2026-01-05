@@ -52,9 +52,15 @@ func Deduplication() func(http.Handler) http.Handler {
 				return
 			}
 			
-			// Skip deduplication for VM action endpoints (they have their own idempotency checks)
-			// VM actions may be retried quickly and should not be blocked
+			// Skip deduplication for VM creation and action endpoints
+			// VM operations may be retried quickly and should not be blocked
+			if r.URL.Path == "/api/vms" && r.Method == "POST" {
+				// VM creation - allow immediate retries
+				next.ServeHTTP(w, r)
+				return
+			}
 			if strings.HasPrefix(r.URL.Path, "/api/vms/") && strings.HasSuffix(r.URL.Path, "/action") {
+				// VM actions - allow immediate retries
 				next.ServeHTTP(w, r)
 				return
 			}
