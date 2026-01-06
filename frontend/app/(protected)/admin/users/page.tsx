@@ -88,9 +88,9 @@ export default function UserManagementPage() {
   
   // React Query hooks - 항상 호출 (조건부로만 사용)
   // 중요: 모든 hooks는 조건부 return 전에 호출되어야 함
-  // Admin 권한이 확인된 후에만 데이터를 가져오도록 enabled 조건 추가
-  // React Error #310 해결: useAdminUsers는 항상 호출하되, 내부에서 enabled 조건으로 제어
-  const { data: users = [], isLoading, error } = useAdminUsers();
+  // Admin 권한이 확인된 후에만 데이터를 가져오도록 isUserAdmin 전달
+  // React Error #310 해결: useAdminUsers에 isUserAdmin을 전달하여 Admin 권한 확인 후에만 API 호출
+  const { data: users = [], isLoading, error } = useAdminUsers(isUserAdmin);
   const { data: expandedUserData } = useAdminUser(expandedUser);
   const createUserMutation = useCreateUser();
   const updateUserMutation = useUpdateUser();
