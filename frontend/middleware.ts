@@ -5,18 +5,18 @@ import type { NextRequest } from 'next/server';
 // ⚠️ 중요: 프론트엔드 서버 IP 정보
 // - 내부망 IP: 10.0.0.10 (enp1s0 인터페이스) - 백엔드와 통신용
 // - 인터넷 IP: 14.54.57.159 (enp3s0 인터페이스) - 외부 사용자 접근용
-// ⚠️ 중요: 백엔드 서버 IP 정보
-// - 인터넷 IP: 61.73.245.105 (eth0) - 외부 접근용 (프론트엔드가 프록시하므로 직접 사용 안 함)
-// - 내부망 IP: 10.0.0.100 (eth1) - 주요 내부망 IP, 프론트엔드와 통신용
-// - 내부망 IP: 10.0.0.110 (eth0) - 추가 내부망 IP
-// - 리스닝: 0.0.0.0:18443 (모든 인터페이스)
-// ⚠️ 중요: 모든 세션 통신은 내부망 포트(18443)를 사용해야 함
-// - 외부 포트: 인터넷 접근용 (사용하지 않음)
-// - 내부망 포트: 프론트엔드-백엔드 통신용 (18443, 9000)
-// - 프론트엔드는 10.0.0.10 → 10.0.0.100:18443로 내부망 통신
+// ⚠️ 중요: 백엔드 서버 정보
+// - 백엔드 경로: /home/darc0/LIMEN/backend
+// - 프론트엔드 경로: /home/darc/LIMEN/frontend
+// - RAG 문서 기준: http://10.0.0.100:18443/api
+// - 포트: 18443 (내부망)
 const getBackendHost = () => {
-  // 내부망 IP만 사용 (절대 외부 IP나 localhost 사용 금지)
-  return process.env.BACKEND_HOST || process.env.NEXT_PUBLIC_BACKEND_HOST || '10.0.0.100';
+  // ⚠️ 중요: Edge Runtime에서는 process.env 접근이 제한될 수 있음
+  // 환경 변수 우선, 없으면 RAG 문서 기준 IP 사용
+  const host = process.env.BACKEND_HOST || process.env.NEXT_PUBLIC_BACKEND_HOST || '10.0.0.100';
+  // 디버깅: 항상 로그 출력
+  console.log('[getBackendHost] Called:', { host, envBackendHost: process.env.BACKEND_HOST, envNextPublic: process.env.NEXT_PUBLIC_BACKEND_HOST });
+  return host;
 };
 
 const getBackendPort = () => {
@@ -25,7 +25,7 @@ const getBackendPort = () => {
 };
 
 const getAgentHost = () => {
-  // 내부망 IP만 사용
+  // 환경 변수 우선, 없으면 RAG 문서 기준 IP 사용
   return process.env.AGENT_HOST || process.env.NEXT_PUBLIC_AGENT_HOST || '10.0.0.100';
 };
 
@@ -64,6 +64,14 @@ export async function middleware(request: NextRequest) {
   const backendPort = getBackendPort();
   const agentHost = getAgentHost();
   const agentPort = getAgentPort();
+  
+  // 디버깅: 환경 변수 확인
+  console.log('[Middleware] Backend host check:', {
+    backendHost,
+    envBackendHost: process.env.BACKEND_HOST,
+    envNextPublicBackendHost: process.env.NEXT_PUBLIC_BACKEND_HOST,
+    default: '10.0.0.100',
+  });
   
   // 동적으로 URL 구성 (절대 경로 사용하지 않음)
   const backendUrl = `http://${backendHost}:${backendPort}`;

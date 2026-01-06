@@ -1,11 +1,15 @@
 /** @type {import('next').NextConfig} */
 
 // Backend and Agent URLs - 서버 사이드 rewrites 전용 (환경 변수 또는 기본값)
-// ⚠️ 중요: 백엔드는 10.0.0.100, 프론트엔드는 10.0.0.10
+// ⚠️ 중요: 백엔드 서버 정보
+// - 백엔드 경로: /home/darc0/LIMEN/backend
+// - 프론트엔드 경로: /home/darc/LIMEN/frontend
+// - RAG 문서 기준: http://10.0.0.100:18443/api
 // 클라이언트 코드에서는 상대 경로만 사용하므로, 이 값은 Next.js rewrites에서만 사용됨
 // 환경 변수가 없으면 기본값 사용 (배포 환경에서는 반드시 환경 변수 설정 필요)
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://10.0.0.100:18443';
-const agentUrl = process.env.NEXT_PUBLIC_AGENT_URL || process.env.AGENT_URL || 'http://10.0.0.100:9000';
+const backendHost = process.env.BACKEND_HOST || process.env.NEXT_PUBLIC_BACKEND_HOST || '10.0.0.100';
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || `http://${backendHost}:18443`;
+const agentUrl = process.env.NEXT_PUBLIC_AGENT_URL || process.env.AGENT_URL || `http://${backendHost}:9000`;
 
 const nextConfig = {
   // 빌드 ID 생성: 파일 내용 기반 해시 사용 (안정적인 캐시 버스팅)
