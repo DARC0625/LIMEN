@@ -149,11 +149,11 @@ export default function Home() {
 
   // 부팅 순서 변경 핸들러
   const handleBootOrderChange = async (uuid: string, bootOrder: BootOrder) => {
-    console.log('[handleBootOrderChange] Called:', { uuid, bootOrder });
+    window.console.log('[handleBootOrderChange] Called:', { uuid, bootOrder });
     try {
-      console.log('[handleBootOrderChange] Calling API...');
+      window.console.log('[handleBootOrderChange] Calling API...');
       const updatedVM = await vmAPI.setBootOrder(uuid, bootOrder);
-      console.log('[handleBootOrderChange] API success:', updatedVM);
+      window.console.log('[handleBootOrderChange] API success:', updatedVM);
       toast.success('부팅 순서가 변경되었습니다.');
       // React Query 자동 갱신
       startTransition(() => {
@@ -165,9 +165,33 @@ export default function Home() {
         });
       });
     } catch (error) {
+      window.console.error('[handleBootOrderChange] API error:', error);
       console.error('[handleBootOrderChange] API error:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(`부팅 순서 변경 실패: ${errorMessage}`);
+      
+      let errorMessage = '부팅 순서 변경 실패';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        
+        // 백엔드에서 제공한 상세 에러 정보 확인
+        const apiError = error as any;
+        if (apiError.details) {
+          const details = apiError.details;
+          if (details.error || details.message) {
+            errorMessage = `${error.message}\n${details.error || details.message}`;
+          }
+        }
+      } else {
+        errorMessage = String(error);
+      }
+      
+      // 에러 메시지를 여러 줄로 표시 (toast는 한 줄만 지원하므로 첫 줄만 표시)
+      const firstLine = errorMessage.split('\n')[0];
+      toast.error(`부팅 순서 변경 실패: ${firstLine}`);
+      
+      // 전체 에러 메시지는 콘솔에만 출력
+      if (errorMessage.includes('\n')) {
+        window.console.error('[handleBootOrderChange] Full error message:', errorMessage);
+      }
     }
   };
 
