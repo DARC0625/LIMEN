@@ -441,7 +441,12 @@ export default function Home() {
           >
             <div 
               className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto edit-popup-container"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+              }}
             >
               <div className="p-6">
                 <h2 className="text-xl font-bold mb-4 text-gray-900">Edit VM: {editingVM.name}</h2>
