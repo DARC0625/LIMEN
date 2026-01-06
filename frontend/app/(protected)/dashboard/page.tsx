@@ -112,18 +112,7 @@ export default function Home() {
     });
   };
 
-  // Close Edit popup on outside click
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (editingVM && !(event.target as Element).closest('.edit-popup-container')) {
-        setEditingVM(null);
-      }
-    };
-    if (editingVM) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [editingVM]);
+  // Edit popup은 Cancel 버튼으로만 닫히도록 변경 (드래그 중 닫힘 방지)
 
   // React Error #321 fix: Remove useCallback
   const handleUpdateVM = async (e: React.FormEvent) => {
@@ -458,9 +447,6 @@ export default function Home() {
         {editingVM && (
           <div 
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setEditingVM(null);
-            }}
           >
             <div 
               className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto edit-popup-container"
