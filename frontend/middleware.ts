@@ -160,9 +160,12 @@ export async function middleware(request: NextRequest) {
           });
         }
         
-        // 타임아웃 설정 (10초)
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+    // 타임아웃 설정
+    // finalize-install 작업은 VM graceful shutdown, XML 수정, DB 업데이트 등 시간이 오래 걸릴 수 있음
+    const isLongRunningOperation = pathname.includes('/finalize-install');
+    const timeout = isLongRunningOperation ? 60000 : 10000; // finalize-install: 60초, 기타: 10초
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
         
         let response: Response;
         try {

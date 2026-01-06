@@ -320,10 +320,13 @@ export const vmAPI = {
     const logger = (await import('../utils/logger')).logger;
     logger.log('[vmAPI.finalizeInstall] Calling API:', { uuid });
     try {
+      // finalize-install 작업은 VM graceful shutdown, XML 수정, DB 업데이트 등 시간이 오래 걸릴 수 있음
+      // 타임아웃을 60초로 설정
       const result = await apiRequest<{ message: string; vm_uuid: string }>(
         `/vms/${uuid}/finalize-install`,
         {
           method: 'POST',
+          timeout: 60000, // 60초
         }
       );
       logger.log('[vmAPI.finalizeInstall] API success:', result);
