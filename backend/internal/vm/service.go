@@ -73,8 +73,19 @@ func (s *VMService) IsAlive() bool {
 
 func (s *VMService) EnsureISO(osType string) (string, error) {
 	var image models.VMImage
-	if err := s.db.Where("os_type = ?", osType).First(&image).Error; err != nil {
-		return "", fmt.Errorf("image not found for os type: %s", osType)
+	// For Windows, prefer Windows 10 ISO if available, otherwise use any Windows ISO
+	if strings.Contains(strings.ToLower(osType), "windows") {
+		// Try to find Windows 10 first
+		if err := s.db.Where("os_type = ? AND (LOWER(name) LIKE '%windows 10%' OR LOWER(path) LIKE '%windows10%')", osType).First(&image).Error; err != nil {
+			// If Windows 10 not found, use any Windows ISO
+			if err := s.db.Where("os_type = ?", osType).First(&image).Error; err != nil {
+				return "", fmt.Errorf("image not found for os type: %s", osType)
+			}
+		}
+	} else {
+		if err := s.db.Where("os_type = ?", osType).First(&image).Error; err != nil {
+			return "", fmt.Errorf("image not found for os type: %s", osType)
+		}
 	}
 
 	imagePath := image.Path
@@ -205,6 +216,49 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
 		bootXML += fmt.Sprintf("    <boot dev='%s'/>\n", device)
 	}
 
+	// Windows 11 requires TPM 2.0 and Secure Boot
+	// Check if OS type is Windows
+	isWindows := strings.Contains(strings.ToLower(osType), "windows")
+	
+	// Build TPM XML for Windows
+	tpmXML := ""
+	loaderXML := ""
+	nvramPath := ""
+	if isWindows {
+		// TPM 2.0 device
+		tpmXML = `    <tpm model='tpm-tis'>
+      <backend type='emulator' version='2.0'/>
+    </tpm>
+`
+		// Secure Boot with OVMF (UEFI) - use secboot version for Secure Boot
+		nvramPath = fmt.Sprintf("/var/lib/libvirt/qemu/nvram/%s_VARS.fd", name)
+		loaderXML = fmt.Sprintf(`
+    <loader readonly='yes' type='pflash'>/usr/share/OVMF/OVMF_CODE_4M.secboot.fd</loader>
+    <nvram>%s</nvram>
+`, nvramPath)
+		// Ensure NVRAM file exists (copy from template)
+		nvramTemplate := "/usr/share/OVMF/OVMF_VARS_4M.fd"
+		if _, err := os.Stat(nvramPath); os.IsNotExist(err) {
+			if templateData, err := os.ReadFile(nvramTemplate); err == nil {
+				if err := os.MkdirAll(filepath.Dir(nvramPath), 0755); err == nil {
+					if err := os.WriteFile(nvramPath, templateData, 0644); err != nil {
+						logger.Log.Warn("Failed to create NVRAM file, libvirt will create it", zap.String("nvram_path", nvramPath), zap.Error(err))
+					} else {
+						logger.Log.Info("NVRAM file created", zap.String("nvram_path", nvramPath))
+					}
+				} else {
+					logger.Log.Warn("Failed to create NVRAM directory, libvirt will create it", zap.String("nvram_path", nvramPath), zap.Error(err))
+				}
+			} else {
+				logger.Log.Warn("Failed to read NVRAM template, libvirt will create it", zap.String("template", nvramTemplate), zap.Error(err))
+			}
+		}
+		// For Windows, use UEFI boot (loader handles boot order)
+		bootXML = `    <boot dev='cdrom'/>
+    <boot dev='hd'/>
+`
+	}
+
 	vmXML := fmt.Sprintf(`
 <domain type='kvm'>
   <name>%s</name>
@@ -212,7 +266,7 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
   <vcpu placement='static'>%d</vcpu>
   <os>
     <type arch='x86_64' machine='pc-q35-7.2'>hvm</type>
-%s  </os>
+%s%s  </os>
   <features>
     <acpi/>
     <apic/>
@@ -305,7 +359,12 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
     </memballoon>
   </devices>
 </domain>
-`, name, memoryMB*1024, vcpu, bootXML, vmDiskPath, isoPath, graphicsXML)
+`, name, memoryMB*1024, vcpu, bootXML, loaderXML, vmDiskPath, isoPath, func() string {
+		if isWindows {
+			return tpmXML
+		}
+		return ""
+	}(), graphicsXML)
 
 	dom, err := s.conn.DomainDefineXML(vmXML)
 	if err != nil {
@@ -436,7 +495,8 @@ func (s *VMService) DeleteVM(name string) error {
 			}
 			
 			// Delete VM from DB (within same transaction)
-			result = tx.Where("id = ?", vmRec.ID).Delete(&models.VM{})
+			// Use Unscoped() to perform hard delete (not soft delete)
+			result = tx.Unscoped().Where("id = ?", vmRec.ID).Delete(&models.VM{})
 			if result.Error != nil {
 				logger.Log.Error("Failed to delete VM from DB", zap.String("vm_name", name), zap.Uint("vm_id", vmRec.ID), zap.Error(result.Error))
 				return fmt.Errorf("failed to delete VM from DB: %w", result.Error)
@@ -444,7 +504,7 @@ func (s *VMService) DeleteVM(name string) error {
 			if result.RowsAffected == 0 {
 				logger.Log.Warn("No VM record found in DB to delete", zap.String("vm_name", name), zap.Uint("vm_id", vmRec.ID))
 			} else {
-				logger.Log.Info("VM successfully deleted from DB", zap.String("vm_name", name), zap.Uint("vm_id", vmRec.ID), zap.Int64("rows_affected", result.RowsAffected))
+				logger.Log.Info("VM successfully deleted from DB (hard delete)", zap.String("vm_name", name), zap.Uint("vm_id", vmRec.ID), zap.Int64("rows_affected", result.RowsAffected))
 			}
 			
 			return nil
@@ -638,6 +698,123 @@ func (s *VMService) StartVM(name string) error {
 }
 
 // SetBootOrder sets the boot order for a VM
+// AddTPMAndSecureBoot adds TPM 2.0 and Secure Boot to an existing Windows VM
+func (s *VMService) AddTPMAndSecureBoot(name string) error {
+	dom, err := s.conn.LookupDomainByName(name)
+	if err != nil {
+		return fmt.Errorf("VM not found: %w", err)
+	}
+	defer dom.Free()
+
+	// Check if VM is running - need to stop it first
+	active, err := dom.IsActive()
+	if err != nil {
+		return fmt.Errorf("failed to check VM status: %w", err)
+	}
+	if active {
+		return fmt.Errorf("VM must be stopped before adding TPM and Secure Boot")
+	}
+
+	// Get current XML
+	xmlDesc, err := dom.GetXMLDesc(0)
+	if err != nil {
+		return fmt.Errorf("failed to get VM XML: %w", err)
+	}
+
+	// Check if TPM already exists
+	if strings.Contains(xmlDesc, "<tpm") {
+		logger.Log.Info("TPM already exists in VM", zap.String("vm_name", name))
+	}
+
+	// Check if loader (UEFI) already exists
+	if strings.Contains(xmlDesc, "<loader") {
+		logger.Log.Info("UEFI loader already exists in VM", zap.String("vm_name", name))
+	}
+
+	// Parse XML
+	var domainXML struct {
+		XMLName xml.Name `xml:"domain"`
+		OS      struct {
+			Type    string `xml:"type,attr"`
+			Arch    string `xml:"arch,attr"`
+			Machine string `xml:"machine,attr"`
+			Boot    []struct {
+				Dev string `xml:"dev,attr"`
+			} `xml:"boot"`
+			Loader struct {
+				Readonly string `xml:"readonly,attr"`
+				Type     string `xml:"type,attr"`
+				Content  string `xml:",chardata"`
+			} `xml:"loader"`
+			NVRAM string `xml:"nvram"`
+		} `xml:"os"`
+		Devices struct {
+			XMLName xml.Name `xml:"devices"`
+			Content string   `xml:",innerxml"`
+		} `xml:"devices"`
+	}
+
+	if err := xml.Unmarshal([]byte(xmlDesc), &domainXML); err != nil {
+		return fmt.Errorf("failed to parse VM XML: %w", err)
+	}
+
+	// Add loader and nvram to OS section if not present
+	nvramPath := fmt.Sprintf("/var/lib/libvirt/qemu/nvram/%s_VARS.fd", name)
+	nvramTemplate := "/usr/share/OVMF/OVMF_VARS_4M.fd"
+	if _, err := os.Stat(nvramPath); os.IsNotExist(err) {
+		if templateData, err := os.ReadFile(nvramTemplate); err == nil {
+			if err := os.MkdirAll(filepath.Dir(nvramPath), 0755); err == nil {
+				os.WriteFile(nvramPath, templateData, 0644)
+			}
+		}
+	}
+
+	// Modify XML to add TPM and Secure Boot
+	// Add loader and nvram to OS section
+	osSection := fmt.Sprintf(`    <type arch='%s' machine='%s'>hvm</type>
+`, domainXML.OS.Arch, domainXML.OS.Machine)
+	for _, boot := range domainXML.OS.Boot {
+		osSection += fmt.Sprintf("    <boot dev='%s'/>\n", boot.Dev)
+	}
+	if !strings.Contains(xmlDesc, "<loader") {
+		osSection += fmt.Sprintf(`    <loader readonly='yes' type='pflash'>/usr/share/OVMF/OVMF_CODE_4M.secboot.fd</loader>
+    <nvram>%s</nvram>
+`, nvramPath)
+	}
+
+	// Add TPM to devices section if not present
+	tpmXML := `    <tpm model='tpm-tis'>
+      <backend type='emulator' version='2.0'/>
+    </tpm>
+`
+	devicesContent := domainXML.Devices.Content
+	if !strings.Contains(devicesContent, "<tpm") {
+		// Insert TPM before video device
+		if strings.Contains(devicesContent, "<video") {
+			devicesContent = strings.Replace(devicesContent, "<video", tpmXML+"    <video", 1)
+		} else {
+			// Add at the end of devices
+			devicesContent += tpmXML
+		}
+	}
+
+	// Reconstruct XML
+	updatedXML := strings.Replace(xmlDesc, "<os>", "<os>\n"+osSection, 1)
+	updatedXML = strings.Replace(updatedXML, domainXML.Devices.Content, devicesContent, 1)
+
+	// Undefine and redefine domain
+	if err := dom.Undefine(); err != nil {
+		return fmt.Errorf("failed to undefine domain: %w", err)
+	}
+
+	if _, err := s.conn.DomainDefineXML(updatedXML); err != nil {
+		return fmt.Errorf("failed to redefine domain with TPM and Secure Boot: %w", err)
+	}
+
+	logger.Log.Info("TPM and Secure Boot added to VM", zap.String("vm_name", name))
+	return nil
+}
+
 func (s *VMService) SetBootOrder(name string, bootOrder models.BootOrder) error {
 	if !bootOrder.IsValid() {
 		return fmt.Errorf("invalid boot order: %s", bootOrder)
@@ -695,9 +872,10 @@ func (s *VMService) SetBootOrder(name string, bootOrder models.BootOrder) error 
 	return nil
 }
 
-// FinalizeInstall removes CDROM device and switches boot to disk-only
+// FinalizeInstall removes CDROM device and marks installation as complete
+// Boot order is preserved (not changed) - user can configure it separately
 // This is the standard way to transition from installation mode to normal operation
-// (equivalent to "Eject ISO / Boot from Hard Disk" in VMware/VirtualBox)
+// (equivalent to "Eject ISO" in VMware/VirtualBox, but boot order is user-configurable)
 func (s *VMService) FinalizeInstall(name string) error {
 	dom, err := s.conn.LookupDomainByName(name)
 	if err != nil {
@@ -716,16 +894,37 @@ func (s *VMService) FinalizeInstall(name string) error {
 		logger.Log.Warn("VM is running during finalize install, attempting graceful shutdown",
 			zap.String("vm_name", name))
 		if err := dom.Shutdown(); err != nil {
-			logger.Log.Warn("Failed to shutdown VM, continuing anyway",
+			logger.Log.Warn("Failed to shutdown VM, attempting force destroy",
 				zap.String("vm_name", name),
 				zap.Error(err))
+			// Try force destroy if graceful shutdown fails
+			if destroyErr := dom.Destroy(); destroyErr != nil {
+				logger.Log.Warn("Failed to force destroy VM, continuing anyway",
+					zap.String("vm_name", name),
+					zap.Error(destroyErr))
+			}
 		} else {
-			// Wait up to 30 seconds for shutdown
-			for i := 0; i < 30; i++ {
+			// Wait up to 10 seconds for shutdown (reduced from 30 to avoid timeout)
+			for i := 0; i < 10; i++ {
 				time.Sleep(1 * time.Second)
 				state, _, _ := dom.GetState()
 				if state == libvirt.DOMAIN_SHUTOFF {
+					logger.Log.Info("VM shutdown completed", zap.String("vm_name", name))
 					break
+				}
+			}
+			// If still running after 10 seconds, force destroy
+			state, _, _ := dom.GetState()
+			if state == libvirt.DOMAIN_RUNNING {
+				logger.Log.Warn("VM still running after graceful shutdown timeout, forcing destroy",
+					zap.String("vm_name", name))
+				if err := dom.Destroy(); err != nil {
+					logger.Log.Warn("Failed to force destroy VM, continuing anyway",
+						zap.String("vm_name", name),
+						zap.Error(err))
+				} else {
+					// Wait a bit more for force destroy to complete
+					time.Sleep(2 * time.Second)
 				}
 			}
 		}
@@ -785,11 +984,14 @@ func (s *VMService) FinalizeInstall(name string) error {
 		return fmt.Errorf("failed to update domain XML: %w", err)
 	}
 
-	// 6. Update database: set boot order to HD only and installation status to Installed
+	// 6. Update database: set installation status to Installed (but preserve existing boot order)
+	// Note: Boot order is NOT changed here - user may want to keep CDROM boot for reinstallation
 	var vmRec models.VM
 	if err := s.db.Where("name = ?", name).First(&vmRec).Error; err == nil {
-		vmRec.BootOrder = models.BootOrderHD
+		// Only update installation status, preserve boot order
+		oldBootOrder := vmRec.BootOrder
 		vmRec.InstallationStatus = models.InstallationStatusInstalled
+		// Boot order is preserved - user can change it manually if needed
 		if err := s.db.Save(&vmRec).Error; err != nil {
 			logger.Log.Warn("Failed to update VM installation status in DB",
 				zap.String("vm_name", name),
@@ -798,11 +1000,12 @@ func (s *VMService) FinalizeInstall(name string) error {
 			logger.Log.Info("VM installation finalized in database",
 				zap.String("vm_name", name),
 				zap.String("boot_order", string(vmRec.BootOrder)),
+				zap.String("old_boot_order", string(oldBootOrder)),
 				zap.String("installation_status", string(vmRec.InstallationStatus)))
 		}
 	}
 
-	logger.Log.Info("VM installation finalized - CDROM removed, boot set to disk only",
+	logger.Log.Info("VM installation finalized - CDROM removed, boot order preserved",
 		zap.String("vm_name", name))
 
 	return nil

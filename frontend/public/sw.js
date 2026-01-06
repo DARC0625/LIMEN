@@ -78,6 +78,12 @@ self.addEventListener('fetch', (event) => {
     return; // ServiceWorker가 가로채지 않음 - 브라우저가 직접 처리
   }
 
+  // Next.js RSC (React Server Components) 페이로드는 ServiceWorker가 처리하지 않음
+  // RSC 요청은 ?_rsc= 쿼리 파라미터를 포함함
+  if (url.searchParams.has('_rsc')) {
+    return; // ServiceWorker가 가로채지 않음 - 브라우저가 직접 처리
+  }
+
   // WebSocket 연결은 ServiceWorker가 처리하지 않음
   if (url.protocol === 'ws:' || url.protocol === 'wss:') {
     return;
@@ -121,6 +127,11 @@ async function networkFirst(request) {
     if (request.url.includes('/_next/') || request.url.includes('?_rsc=')) {
       throw error;
     }
+    
+    // Next.js RSC 페이로드는 캐시에서 찾지 않음
+    if (request.url.includes('?_rsc=')) {
+      throw error;
+    }
 
     // 네트워크 실패 시 캐시에서 찾기
     const cachedResponse = await caches.match(request);
@@ -145,6 +156,15 @@ async function networkFirst(request) {
 async function cacheFirst(request) {
   // Next.js 내부 파일은 캐시 우선 전략 사용하지 않음
   if (request.url.includes('/_next/') || request.url.includes('?_rsc=')) {
+    try {
+      return await fetch(request);
+    } catch (error) {
+      throw error;
+    }
+  }
+  
+  // Next.js RSC 페이로드는 캐시 우선 전략 사용하지 않음
+  if (request.url.includes('?_rsc=')) {
     try {
       return await fetch(request);
     } catch (error) {

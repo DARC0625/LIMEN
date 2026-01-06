@@ -154,10 +154,14 @@ func main() {
 			zap.String("vm_dir", cfg.VMDir))
 		logger.Log.Info("VM operations will be unavailable until libvirt connection is established")
 		vmService = nil // Continue without VM service
+		// Cleanup orphaned VMs even if libvirt connection failed (soft-deleted only)
+		cleanupSoftDeletedVMs(database.DB)
 	} else {
 		logger.Log.Info("VM service initialized successfully",
 			zap.String("libvirt_uri", libvirtURI))
 		defer vmService.Close() // Close libvirt connection on shutdown
+		// Cleanup orphaned VM records (soft-deleted or without libvirt domain)
+		cleanupOrphanedVMs(database.DB, vmService)
 	}
 
 	// Start host metrics collection
@@ -468,4 +472,99 @@ func initImages(db *gorm.DB, isoDir string) error {
 	}
 
 	return nil
+}
+
+// cleanupOrphanedVMs removes VM records that are soft-deleted or don't exist in libvirt
+func cleanupOrphanedVMs(db *gorm.DB, vmService *vm.VMService) {
+	logger.Log.Info("Starting orphaned VM cleanup...")
+	
+	// Get all soft-deleted VMs and hard delete immediately
+	var softDeletedVMs []models.VM
+	if err := db.Unscoped().Where("deleted_at IS NOT NULL").Find(&softDeletedVMs).Error; err == nil {
+		if len(softDeletedVMs) > 0 {
+			logger.Log.Info("Found soft-deleted VMs to cleanup", zap.Int("count", len(softDeletedVMs)))
+			// Delete all console_sessions for soft-deleted VMs in one query
+			var vmIDs []uint
+			var vmUUIDs []string
+			for _, vm := range softDeletedVMs {
+				vmIDs = append(vmIDs, vm.ID)
+				vmUUIDs = append(vmUUIDs, vm.UUID)
+			}
+			if len(vmIDs) > 0 {
+				db.Unscoped().Where("vm_id IN ? OR vm_uuid IN ?", vmIDs, vmUUIDs).Delete(&models.ConsoleSession{})
+			}
+			// Hard delete all soft-deleted VMs in one query
+			result := db.Unscoped().Where("deleted_at IS NOT NULL").Delete(&models.VM{})
+			if result.Error != nil {
+				logger.Log.Error("Failed to delete soft-deleted VMs", zap.Error(result.Error))
+			} else {
+				logger.Log.Info("Soft-deleted VMs cleaned up", zap.Int("count", len(softDeletedVMs)), zap.Int64("rows_deleted", result.RowsAffected))
+			}
+		}
+	}
+	
+	// Check for VMs that exist in DB but not in libvirt
+	var allVMs []models.VM
+	if err := db.Find(&allVMs).Error; err == nil {
+		var orphanedVMIDs []uint
+		var orphanedVMUUIDs []string
+		for _, vmRec := range allVMs {
+			// Check if VM exists in libvirt
+			status, err := vmService.GetVMStatusFromLibvirt(vmRec.Name)
+			if err != nil || status == "" {
+				// VM doesn't exist in libvirt, but exists in DB
+				// This is an orphaned record - mark for cleanup
+				logger.Log.Info("Found orphaned VM (exists in DB but not in libvirt)", 
+					zap.String("vm_name", vmRec.Name), 
+					zap.String("vm_uuid", vmRec.UUID))
+				orphanedVMIDs = append(orphanedVMIDs, vmRec.ID)
+				orphanedVMUUIDs = append(orphanedVMUUIDs, vmRec.UUID)
+			}
+		}
+		if len(orphanedVMIDs) > 0 {
+			// Delete all console_sessions for orphaned VMs in one query
+			db.Unscoped().Where("vm_id IN ? OR vm_uuid IN ?", orphanedVMIDs, orphanedVMUUIDs).Delete(&models.ConsoleSession{})
+			// Hard delete all orphaned VMs in one query
+			result := db.Unscoped().Where("id IN ?", orphanedVMIDs).Delete(&models.VM{})
+			if result.Error != nil {
+				logger.Log.Error("Failed to delete orphaned VMs", zap.Error(result.Error))
+			} else {
+				logger.Log.Info("Orphaned VMs cleaned up", zap.Int("count", len(orphanedVMIDs)), zap.Int64("rows_deleted", result.RowsAffected))
+			}
+		}
+	}
+	
+	logger.Log.Info("Orphaned VM cleanup completed")
+}
+
+// cleanupSoftDeletedVMs removes only soft-deleted VM records (when libvirt is unavailable)
+func cleanupSoftDeletedVMs(db *gorm.DB) {
+	logger.Log.Info("Starting soft-deleted VM cleanup (libvirt unavailable)...")
+	
+	// Get all soft-deleted VMs
+	var softDeletedVMs []models.VM
+	if err := db.Unscoped().Where("deleted_at IS NOT NULL").Find(&softDeletedVMs).Error; err == nil {
+		if len(softDeletedVMs) > 0 {
+			logger.Log.Info("Found soft-deleted VMs to cleanup", zap.Int("count", len(softDeletedVMs)))
+			// Delete all console_sessions for soft-deleted VMs in one query
+			var vmIDs []uint
+			var vmUUIDs []string
+			for _, vm := range softDeletedVMs {
+				vmIDs = append(vmIDs, vm.ID)
+				vmUUIDs = append(vmUUIDs, vm.UUID)
+			}
+			if len(vmIDs) > 0 {
+				db.Unscoped().Where("vm_id IN ? OR vm_uuid IN ?", vmIDs, vmUUIDs).Delete(&models.ConsoleSession{})
+			}
+			// Hard delete all soft-deleted VMs in one query
+			result := db.Unscoped().Where("deleted_at IS NOT NULL").Delete(&models.VM{})
+			if result.Error != nil {
+				logger.Log.Error("Failed to delete soft-deleted VMs", zap.Error(result.Error))
+			} else {
+				logger.Log.Info("Soft-deleted VMs cleaned up", zap.Int("count", len(softDeletedVMs)), zap.Int64("rows_deleted", result.RowsAffected))
+			}
+		}
+	}
+	
+	logger.Log.Info("Soft-deleted VM cleanup completed")
 }

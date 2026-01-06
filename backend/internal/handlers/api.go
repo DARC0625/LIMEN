@@ -27,9 +27,9 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/validator"
 	"github.com/DARC0625/LIMEN/backend/internal/vm"
 	"github.com/go-chi/chi/v5"
-	"nhooyr.io/websocket"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"nhooyr.io/websocket"
 )
 
 // Buffer pool for VNC connections to reduce memory allocations
@@ -51,11 +51,11 @@ type Handler struct {
 func NewHandler(db *gorm.DB, vmService *vm.VMService, cfg *config.Config) *Handler {
 	broadcaster := NewVMStatusBroadcaster()
 	go broadcaster.Run()
-	
+
 	// Initialize cache with optimized TTL for 10+ concurrent users:
 	// 3 minutes for VM lists (balance between freshness and load reduction)
 	vmCache := cache.NewInMemoryCache(3 * time.Minute)
-	
+
 	return &Handler{
 		DB:                  db,
 		VMService:           vmService,
@@ -104,12 +104,12 @@ func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 type CreateVMRequest struct {
-	Name         string `json:"name" example:"my-vm" binding:"required"` // VM name (unique)
-	CPU          int    `json:"cpu" example:"4" binding:"required,min=1"` // Number of CPU cores (minimum 1, no maximum limit)
+	Name         string `json:"name" example:"my-vm" binding:"required"`           // VM name (unique)
+	CPU          int    `json:"cpu" example:"4" binding:"required,min=1"`          // Number of CPU cores (minimum 1, no maximum limit)
 	Memory       int    `json:"memory" example:"4096" binding:"required,min=1024"` // Memory in MB (minimum 1024MB/1GB)
-	OSType       string `json:"os_type" example:"ubuntu" binding:"required"` // OS type (must exist in VMImage table)
-	GraphicsType string `json:"graphics_type,omitempty" example:"vnc"` // Graphics type (vnc, spice, none). Auto-enabled for GUI OS if not specified.
-	VNCEnabled   *bool  `json:"vnc_enabled,omitempty" example:"true"` // Enable VNC graphics. Auto-enabled for GUI OS if not specified.
+	OSType       string `json:"os_type" example:"ubuntu" binding:"required"`       // OS type (must exist in VMImage table)
+	GraphicsType string `json:"graphics_type,omitempty" example:"vnc"`             // Graphics type (vnc, spice, none). Auto-enabled for GUI OS if not specified.
+	VNCEnabled   *bool  `json:"vnc_enabled,omitempty" example:"true"`              // Enable VNC graphics. Auto-enabled for GUI OS if not specified.
 }
 
 // HandleVMs handles VM list and creation
@@ -165,14 +165,14 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 			// Add context with timeout to prevent goroutines from running indefinitely
 			syncCtx, syncCancel := context.WithTimeout(r.Context(), 10*time.Second) // Increased for concurrent users
 			defer syncCancel()
-			
+
 			const maxConcurrency = 8 // Increased for 10+ concurrent users (was 3)
 			sem := make(chan struct{}, maxConcurrency)
 			var wg sync.WaitGroup
-			
+
 			// Wait for all goroutines with timeout
 			done := make(chan struct{})
-			
+
 			for i := range vms {
 				// Check if context is cancelled before starting new goroutine
 				select {
@@ -181,11 +181,11 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 					goto syncComplete
 				default:
 				}
-				
+
 				wg.Add(1)
 				go func(idx int) {
 					defer wg.Done()
-					
+
 					// Check context before acquiring semaphore
 					select {
 					case <-syncCtx.Done():
@@ -193,7 +193,7 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 					case sem <- struct{}{}:
 						defer func() { <-sem }() // Release semaphore
 					}
-					
+
 					// Check context again before sync
 					select {
 					case <-syncCtx.Done():
@@ -209,12 +209,12 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 					}
 				}(i)
 			}
-			
+
 			go func() {
 				wg.Wait()
 				close(done)
 			}()
-			
+
 			select {
 			case <-done:
 				// All goroutines completed
@@ -224,8 +224,8 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 					logger.Log.Debug("VM status sync timed out, some syncs may be incomplete")
 				}
 			}
-			
-			syncComplete:
+
+		syncComplete:
 			wg.Wait()
 		}
 
@@ -260,13 +260,6 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 		if err := validator.ValidateOSType(req.OSType); err != nil {
 			errors.WriteBadRequest(w, err.Error(), err)
 			return
-		}
-
-		// Clean up existing DB record (including soft-deleted) to avoid unique constraint violation
-		var existingVM models.VM
-		if err := h.DB.Unscoped().Where("name = ?", req.Name).First(&existingVM).Error; err == nil {
-			logger.Log.Info("Cleaning up existing DB record", zap.String("vm_name", req.Name))
-			h.DB.Unscoped().Delete(&existingVM)
 		}
 
 		// Get user ID from context (set by auth middleware)
@@ -391,7 +384,7 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 			OwnerID:            userID,
 			InstallationStatus: models.InstallationStatusNotInstalled,
 			BootOrder:          models.BootOrderCDROMHD, // Default: CDROM 우선, HDD 다음
-			DiskSize:           20,                       // Default 20GB
+			DiskSize:           20,                      // Default 20GB
 		}
 
 		// Use transaction to ensure atomicity
@@ -401,6 +394,29 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 				tx.Rollback()
 			}
 		}()
+
+		// Clean up existing DB record (including soft-deleted) to avoid unique constraint violation
+		// Do this inside transaction to ensure atomicity
+		// First, find all VMs with the same name (including soft-deleted)
+		var existingVMs []models.VM
+		if err := tx.Unscoped().Where("name = ?", req.Name).Find(&existingVMs).Error; err == nil && len(existingVMs) > 0 {
+			logger.Log.Info("Cleaning up existing DB records", zap.String("vm_name", req.Name), zap.Int("count", len(existingVMs)))
+			// Delete console_sessions first to avoid foreign key constraint
+			for _, existingVM := range existingVMs {
+				if existingVM.ID > 0 {
+					tx.Unscoped().Where("vm_id = ? OR vm_uuid = ?", existingVM.ID, existingVM.UUID).Delete(&models.ConsoleSession{})
+				}
+			}
+			// Hard delete all VM records with the same name (including soft-deleted)
+			result := tx.Unscoped().Where("name = ?", req.Name).Delete(&models.VM{})
+			if result.Error != nil {
+				logger.Log.Error("Failed to cleanup existing VM records", zap.Error(result.Error), zap.String("vm_name", req.Name))
+				tx.Rollback()
+				errors.WriteInternalError(w, fmt.Errorf("Failed to cleanup existing VM: %v", result.Error), h.Config.Env == "development")
+				return
+			}
+			logger.Log.Info("Existing VM records hard deleted", zap.String("vm_name", req.Name), zap.Int64("rows_deleted", result.RowsAffected))
+		}
 
 		if err := tx.Create(&newVM).Error; err != nil {
 			tx.Rollback()
@@ -476,11 +492,11 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 		// Using 60 second timeout for flexibility
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		
+
 		ready := false
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
-		
+
 		for !ready {
 			select {
 			case <-ctx.Done():
@@ -510,10 +526,10 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 					// Wait for VM to start with generous timeout (30 seconds)
 					ctx2, cancel2 := context.WithTimeout(context.Background(), 30*time.Second)
 					defer cancel2()
-					
+
 					ticker2 := time.NewTicker(500 * time.Millisecond)
 					defer ticker2.Stop()
-					
+
 					vmStarted := false
 					for !vmStarted {
 						select {
@@ -569,8 +585,8 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 }
 
 type VMActionRequest struct {
-	Action string `json:"action" example:"start"` // Valid actions: start, stop, delete, update
-	CPU    int    `json:"cpu,omitempty" example:"4"` // Required for update action
+	Action string `json:"action" example:"start"`          // Valid actions: start, stop, delete, update
+	CPU    int    `json:"cpu,omitempty" example:"4"`       // Required for update action
 	Memory int    `json:"memory,omitempty" example:"4096"` // Required for update action (in MB)
 }
 
@@ -659,18 +675,18 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		
+
 		// Check actual VM status from libvirt before attempting to start
 		actualStatusBefore, err := h.VMService.GetVMStatusFromLibvirt(vmRec.Name)
 		if err != nil {
 			logger.Log.Warn("Failed to get VM status from libvirt before start", zap.String("vm_name", vmRec.Name), zap.Error(err))
 		}
-		
+
 		if err := h.VMService.StartVM(vmRec.Name); err != nil {
 			// Check if error is "VM not found" - this means VM exists in DB but not in libvirt
 			if strings.Contains(err.Error(), "Domain not found") || strings.Contains(err.Error(), "VM not found") {
-				logger.Log.Warn("VM not found in libvirt, marking as stopped in DB", 
-					zap.String("vm_name", vmRec.Name), 
+				logger.Log.Warn("VM not found in libvirt, marking as stopped in DB",
+					zap.String("vm_name", vmRec.Name),
 					zap.Error(err))
 				// Update DB status to Stopped since VM doesn't exist in libvirt
 				vmRec.Status = models.VMStatusStopped
@@ -689,7 +705,7 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 			errors.WriteInternalError(w, err, h.Config.Env == "development")
 			return
 		}
-		
+
 		// Verify actual VM status from libvirt after starting (or if already running)
 		actualStatus, err := h.VMService.GetVMStatusFromLibvirt(vmRec.Name)
 		if err != nil {
@@ -700,8 +716,8 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 			// Use actual status from libvirt
 			vmRec.Status = actualStatus
 			if actualStatus != models.VMStatusRunning {
-				logger.Log.Warn("VM start command succeeded but VM is not running", 
-					zap.String("vm_name", vmRec.Name), 
+				logger.Log.Warn("VM start command succeeded but VM is not running",
+					zap.String("vm_name", vmRec.Name),
 					zap.String("actual_status", string(actualStatus)))
 			} else if actualStatusBefore == models.VMStatusRunning {
 				logger.Log.Info("VM was already running, syncing status", zap.String("vm_name", vmRec.Name))
@@ -806,7 +822,7 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 		if err := h.DB.Select("id", "uuid", "name", "status", "cpu", "memory").Find(&allVMs).Error; err == nil {
 			h.VMStatusBroadcaster.BroadcastVMList(allVMs)
 		}
-		
+
 		// Update metrics before returning
 		metrics.VMDeleteTotal.Inc()
 		if err := h.UpdateMetrics(); err != nil {
@@ -839,23 +855,37 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 			errors.WriteBadRequest(w, err.Error(), err)
 			return
 		}
+		// Update CPU and Memory in DB first (always update DB, even if libvirt update fails)
+		vmRec.CPU = req.CPU
+		vmRec.Memory = req.Memory
+
+		// Try to update libvirt configuration
 		if err := h.VMService.UpdateVM(vmRec.Name, req.Memory, req.CPU); err != nil {
 			// Check if error is "VM not found in libvirt"
 			if strings.Contains(err.Error(), "VM not found in libvirt") || strings.Contains(err.Error(), "Domain not found") {
-				logger.Log.Warn("VM not found in libvirt", 
-					zap.String("vm_name", vmRec.Name), 
+				logger.Log.Warn("VM not found in libvirt, updating DB only",
+					zap.String("vm_name", vmRec.Name),
 					zap.Error(err))
-				errors.WriteError(w, http.StatusNotFound, "VM not found in libvirt. The VM may have been deleted or not created properly.", err)
-				return
+				// Continue to save DB even if libvirt update fails
+				// The DB will be updated, and when VM is recreated, it will use the new values
+			} else if strings.Contains(err.Error(), "vm must be stopped") {
+				logger.Log.Warn("VM is running, updating DB only. Changes will apply after VM restart",
+					zap.String("vm_name", vmRec.Name),
+					zap.Error(err))
+				// Continue to save DB even if libvirt update fails (VM is running)
+				// The DB will be updated, and when VM is restarted, it will use the new values
+			} else {
+				logger.Log.Error("Failed to update VM in libvirt, but updating DB anyway",
+					zap.Error(err),
+					zap.String("vm_name", vmRec.Name))
+				// Continue to save DB even if libvirt update fails
 			}
-			logger.Log.Error("Failed to update VM", zap.Error(err), zap.String("vm_name", vmRec.Name))
-			errors.WriteInternalError(w, err, h.Config.Env == "development")
-			return
+		} else {
+			logger.Log.Info("VM updated in libvirt", zap.String("vm_name", vmRec.Name), zap.Int("cpu", req.CPU), zap.Int("memory", req.Memory))
 		}
-		vmRec.CPU = req.CPU
-		vmRec.Memory = req.Memory
+
 		actionSuccess = true
-		logger.Log.Info("VM updated", zap.String("vm_name", vmRec.Name), zap.Int("cpu", req.CPU), zap.Int("memory", req.Memory))
+		logger.Log.Info("VM updated (DB)", zap.String("vm_name", vmRec.Name), zap.Int("cpu", req.CPU), zap.Int("memory", req.Memory))
 		// Broadcast VM update via WebSocket
 		h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
 	default:
@@ -958,12 +988,12 @@ func (h *Handler) HandleVMDelete(w http.ResponseWriter, r *http.Request) {
 	h.Cache.Delete("vms:list")
 	metrics.CacheSize.WithLabelValues("vm_list").Set(float64(h.Cache.Size()))
 
-		// Broadcast VM deletion via WebSocket (send updated list)
-		// Optimized: Only fetch necessary fields for broadcast
-		var allVMs []models.VM
-		if err := h.DB.Select("id", "uuid", "name", "status", "cpu", "memory").Find(&allVMs).Error; err == nil {
-			h.VMStatusBroadcaster.BroadcastVMList(allVMs)
-		}
+	// Broadcast VM deletion via WebSocket (send updated list)
+	// Optimized: Only fetch necessary fields for broadcast
+	var allVMs []models.VM
+	if err := h.DB.Select("id", "uuid", "name", "status", "cpu", "memory").Find(&allVMs).Error; err == nil {
+		h.VMStatusBroadcaster.BroadcastVMList(allVMs)
+	}
 
 	// Update metrics
 	metrics.VMDeleteTotal.Inc()
@@ -984,7 +1014,7 @@ func (h *Handler) HandleVMDelete(w http.ResponseWriter, r *http.Request) {
 // Origin validation uses the same CORS configuration as HTTP requests.
 func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
 	origin := r.Header.Get("Origin")
-	
+
 	// If origin is empty (e.g., removed by proxy), try to extract from Referer header
 	if origin == "" {
 		referer := r.Header.Get("Referer")
@@ -998,7 +1028,7 @@ func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*webs
 			}
 		}
 	}
-	
+
 	// If still empty and we have allowed origins configured, check if we're behind a proxy
 	// In production behind a trusted proxy (like Envoy), we may allow empty origin
 	// if the request comes from a trusted source
@@ -1010,7 +1040,7 @@ func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*webs
 			zap.String("host", r.Host),
 			zap.String("remote_addr", r.RemoteAddr),
 			zap.String("x-forwarded-for", r.Header.Get("X-Forwarded-For")))
-		
+
 		// If we have authentication (token/cookie), allow empty origin for proxy scenarios
 		// This is safe because authentication is still required
 		_, hasRefreshTokenErr := r.Cookie("refresh_token")
@@ -1018,7 +1048,7 @@ func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*webs
 		hasAuth := r.URL.Query().Get("token") != "" ||
 			r.Header.Get("Authorization") != "" ||
 			hasRefreshToken
-		
+
 		if hasAuth {
 			logger.Log.Info("Allowing WebSocket with empty origin due to authentication and proxy scenario",
 				zap.String("path", r.URL.Path),
@@ -1026,7 +1056,7 @@ func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*webs
 			origin = "*" // Set to wildcard to bypass origin check
 		}
 	}
-	
+
 	allowed := h.isOriginAllowed(origin)
 	if !allowed {
 		logger.Log.Warn("WebSocket origin not allowed",
@@ -1056,9 +1086,9 @@ func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*webs
 			originPatterns = append(originPatterns, "https://"+allowedOrigin)
 		}
 	}
-	
+
 	opts := &websocket.AcceptOptions{
-		OriginPatterns: originPatterns,
+		OriginPatterns:  originPatterns,
 		CompressionMode: websocket.CompressionContextTakeover, // Enable compression
 	}
 
@@ -1066,7 +1096,7 @@ func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*webs
 	// If Upgrade header exists but Connection is missing, it's likely a proxy issue
 	upgradeHeader := r.Header.Get("Upgrade")
 	connectionHeader := r.Header.Get("Connection")
-	
+
 	if upgradeHeader == "websocket" && connectionHeader == "" {
 		// Proxy stripped Connection header, but Upgrade header exists
 		// Manually set Connection header for WebSocket library
@@ -1098,13 +1128,13 @@ func (h *Handler) isOriginAllowed(origin string) bool {
 	if len(h.Config.AllowedOrigins) == 0 {
 		return false
 	}
-	
+
 	// Normalize origin (remove trailing slash and protocol)
 	normalizedOrigin := strings.TrimSuffix(origin, "/")
 	// Remove protocol if present
 	normalizedOrigin = strings.TrimPrefix(normalizedOrigin, "https://")
 	normalizedOrigin = strings.TrimPrefix(normalizedOrigin, "http://")
-	
+
 	for _, allowed := range h.Config.AllowedOrigins {
 		if allowed == "*" {
 			return true
@@ -1113,7 +1143,7 @@ func (h *Handler) isOriginAllowed(origin string) bool {
 		normalizedAllowed := strings.TrimSuffix(allowed, "/")
 		normalizedAllowed = strings.TrimPrefix(normalizedAllowed, "https://")
 		normalizedAllowed = strings.TrimPrefix(normalizedAllowed, "http://")
-		
+
 		// Check normalized match (without protocol)
 		if normalizedAllowed == normalizedOrigin {
 			return true
@@ -1168,7 +1198,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 	isWebSocketRequest := r.Header.Get("Upgrade") == "websocket" ||
 		strings.ToLower(r.Header.Get("Connection")) == "upgrade" ||
 		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
-	
+
 	// If not a WebSocket request (e.g., browser navigation), return appropriate response
 	if !isWebSocketRequest && r.Method == "GET" {
 		// This is likely a browser navigation to the VNC URL
@@ -1190,14 +1220,14 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			cookieNames = append(cookieNames, c.Name)
 		}
 	}
-	
+
 	// Check beta access for VNC console (admin always has access)
 	// Get user ID from token or cookie
 	var userID uint
 	var username string
 	var role string
 	var betaAccess bool
-	
+
 	// Try to get from token first
 	token := r.URL.Query().Get("token")
 	if token == "" {
@@ -1206,7 +1236,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			token = strings.TrimPrefix(authHeader, "Bearer ")
 		}
 	}
-	
+
 	if token != "" {
 		claims, err := auth.ValidateToken(token, h.Config.JWTSecret)
 		if err == nil {
@@ -1216,7 +1246,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			betaAccess = claims.BetaAccess
 		}
 	}
-	
+
 	// Fallback to refresh token cookie
 	if userID == 0 {
 		if cookie, err := r.Cookie("refresh_token"); err == nil {
@@ -1229,7 +1259,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	
+
 	// Check beta access (admin always has access)
 	if role != string(models.RoleAdmin) && !betaAccess {
 		// Fallback: check database
@@ -1370,7 +1400,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			zap.String("path", r.URL.Path),
 			zap.Uint("user_id", claims.UserID))
 	}
-	
+
 	ws, err := h.acceptWebSocket(w, r)
 	if err != nil {
 		logger.Log.Error("WebSocket accept failed - DETAILED",
@@ -1397,7 +1427,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		}
 		ws.Close(websocket.StatusNormalClosure, "")
 	}()
-	
+
 	// Only log in development
 	if h.Config.Env == "development" {
 		logger.Log.Debug("WebSocket accept SUCCESS",
@@ -1409,13 +1439,13 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	if err := ws.Write(ctx, websocket.MessageText, []byte(`{"type":"status","message":"Connected, checking VM status..."}`)); err != nil {
-		logger.Log.Warn("Failed to send initial status", 
+		logger.Log.Warn("Failed to send initial status",
 			zap.Error(err),
 			zap.Uint("user_id", claims.UserID),
 			zap.String("username", claims.Username))
 		return
 	}
-	
+
 	logger.Log.Info("Initial status message sent successfully",
 		zap.Uint("user_id", claims.UserID))
 
@@ -1443,7 +1473,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 			uuidStr = chi.URLParam(r, "uuid")
 		}
 	}
-	
+
 	if uuidStr == "" {
 		logger.Log.Warn("VNC connection attempt without VM UUID",
 			zap.Uint("user_id", claims.UserID),
@@ -1456,7 +1486,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Log.Info("VNC connection request", 
+	logger.Log.Info("VNC connection request",
 		zap.String("vm_uuid", uuidStr),
 		zap.Uint("user_id", claims.UserID),
 		zap.String("username", claims.Username))
@@ -1485,7 +1515,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Log.Info("VNC connection request", 
+	logger.Log.Info("VNC connection request",
 		zap.String("vm_uuid", uuidStr),
 		zap.String("vm_name", vmRec.Name),
 		zap.Int("vm_id", int(vmRec.ID)))
@@ -1498,6 +1528,17 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 	// Sync VM status from libvirt to ensure accuracy
 	actualStatus, err := h.VMService.GetVMStatusFromLibvirt(vmRec.Name)
 	if err != nil {
+		// Check if VM doesn't exist in libvirt
+		if strings.Contains(err.Error(), "Domain not found") || strings.Contains(err.Error(), "VM not found") {
+			logger.Log.Warn("VM not found in libvirt for VNC connection",
+				zap.String("vm_name", vmRec.Name),
+				zap.String("vm_uuid", vmRec.UUID),
+				zap.Error(err))
+			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer cancel()
+			ws.Write(ctx, websocket.MessageText, []byte(fmt.Sprintf(`{"type":"error","error":"VM not found in libvirt","code":"VM_NOT_FOUND_IN_LIBVIRT","message":"The VM may have been deleted or not created properly. Please recreate the VM."}`)))
+			return
+		}
 		logger.Log.Warn("Failed to get VM status from libvirt", zap.String("vm_name", vmRec.Name), zap.Error(err))
 	} else {
 		// Update DB status if different
@@ -1536,10 +1577,10 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		// Wait for VM to start and VNC to initialize (max 5 seconds)
 		vmCtx, vmCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer vmCancel()
-		
+
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
-		
+
 		vmStarted := false
 		for {
 			select {
@@ -1674,7 +1715,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 
 	// Create console session
 	sessionMgr := session.GetSessionManager()
-	
+
 	// Check reconnect limit
 	if err := sessionMgr.CheckReconnectLimit(claims.UserID); err != nil {
 		logger.Log.Warn("Reconnect limit exceeded",
@@ -1744,7 +1785,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			messageCount++
-			
+
 			// Update session activity (every 100 messages to reduce DB load)
 			if messageCount%100 == 0 {
 				if err := sessionMgr.UpdateActivity(sessionID); err != nil {
@@ -1779,7 +1820,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		// Optimized: Use buffer pool to reduce memory allocations
 		buf := vncBufferPool.Get().([]byte)
 		defer vncBufferPool.Put(buf)
-		
+
 		readCount := int32(0)
 		for {
 			select {
@@ -1807,14 +1848,14 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			count := atomic.AddInt32(&readCount, 1)
-			
+
 			// Update session activity (every 100 reads to reduce DB load)
 			if count%100 == 0 {
 				if err := sessionMgr.UpdateActivity(sessionID); err != nil {
 					logger.Log.Warn("Failed to update session activity", zap.Error(err))
 				}
 			}
-			
+
 			// Reduced logging: only log first read and every 1000th read
 			if count == 1 {
 				logger.Log.Debug("VNC TCP -> WebSocket (first read)",
@@ -1848,7 +1889,7 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 
 	// Wait for error from either goroutine
 	err = <-errc
-	
+
 	// Close connections gracefully (ensure cleanup even on error)
 	if conn != nil {
 		if closeErr := conn.Close(); closeErr != nil {
@@ -1857,30 +1898,30 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 				zap.String("vm_uuid", vmRec.UUID))
 		}
 	}
-	
+
 	// Send close message to WebSocket if not already closed
 	closeStatus := websocket.CloseStatus(err)
 	if err != nil && closeStatus != websocket.StatusNormalClosure && closeStatus != websocket.StatusGoingAway {
 		// Try to send close frame
 		ws.Close(websocket.StatusInternalError, "Connection closed")
 	}
-	
+
 	// Log connection closure
 	if err != nil && closeStatus != websocket.StatusNormalClosure && closeStatus != websocket.StatusGoingAway {
-	// Only log actual errors, not normal closures
-	if err != nil && err.Error() != "EOF" {
-		logger.Log.Warn("VNC connection closed with error",
-			zap.Error(err),
-			zap.String("vm_uuid", vmRec.UUID),
-			zap.Uint("user_id", claims.UserID))
-	}
+		// Only log actual errors, not normal closures
+		if err != nil && err.Error() != "EOF" {
+			logger.Log.Warn("VNC connection closed with error",
+				zap.Error(err),
+				zap.String("vm_uuid", vmRec.UUID),
+				zap.Uint("user_id", claims.UserID))
+		}
 	} else {
-	// Only log in development
-	if h.Config.Env == "development" {
-		logger.Log.Debug("VNC connection closed normally",
-			zap.String("vm_uuid", vmRec.UUID),
-			zap.Uint("user_id", claims.UserID))
-	}
+		// Only log in development
+		if h.Config.Env == "development" {
+			logger.Log.Debug("VNC connection closed normally",
+				zap.String("vm_uuid", vmRec.UUID),
+				zap.Uint("user_id", claims.UserID))
+		}
 	}
 }
 
@@ -1990,8 +2031,8 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Action    string `json:"action" example:"detach"` // "attach" or "detach"
-		ISOPath   string `json:"iso_path,omitempty" example:"/path/to/ubuntu.iso"` // ISO file path (for attach)
+		Action    string `json:"action" example:"detach"`                            // "attach" or "detach"
+		ISOPath   string `json:"iso_path,omitempty" example:"/path/to/ubuntu.iso"`   // ISO file path (for attach)
 		MediaPath string `json:"media_path,omitempty" example:"/path/to/disk.qcow2"` // Media file path (ISO or VM disk, for attach)
 	}
 
@@ -2004,7 +2045,7 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 	case "detach":
 		// Get current media path before detaching for response
 		currentMediaPath, _ := h.VMService.GetCurrentMedia(vmRec.Name)
-		
+
 		if err := h.VMService.DetachMedia(vmRec.Name); err != nil {
 			logger.Log.Error("Failed to detach media", zap.Error(err), zap.String("vm_name", vmRec.Name))
 			errors.WriteInternalError(w, err, h.Config.Env == "development")
@@ -2013,8 +2054,8 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 		logger.Log.Info("Media detached (disabled)", zap.String("vm_name", vmRec.Name), zap.String("previous_iso_path", currentMediaPath))
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"message": "Media disabled successfully. You can reattach it later.",
-			"vm_uuid": uuidStr,
+			"message":             "Media disabled successfully. You can reattach it later.",
+			"vm_uuid":             uuidStr,
 			"previous_media_path": currentMediaPath,
 		})
 	case "attach":
@@ -2023,12 +2064,12 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 		if mediaPath == "" {
 			mediaPath = req.ISOPath // Fallback to iso_path for backward compatibility
 		}
-		
+
 		if mediaPath == "" {
 			errors.WriteBadRequest(w, "Media path (iso_path or media_path) is required for attach", nil)
 			return
 		}
-		
+
 		if err := h.VMService.AttachMedia(vmRec.Name, mediaPath); err != nil {
 			// Check if error is "VM not found in libvirt"
 			if strings.Contains(err.Error(), "VM not found in libvirt") || strings.Contains(err.Error(), "Domain not found") {
@@ -2093,7 +2134,7 @@ func (h *Handler) HandleListISOs(w http.ResponseWriter, r *http.Request, cfg *co
 			// Fallback: construct path from UUID if not in DB
 			diskPath = filepath.Join(h.VMService.GetVMDir(), vm.UUID+".qcow2")
 		}
-		
+
 		// Check if disk file exists
 		diskExists := false
 		var diskSize int64 = 0
@@ -2106,13 +2147,13 @@ func (h *Handler) HandleListISOs(w http.ResponseWriter, r *http.Request, cfg *co
 
 		if diskExists {
 			vmDisks = append(vmDisks, map[string]interface{}{
-				"path":     diskPath,
-				"name":     filepath.Base(diskPath),
-				"vm_name":  vm.Name,
-				"vm_uuid":  vm.UUID,
-				"size":     diskSize,
-				"size_gb":  float64(diskSize) / (1024 * 1024 * 1024),
-				"type":     "qcow2",
+				"path":    diskPath,
+				"name":    filepath.Base(diskPath),
+				"vm_name": vm.Name,
+				"vm_uuid": vm.UUID,
+				"size":    diskSize,
+				"size_gb": float64(diskSize) / (1024 * 1024 * 1024),
+				"type":    "qcow2",
 			})
 		}
 	}
@@ -2164,7 +2205,7 @@ func (h *Handler) HandleVMBootOrder(w http.ResponseWriter, r *http.Request) {
 	bootOrderStr = strings.ReplaceAll(bootOrderStr, "hdd", "hd")
 	// Convert hyphens to underscores (e.g., "cdrom-hdd" -> "cdrom_hd")
 	bootOrderStr = strings.ReplaceAll(bootOrderStr, "-", "_")
-	
+
 	bootOrder := models.BootOrder(bootOrderStr)
 	if !bootOrder.IsValid() {
 		errors.WriteBadRequest(w, fmt.Sprintf("Invalid boot order: %s. Valid options: cdrom_hd, hd, cdrom, hd_cdrom", req.BootOrder), nil)
@@ -2191,8 +2232,8 @@ func (h *Handler) HandleVMBootOrder(w http.ResponseWriter, r *http.Request) {
 	if err := h.VMService.SetBootOrder(vmRec.Name, bootOrder); err != nil {
 		// Check if error is "VM not found in libvirt"
 		if strings.Contains(err.Error(), "VM not found in libvirt") || strings.Contains(err.Error(), "Domain not found") {
-			logger.Log.Warn("VM not found in libvirt", 
-				zap.String("vm_name", vmRec.Name), 
+			logger.Log.Warn("VM not found in libvirt",
+				zap.String("vm_name", vmRec.Name),
 				zap.Error(err))
 			errors.WriteError(w, http.StatusNotFound, "VM not found in libvirt. The VM may have been deleted or not created properly.", err)
 			return
@@ -2249,15 +2290,15 @@ func (h *Handler) HandleGetVMBootOrder(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"vm_uuid":   uuidStr,
-		"boot_order": vmRec.BootOrder,
+		"vm_uuid":      uuidStr,
+		"boot_order":   vmRec.BootOrder,
 		"boot_devices": vmRec.BootOrder.GetBootDevices(),
 	})
 }
 
-// HandleFinalizeInstall finalizes VM installation by removing CDROM and switching to disk-only boot
+// HandleFinalizeInstall finalizes VM installation by removing CDROM device
 // @Summary Finalize VM installation
-// @Description Remove CDROM device and switch boot to disk-only (equivalent to "Eject ISO / Boot from Hard Disk")
+// @Description Remove CDROM device and mark installation as complete. Boot order is preserved (not changed).
 // @Tags vms
 // @Accept json
 // @Produce json
@@ -2309,11 +2350,23 @@ func (h *Handler) HandleFinalizeInstall(w http.ResponseWriter, r *http.Request) 
 	logger.Log.Info("VM installation finalized", zap.String("vm_name", vmRec.Name), zap.Uint("user_id", userID))
 	// Note: Audit logging can be added here if needed
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":             "VM installation finalized successfully. CDROM removed, boot set to disk only.",
-		"vm_uuid":             uuidStr,
-		"boot_order":          "hd",
-		"installation_status": "Installed",
-	})
+	// Get updated VM from DB to return current boot_order
+	var updatedVM models.VM
+	if err := h.DB.Where("uuid = ?", uuidStr).First(&updatedVM).Error; err == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message":             "VM installation finalized successfully. CDROM removed, boot order preserved.",
+			"vm_uuid":             uuidStr,
+			"boot_order":          updatedVM.BootOrder,
+			"installation_status": "Installed",
+		})
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message":             "VM installation finalized successfully. CDROM removed, boot order preserved.",
+			"vm_uuid":             uuidStr,
+			"boot_order":          vmRec.BootOrder,
+			"installation_status": "Installed",
+		})
+	}
 }
