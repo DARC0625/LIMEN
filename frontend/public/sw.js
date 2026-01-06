@@ -1,8 +1,8 @@
 // Service Worker for LIMEN PWA
 // 오프라인 지원 및 캐싱 전략
 
-const CACHE_NAME = 'limen-v1';
-const RUNTIME_CACHE = 'limen-runtime-v1';
+const CACHE_NAME = 'limen-v2';
+const RUNTIME_CACHE = 'limen-runtime-v2';
 
 // 캐시할 리소스 목록
 const STATIC_CACHE_URLS = [
