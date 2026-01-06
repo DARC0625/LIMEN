@@ -231,10 +231,10 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
       setTimeout(() => loadMountedMedia(), 1000);
     } catch (error: unknown) {
       handleError(error, { component: 'VNCViewer', action: 'attach_media' });
-      const errorMessage = error instanceof Error ? error.message : 'Failed to attach media';
+      
+      const apiError = error as { status?: number; message?: string; details?: { errorMessage?: string; errorDetails?: unknown } };
       
       // 409 Conflict 에러 처리: 중복 요청 방지
-      const apiError = error as { status?: number; message?: string };
       if (apiError?.status === 409) {
         setStatus('This request was recently processed. Please wait a moment before retrying.');
         // 2초 후 자동으로 미디어 상태 다시 로드
@@ -245,7 +245,19 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
         return;
       }
       
-      setStatus(`Error: ${errorMessage}`);
+      // 500 Internal Server Error 처리
+      if (apiError?.status === 500) {
+        const errorMessage = apiError.details?.errorMessage || apiError.message || 'Internal server error';
+        setStatus(`Server error: ${errorMessage}. Please check if the file exists and try again.`);
+        logger.error('[VNCViewer] 500 error attaching media:', {
+          status: apiError.status,
+          message: errorMessage,
+          details: apiError.details,
+        });
+      } else {
+        const errorMessage = apiError?.message || (error instanceof Error ? error.message : 'Failed to attach media');
+        setStatus(`Error: ${errorMessage}`);
+      }
     } finally {
       setIsProcessing(false);
     }
