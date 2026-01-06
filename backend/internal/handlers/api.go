@@ -659,13 +659,20 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		
+		// Check actual VM status from libvirt before attempting to start
+		actualStatusBefore, err := h.VMService.GetVMStatusFromLibvirt(vmRec.Name)
+		if err != nil {
+			logger.Log.Warn("Failed to get VM status from libvirt before start", zap.String("vm_name", vmRec.Name), zap.Error(err))
+		}
+		
 		if err := h.VMService.StartVM(vmRec.Name); err != nil {
 			logger.Log.Error("Failed to start VM", zap.Error(err), zap.String("vm_name", vmRec.Name))
 			audit.LogVMStart(r.Context(), userID, vmRec.UUID, false)
 			errors.WriteInternalError(w, err, h.Config.Env == "development")
 			return
 		}
-		// Verify actual VM status from libvirt after starting
+		
+		// Verify actual VM status from libvirt after starting (or if already running)
 		actualStatus, err := h.VMService.GetVMStatusFromLibvirt(vmRec.Name)
 		if err != nil {
 			logger.Log.Warn("Failed to verify VM status after start", zap.String("vm_name", vmRec.Name), zap.Error(err))
@@ -678,18 +685,23 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 				logger.Log.Warn("VM start command succeeded but VM is not running", 
 					zap.String("vm_name", vmRec.Name), 
 					zap.String("actual_status", string(actualStatus)))
+			} else if actualStatusBefore == models.VMStatusRunning {
+				logger.Log.Info("VM was already running, syncing status", zap.String("vm_name", vmRec.Name))
 			}
 		}
 		actionSuccess = true
 		logger.Log.Info("VM started", zap.String("vm_name", vmRec.Name), zap.String("status", string(vmRec.Status)))
 		audit.LogVMStart(r.Context(), userID, vmRec.UUID, vmRec.Status == models.VMStatusRunning)
-		// Save VM status to DB before broadcasting
+		// Save VM status to DB before broadcasting (always save, even if already running)
 		if err := h.DB.Save(&vmRec).Error; err != nil {
 			logger.Log.Error("Failed to save VM status after start", zap.Error(err), zap.String("vm_name", vmRec.Name))
 			// Continue anyway - status update is more important than DB save failure
+		} else {
+			logger.Log.Info("VM status saved to DB", zap.String("vm_name", vmRec.Name), zap.String("status", string(vmRec.Status)))
 		}
-		// Broadcast VM update via WebSocket
+		// Broadcast VM update via WebSocket (always broadcast, even if already running)
 		h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
+		logger.Log.Info("VM status broadcasted via WebSocket", zap.String("vm_name", vmRec.Name), zap.String("status", string(vmRec.Status)))
 	case models.VMActionStop:
 		// Check if VM is actually running before trying to stop
 		actualStatus, err := h.VMService.GetVMStatusFromLibvirt(vmRec.Name)
@@ -704,7 +716,17 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 			vmRec.Status = models.VMStatusStopped
 			actionSuccess = true
 			logger.Log.Info("VM stopped", zap.String("vm_name", vmRec.Name))
+			audit.LogVMStop(r.Context(), userID, vmRec.UUID, true)
+			// Save VM status to DB before broadcasting (always save)
+			if err := h.DB.Save(&vmRec).Error; err != nil {
+				logger.Log.Error("Failed to save VM status after stop", zap.Error(err), zap.String("vm_name", vmRec.Name))
+				// Continue anyway - status update is more important than DB save failure
+			} else {
+				logger.Log.Info("VM status saved to DB", zap.String("vm_name", vmRec.Name), zap.String("status", string(vmRec.Status)))
+			}
+			// Broadcast VM update via WebSocket
 			h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
+			logger.Log.Info("VM status broadcasted via WebSocket", zap.String("vm_name", vmRec.Name), zap.String("status", string(vmRec.Status)))
 		} else if actualStatus == models.VMStatusStopped {
 			// VM is already stopped, just sync the status
 			vmRec.Status = models.VMStatusStopped
@@ -716,11 +738,12 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			actionSuccess = true
-			h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
 			logger.Log.Info("VM was already stopped, status synced", zap.String("vm_name", vmRec.Name))
+			audit.LogVMStop(r.Context(), userID, vmRec.UUID, true)
+			// Broadcast VM update via WebSocket
+			h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
+			logger.Log.Info("VM status broadcasted via WebSocket", zap.String("vm_name", vmRec.Name), zap.String("status", string(vmRec.Status)))
 			// Skip the DB.Save after switch since we already saved here
-			// Set a flag or use a different approach - actually, we can just return early
-			// But we need to send response, so we'll let it fall through but skip the save
 		} else {
 			// VM is running, stop it
 			if err := h.VMService.StopVM(vmRec.Name); err != nil {
@@ -732,8 +755,16 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 			actionSuccess = true
 			logger.Log.Info("VM stopped", zap.String("vm_name", vmRec.Name))
 			audit.LogVMStop(r.Context(), userID, vmRec.UUID, true)
+			// Save VM status to DB before broadcasting (always save)
+			if err := h.DB.Save(&vmRec).Error; err != nil {
+				logger.Log.Error("Failed to save VM status after stop", zap.Error(err), zap.String("vm_name", vmRec.Name))
+				// Continue anyway - status update is more important than DB save failure
+			} else {
+				logger.Log.Info("VM status saved to DB", zap.String("vm_name", vmRec.Name), zap.String("status", string(vmRec.Status)))
+			}
 			// Broadcast VM update via WebSocket
 			h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
+			logger.Log.Info("VM status broadcasted via WebSocket", zap.String("vm_name", vmRec.Name), zap.String("status", string(vmRec.Status)))
 		}
 	case models.VMActionDelete:
 		if err := h.VMService.DeleteVM(vmRec.Name); err != nil {

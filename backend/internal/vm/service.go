@@ -426,6 +426,22 @@ func (s *VMService) StartVM(name string) error {
 		if err := s.ensureVNCGraphics(name); err != nil {
 			logger.Log.Warn("Failed to ensure VNC graphics on running VM", zap.String("vm_name", name), zap.Error(err))
 		}
+		// Verify the VM is actually running and update DB status
+		state, _, err := dom.GetState()
+		if err == nil && state == libvirt.DOMAIN_RUNNING {
+			// Update DB to ensure status is synced
+			var vmRec models.VM
+			if err := s.db.Where("name = ?", name).First(&vmRec).Error; err == nil {
+				if vmRec.Status != models.VMStatusRunning {
+					vmRec.Status = models.VMStatusRunning
+					if err := s.db.Save(&vmRec).Error; err != nil {
+						logger.Log.Warn("Failed to sync VM status in DB", zap.String("vm_name", name), zap.Error(err))
+					} else {
+						logger.Log.Info("VM status synced to Running in DB", zap.String("vm_name", name))
+					}
+				}
+			}
+		}
 		return nil
 	}
 

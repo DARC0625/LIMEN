@@ -571,12 +571,22 @@ export function useVMAction() {
             });
           }, 500);
         } else if (variables.action === 'start' || variables.action === 'stop') {
-          // start/stop 액션: 서버 응답을 신뢰하므로 invalidateQueries를 호출하지 않음
-          // 서버가 start/stop 액션에 대해 반환한 상태(Running/Stopped)를 우선함
-          // invalidateQueries를 호출하면 서버에서 최신 상태를 가져오는데,
-          // VM 시작/중지는 비동기 작업이므로 서버가 아직 상태를 업데이트하지 않았을 수 있음
-          // 따라서 서버 응답을 신뢰하고, 백그라운드 폴링(5분마다)만 사용하여 동기화
-          // 이렇게 하면 서버 응답(Running)이 invalidateQueries로 인해 덮어쓰이지 않음
+          // start/stop 액션: 서버 응답을 신뢰하되, 적절한 타이밍에 invalidateQueries 호출
+          // 서버가 start/stop 액션에 대해 반환한 상태(Running/Stopped)를 우선하되,
+          // 새로고침 시 최신 상태를 가져올 수 있도록 약간의 지연 후 invalidateQueries 호출
+          // 너무 빠르면 서버가 아직 상태를 업데이트하지 않았을 수 있고,
+          // 너무 늦으면 새로고침 시 최신 상태를 가져오지 못함
+          setTimeout(() => {
+            queueMicrotask(() => {
+              startTransition(() => {
+                // 서버 응답 후 1초 지연하여 invalidateQueries 호출
+                // 이렇게 하면 서버가 DB에 상태를 저장하고 WebSocket으로 브로드캐스트한 후에
+                // 최신 상태를 가져올 수 있음
+                queryClient.invalidateQueries({ queryKey: ['vms'] });
+                queryClient.invalidateQueries({ queryKey: ['quota'] });
+              });
+            });
+          }, 1000); // 1초 지연
         } else if (variables.action === 'update') {
           // 업데이트: 즉시 무효화
           startTransition(() => {
