@@ -433,10 +433,6 @@ export default function VMListSection({
               const offsetFromCenter = cardCenter - containerCenter;
               const maxOffset = containerWidth / 2;
               
-              // 카드가 컨테이너 밖에 있으면 렌더링하지 않음 (성능 최적화 및 overflow 방지)
-              const cardRight = cardLeft + cardWidth;
-              const isVisible = cardRight > -cardWidth && cardLeft < containerWidth + cardWidth;
-              
               // 회전 방향: 
               // - 왼쪽 카드(offsetFromCenter < 0): 오른쪽으로 기울어야 함 (양수 rotationY)
               // - 오른쪽 카드(offsetFromCenter > 0): 왼쪽으로 기울어야 함 (음수 rotationY)
@@ -446,10 +442,10 @@ export default function VMListSection({
               const scale = isCenter ? 1.1 : isNearCenter ? 1.05 : 0.92; // 스케일
               const opacity = isCenter ? 1 : isNearCenter ? 0.9 : 0.75; // 투명도
               
-              // 카드가 보이지 않으면 렌더링하지 않음
-              if (!isVisible) {
-                return null;
-              }
+              // 카드가 컨테이너 밖에 있으면 투명도만 낮춤 (렌더링은 유지하여 사라지는 현상 방지)
+              const cardRight = cardLeft + cardWidth;
+              const isFarOutside = cardRight < -cardWidth * 2 || cardLeft > containerWidth + cardWidth * 2;
+              const finalOpacity = isFarOutside ? 0 : opacity;
               
               return (
                 <article
@@ -472,7 +468,8 @@ export default function VMListSection({
                     backgroundClip: isActive ? 'padding-box, border-box' : undefined,
                     transform: `perspective(1000px) rotateY(${rotationY}deg) translateZ(${translateZ}px) scale(${scale})`,
                     transformStyle: 'preserve-3d',
-                    opacity: opacity,
+                    opacity: finalOpacity,
+                    visibility: finalOpacity === 0 ? 'hidden' : 'visible',
                     zIndex: isCenter ? 30 : isNearCenter ? 20 : 10,
                     boxShadow: isCenter 
                       ? '0 10px 20px -8px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1)'

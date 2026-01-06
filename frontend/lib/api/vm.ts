@@ -164,8 +164,21 @@ export const vmAPI = {
       return result;
     } catch (error) {
       const errorContext = error instanceof Error 
-        ? { message: error.message, stack: error.stack, name: error.name }
+        ? { 
+            message: error.message, 
+            stack: error.stack, 
+            name: error.name,
+            status: (error as any).status,
+            details: (error as any).details,
+          }
         : { error: String(error) };
+      
+      window.console.error('[vmAPI.action] API error details:', {
+        uuid,
+        action,
+        ...errorContext,
+      });
+      
       logger.error('[vmAPI.action] API error:', { uuid, action, ...errorContext });
       throw error;
     }

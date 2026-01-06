@@ -19,6 +19,7 @@ export function useAdminUsers() {
   
   // 서버와 클라이언트 초기 렌더링에서 동일한 값 반환 (false)
   // 마운트 후에만 인증 상태 확인
+  // Admin 권한 확인은 페이지 컴포넌트에서 처리하고, 여기서는 인증 상태만 확인
   const enabled = mounted && isAuthenticated === true;
   
   // useQuery는 항상 호출되어야 함 (조건부 호출 금지)

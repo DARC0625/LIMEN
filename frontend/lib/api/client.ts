@@ -267,6 +267,44 @@ async function handleResponse<T>(
   url: string,
   method: string
 ): Promise<T> {
+  // 500 Internal Server Error 처리
+  if (response.status === 500) {
+    // 응답 본문을 읽어서 상세 에러 정보 확인
+    let errorMessage = 'Internal server error';
+    let errorDetails: any = null;
+    
+    try {
+      const errorText = await response.text();
+      if (errorText) {
+        try {
+          errorDetails = JSON.parse(errorText);
+          errorMessage = errorDetails.message || errorDetails.error || errorMessage;
+        } catch {
+          errorMessage = errorText.substring(0, 200);
+        }
+      }
+    } catch (e) {
+      // 응답 본문 읽기 실패는 무시
+    }
+    
+    window.console.error('[handleResponse] 500 Internal Server Error:', {
+      endpoint,
+      url,
+      method,
+      errorMessage,
+      errorDetails,
+      status: response.status,
+      statusText: response.statusText,
+    });
+    
+    const error: APIError = new Error(errorMessage);
+    error.status = 500;
+    if (errorDetails) {
+      (error as any).details = errorDetails;
+    }
+    throw error;
+  }
+
   // 404 처리
   if (response.status === 404) {
     const error: APIError = new Error('Not Found');

@@ -32,6 +32,8 @@ export default function UserManagementPage() {
   
   // React Query hooks - 항상 호출 (조건부로만 사용)
   // 중요: 모든 hooks는 조건부 return 전에 호출되어야 함
+  // 인증 및 Admin 확인이 완료된 후에만 쿼리 활성화
+  // shouldEnableQuery는 hooks 호출 후에 계산하되, useAdminUsers는 항상 호출
   const { data: users = [], isLoading, error } = useAdminUsers();
   const { data: expandedUserData } = useAdminUser(expandedUser);
   const createUserMutation = useCreateUser();

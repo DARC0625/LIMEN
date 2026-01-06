@@ -160,13 +160,47 @@ export async function middleware(request: NextRequest) {
           });
         }
         
-        const response = await fetch(targetUrl, {
-          method: request.method,
-          headers: backendHeaders,
-          body: request.method !== 'GET' && request.method !== 'HEAD'
-            ? await request.text()
-            : undefined,
-        });
+        // 타임아웃 설정 (10초)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        
+        let response: Response;
+        try {
+          response = await fetch(targetUrl, {
+            method: request.method,
+            headers: backendHeaders,
+            body: request.method !== 'GET' && request.method !== 'HEAD'
+              ? await request.text()
+              : undefined,
+            signal: controller.signal,
+          });
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+          const error = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
+          console.error(`[Proxy] Fetch error for ${request.method} ${pathname}:`, {
+            error: error.message,
+            targetUrl,
+            backendUrl,
+            pathname,
+          });
+          
+          // 연결 실패 시 503 에러 반환
+          return NextResponse.json(
+            {
+              error: 'Backend service unavailable',
+              message: `Failed to connect to backend: ${error.message}`,
+              debug: {
+                targetUrl,
+                backendUrl,
+                pathname,
+                errorMessage: error.message,
+              },
+            },
+            { status: 503 }
+          );
+        } finally {
+          clearTimeout(timeoutId);
+        }
 
       const duration = Date.now() - startTime;
       const data = await response.text();
