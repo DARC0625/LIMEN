@@ -41,9 +41,14 @@ export default function UserManagementPage() {
     
     // 인증되지 않았으면 리다이렉트
     if (isAuthenticated === false) {
-      setIsCheckingAuth(false);
-      setIsUserAdmin(false);
-      router.push('/dashboard');
+      startTransition(() => {
+        setIsCheckingAuth(false);
+        setIsUserAdmin(false);
+      });
+      // router.push는 startTransition 밖에서 호출 (리다이렉트는 즉시 필요)
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 100);
       return;
     }
     
@@ -51,19 +56,29 @@ export default function UserManagementPage() {
     let cancelled = false;
     isAdmin().then((admin) => {
       if (cancelled) return;
-      setIsUserAdmin(admin);
-      setIsCheckingAuth(false);
+      startTransition(() => {
+        setIsUserAdmin(admin);
+        setIsCheckingAuth(false);
+      });
       if (!admin) {
         toast.error('Admin 권한이 필요합니다.');
-        router.push('/dashboard');
+        // router.push는 startTransition 밖에서 호출
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 100);
       }
     }).catch((error) => {
       if (cancelled) return;
       console.error('[UserManagement] Admin check failed:', error);
-      setIsUserAdmin(false);
-      setIsCheckingAuth(false);
+      startTransition(() => {
+        setIsUserAdmin(false);
+        setIsCheckingAuth(false);
+      });
       toast.error('Admin 권한 확인에 실패했습니다. 다시 시도해주세요.');
-      router.push('/dashboard');
+      // router.push는 startTransition 밖에서 호출
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 100);
     });
     
     return () => {
@@ -217,23 +232,27 @@ export default function UserManagementPage() {
 
   // 에러 처리: 401/403 에러 시 대시보드로 리다이렉트
   useEffect(() => {
-    if (error && isUserAdmin === true) {
-      // Admin 권한이 확인된 후에만 에러 처리 (권한 확인 중 에러는 무시)
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes('401') || errorMessage.includes('Authentication required') || 
-          errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
-        // React Error #310 해결: 상태 업데이트를 startTransition으로 감싸기
-        startTransition(() => {
-          toast.error('인증이 만료되었습니다. 다시 로그인해주세요.');
-          router.push('/dashboard');
-        });
-      } else {
-        // 기타 에러는 사용자에게 표시
-        const friendlyMessage = errorMessage.includes('Network') || errorMessage.includes('fetch')
-          ? '네트워크 오류가 발생했습니다. 연결을 확인하고 다시 시도해주세요.'
-          : `오류가 발생했습니다: ${errorMessage}`;
-        toast.error(friendlyMessage);
-      }
+    // React Error #310 해결: 조건을 더 명확하게 설정하고, 상태 업데이트를 분리
+    if (!error || isUserAdmin !== true) {
+      return; // 에러가 없거나 Admin 권한이 확인되지 않았으면 처리하지 않음
+    }
+    
+    // Admin 권한이 확인된 후에만 에러 처리 (권한 확인 중 에러는 무시)
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('401') || errorMessage.includes('Authentication required') || 
+        errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+      // React Error #310 해결: router.push와 toast를 분리하여 처리
+      toast.error('인증이 만료되었습니다. 다시 로그인해주세요.');
+      // router.push는 startTransition 밖에서 호출 (리다이렉트는 즉시 필요)
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 100);
+    } else {
+      // 기타 에러는 사용자에게 표시
+      const friendlyMessage = errorMessage.includes('Network') || errorMessage.includes('fetch')
+        ? '네트워크 오류가 발생했습니다. 연결을 확인하고 다시 시도해주세요.'
+        : `오류가 발생했습니다: ${errorMessage}`;
+      toast.error(friendlyMessage);
     }
   }, [error, isUserAdmin, toast, router]);
 
