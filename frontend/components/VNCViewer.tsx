@@ -166,10 +166,26 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
         }
       }, 1500);
     } catch (error: unknown) {
-        handleError(error, { component: 'VNCViewer', action: 'detach_media' });
+      handleError(error, { component: 'VNCViewer', action: 'detach_media' });
       
       // Enhanced error message handling
       const apiError = error as { responseData?: { message?: string }; response?: { data?: { message?: string } }; message?: string; status?: number };
+      
+      // 409 Conflict 에러 처리: 중복 요청 방지
+      if (apiError?.status === 409) {
+        setStatus('This request was recently processed. Please wait a moment before retrying.');
+        // 2초 후 자동으로 미디어 상태 다시 로드
+        setTimeout(async () => {
+          try {
+            await loadMountedMedia();
+          } catch (err) {
+            logger.error(err instanceof Error ? err : new Error(String(err)), { component: 'VNCViewer', action: 'reload_media_after_409' });
+          }
+          setIsProcessing(false);
+        }, 2000);
+        return;
+      }
+      
       let errorMessage = 'Failed to disable media';
       if (apiError?.responseData?.message) {
         errorMessage = apiError.responseData.message;
