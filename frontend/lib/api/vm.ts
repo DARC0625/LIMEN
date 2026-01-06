@@ -97,7 +97,7 @@ export const vmAPI = {
       vmData.vnc_enabled = vm.vnc_enabled;
     } else {
       // Default: Enable VNC for GUI OS
-      const guiOS = ['ubuntu-desktop', 'kali', 'windows'];
+      const guiOS = ['ubuntu-desktop', 'kali', 'windows', 'windows11'];
       if (vm.os_type && guiOS.includes(vm.os_type)) {
         vmData.vnc_enabled = true;
         vmData.graphics_type = 'vnc';
@@ -160,7 +160,7 @@ export const vmAPI = {
         body.vnc_enabled = options.vnc_enabled;
       } else if (options.os_type) {
         // If OS type is changed, enable VNC for GUI OS
-        const guiOS = ['ubuntu-desktop', 'kali', 'windows'];
+        const guiOS = ['ubuntu-desktop', 'kali', 'windows', 'windows11'];
         if (guiOS.includes(options.os_type)) {
           body.vnc_enabled = true;
           body.graphics_type = 'vnc';
