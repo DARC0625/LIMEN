@@ -183,13 +183,19 @@ export default function Home() {
   };
 
   const handleFinalizeInstall = async (uuid: string) => {
+    window.console.log('[handleFinalizeInstall] Called with uuid:', uuid);
+    
     if (!confirm('Finalize installation?\n\nThis will:\n- Remove CDROM device\n- Set boot order to HDD only\n- Mark installation as complete\n\nVM will be shut down if running.')) {
+      window.console.log('[handleFinalizeInstall] User cancelled');
       return;
     }
 
+    window.console.log('[handleFinalizeInstall] Starting finalize install...');
     setProcessingId(uuid);
     try {
+      window.console.log('[handleFinalizeInstall] Calling API...');
       const result = await vmAPI.finalizeInstall(uuid);
+      window.console.log('[handleFinalizeInstall] API success:', result);
       toast.success(result.message || 'Installation finalized successfully');
       
       // React Query 캐시 업데이트
@@ -214,6 +220,7 @@ export default function Home() {
       // VM 목록 새로고침
       queryClient.invalidateQueries({ queryKey: ['vms'] });
     } catch (error) {
+      window.console.error('[handleFinalizeInstall] API error:', error);
       console.error('[handleFinalizeInstall] API error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to finalize installation';
       toast.error(`Failed to finalize installation: ${errorMessage}`);
@@ -448,7 +455,7 @@ export default function Home() {
                     type="text"
                     required
                     maxLength={100}
-                    pattern="[-a-zA-Z0-9_]+"
+                    pattern="[a-zA-Z0-9_-]+"
                     className="w-full p-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                     value={editingVM.name || ''}
                     onChange={(e) => {
@@ -536,18 +543,26 @@ export default function Home() {
                     </p>
                   </div>
                 )}
-                <div className="flex gap-3 justify-end pt-4">
+                <div className="flex gap-3 justify-end pt-4 border-t border-gray-200">
                   <button
                     type="button"
-                    onClick={() => setEditingVM(null)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      window.console.log('[EditVM] Cancel button clicked');
+                      setEditingVM(null);
+                    }}
                     className="px-4 py-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 hover:shadow-md transition-all duration-200 font-medium"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
+                    onClick={(e) => {
+                      window.console.log('[EditVM] Update button clicked');
+                    }}
                     disabled={vmActionMutation.isPending || processingId === editingVM.uuid}
-                    className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 hover:shadow-md transition-all duration-200 font-medium"
+                    className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 hover:shadow-md transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {vmActionMutation.isPending && processingId === editingVM.uuid ? 'Updating...' : 'Update'}
                   </button>
