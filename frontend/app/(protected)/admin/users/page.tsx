@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { isAdmin } from '../../../../lib/api';
 import { useToast } from '../../../../components/ToastContainer';
 import { useAuth } from '../../../../components/AuthGuard';
+import { useMounted } from '../../../../hooks/useMounted';
 import { 
   useAdminUsers, 
   useAdminUser, 
@@ -20,23 +21,36 @@ import type { UpdateUserRequest } from '../../../../lib/types';
 import Loading from '../../../../components/Loading';
 
 export default function UserManagementPage() {
-  // 모든 hooks를 항상 같은 순서로 호출 (React Hooks 규칙 준수)
+  // React Error #310 완전 해결: 모든 hooks를 항상 같은 순서로 호출
+  // 1. 기본 hooks
+  const mounted = useMounted();
+  const toast = useToast();
+  const router = useRouter();
+  const { isAuthenticated } = useAuth();
+  
+  // 2. 상태 hooks
   const [expandedUser, setExpandedUser] = useState<number | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingUser, setEditingUser] = useState<number | null>(null);
   const [isUserAdmin, setIsUserAdmin] = useState<boolean | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const toast = useToast();
-  const router = useRouter();
-  const { isAuthenticated } = useAuth();
-  
-  // 리다이렉트 상태 관리
   const [shouldRedirect, setShouldRedirect] = useState(false);
   
-  // 인증 및 Admin 권한 확인 (hooks 호출 전에 먼저 확인)
-  // React Error #310 해결: Admin 권한 확인을 먼저 수행하여 불필요한 API 호출 방지
-  // useEffect 내에서 상태 업데이트를 startTransition으로 감싸서 hydration mismatch 방지
+  // 3. React Query hooks - 항상 호출 (조건부로만 사용)
+  // React Error #310 해결: useAdminUsers에 isUserAdmin을 전달하여 Admin 권한 확인 후에만 API 호출
+  const { data: users = [], isLoading, error } = useAdminUsers(isUserAdmin);
+  const { data: expandedUserData } = useAdminUser(expandedUser);
+  const createUserMutation = useCreateUser();
+  const updateUserMutation = useUpdateUser();
+  const deleteUserMutation = useDeleteUser();
+  const approveUserMutation = useApproveUser();
+  
+  // 4. 인증 및 Admin 권한 확인
+  // React Error #310 해결: queueMicrotask와 startTransition을 사용하여 hydration mismatch 방지
   useEffect(() => {
+    // 마운트되지 않았으면 아무것도 하지 않음
+    if (!mounted) return;
+    
     // 인증 상태 확인
     if (isAuthenticated === null) {
       // 아직 확인 중이면 상태 유지
@@ -45,11 +59,13 @@ export default function UserManagementPage() {
     
     // 인증되지 않았으면 리다이렉트
     if (isAuthenticated === false) {
-      // React Error #310 해결: 모든 상태 업데이트를 startTransition으로 감싸기
-      startTransition(() => {
-        setIsCheckingAuth(false);
-        setIsUserAdmin(false);
-        setShouldRedirect(true);
+      // React Error #310 해결: queueMicrotask로 상태 업데이트를 다음 마이크로태스크로 지연
+      queueMicrotask(() => {
+        startTransition(() => {
+          setIsCheckingAuth(false);
+          setIsUserAdmin(false);
+          setShouldRedirect(true);
+        });
       });
       return;
     }
@@ -58,54 +74,52 @@ export default function UserManagementPage() {
     let cancelled = false;
     isAdmin().then((admin) => {
       if (cancelled) return;
-      // React Error #310 해결: 모든 상태 업데이트를 startTransition으로 감싸기
-      startTransition(() => {
-        setIsUserAdmin(admin);
-        setIsCheckingAuth(false);
-        // Admin이 아니면 리다이렉트
-        if (!admin) {
-          setShouldRedirect(true);
-        }
+      // React Error #310 해결: queueMicrotask로 상태 업데이트를 다음 마이크로태스크로 지연
+      queueMicrotask(() => {
+        startTransition(() => {
+          setIsUserAdmin(admin);
+          setIsCheckingAuth(false);
+          // Admin이 아니면 리다이렉트
+          if (!admin) {
+            setShouldRedirect(true);
+          }
+        });
       });
-      // toast는 startTransition 밖에서 호출 (사이드 이펙트)
+      // toast는 queueMicrotask 밖에서 호출 (사이드 이펙트)
       if (!admin) {
-        toast.error('Admin 권한이 필요합니다.');
+        queueMicrotask(() => {
+          toast.error('Admin 권한이 필요합니다.');
+        });
       }
     }).catch((error) => {
       if (cancelled) return;
       console.error('[UserManagement] Admin check failed:', error);
-      // React Error #310 해결: 모든 상태 업데이트를 startTransition으로 감싸기
-      startTransition(() => {
-        setIsUserAdmin(false);
-        setIsCheckingAuth(false);
-        setShouldRedirect(true);
+      // React Error #310 해결: queueMicrotask로 상태 업데이트를 다음 마이크로태스크로 지연
+      queueMicrotask(() => {
+        startTransition(() => {
+          setIsUserAdmin(false);
+          setIsCheckingAuth(false);
+          setShouldRedirect(true);
+        });
       });
-      // toast는 startTransition 밖에서 호출 (사이드 이펙트)
-      toast.error('Admin 권한 확인에 실패했습니다. 다시 시도해주세요.');
+      // toast는 queueMicrotask 밖에서 호출 (사이드 이펙트)
+      queueMicrotask(() => {
+        toast.error('Admin 권한 확인에 실패했습니다. 다시 시도해주세요.');
+      });
     });
     
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, toast]);
+  }, [mounted, isAuthenticated, toast]);
   
-  // 리다이렉트 처리 (별도 useEffect로 분리)
+  // 5. 리다이렉트 처리 (별도 useEffect로 분리)
   useEffect(() => {
     if (shouldRedirect) {
+      // router.push는 startTransition 밖에서 호출 (리다이렉트는 즉시 필요)
       router.push('/dashboard');
     }
   }, [shouldRedirect, router]);
-  
-  // React Query hooks - 항상 호출 (조건부로만 사용)
-  // 중요: 모든 hooks는 조건부 return 전에 호출되어야 함
-  // Admin 권한이 확인된 후에만 데이터를 가져오도록 isUserAdmin 전달
-  // React Error #310 해결: useAdminUsers에 isUserAdmin을 전달하여 Admin 권한 확인 후에만 API 호출
-  const { data: users = [], isLoading, error } = useAdminUsers(isUserAdmin);
-  const { data: expandedUserData } = useAdminUser(expandedUser);
-  const createUserMutation = useCreateUser();
-  const updateUserMutation = useUpdateUser();
-  const deleteUserMutation = useDeleteUser();
-  const approveUserMutation = useApproveUser();
   
   // 인증 확인 중이거나 Admin 권한 확인 중이면 로딩 표시
   if (isCheckingAuth || isAuthenticated === null || isUserAdmin === null) {
