@@ -112,7 +112,10 @@ export default function UserManagementPage() {
     
     const handleClickOutside = (event: MouseEvent) => {
       if (!(event.target as Element).closest('.create-user-popup-container')) {
-        setShowCreateModal(false);
+        // React Error #310 해결: 상태 업데이트를 startTransition으로 감싸기
+        startTransition(() => {
+          setShowCreateModal(false);
+        });
       }
     };
     
@@ -223,8 +226,11 @@ export default function UserManagementPage() {
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('401') || errorMessage.includes('Authentication required') || 
           errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
-        toast.error('Admin access required');
-        router.push('/dashboard');
+        // React Error #310 해결: 상태 업데이트를 startTransition으로 감싸기
+        startTransition(() => {
+          toast.error('Admin access required');
+          router.push('/dashboard');
+        });
       }
     }
   }, [error, toast, router]);
