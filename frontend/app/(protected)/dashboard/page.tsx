@@ -441,7 +441,7 @@ export default function Home() {
                     type="text"
                     required
                     maxLength={100}
-                    pattern="[a-zA-Z0-9_\-]+"
+                    pattern="[-a-zA-Z0-9_]+"
                     className="w-full p-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                     value={editingVM.name || ''}
                     onChange={(e) => {
