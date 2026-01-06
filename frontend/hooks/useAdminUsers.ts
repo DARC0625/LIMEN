@@ -11,19 +11,14 @@ import { handleAuthError } from '../lib/utils/errorHelpers';
 
 /**
  * 사용자 목록 조회 훅 (Admin 전용)
- * @param isUserAdmin - Admin 권한이 확인되었는지 여부 (페이지 컴포넌트에서 전달)
  */
-export function useAdminUsers(isUserAdmin?: boolean | null) {
+export function useAdminUsers() {
   // hooks는 항상 같은 순서로 호출되어야 함
   const { isAuthenticated } = useAuth();
   const mounted = useMounted();
   
-  // React Error #310 해결: isUserAdmin이 명시적으로 true일 때만 API 호출
-  // isUserAdmin이 undefined이면 기존 로직 유지 (하위 호환성)
-  // isUserAdmin이 null이거나 false이면 API 호출하지 않음
-  const enabled = mounted && 
-                  isAuthenticated === true && 
-                  (isUserAdmin === undefined ? true : isUserAdmin === true);
+  // React Error #310 해결: 최소한의 조건만 확인
+  const enabled = mounted && isAuthenticated === true;
   
   // useQuery는 항상 호출되어야 함 (조건부 호출 금지)
   // React Error #310 해결: useQuery는 항상 같은 순서로 호출

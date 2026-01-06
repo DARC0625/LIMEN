@@ -26,89 +26,38 @@ export default function UserManagementPage() {
   const mounted = useMounted();
   const toast = useToast();
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
   
-  // 상태 관리 - 단순화
+  // 상태 관리 - 최소화
   const [expandedUser, setExpandedUser] = useState<number | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingUser, setEditingUser] = useState<number | null>(null);
-  const [isUserAdmin, setIsUserAdmin] = useState<boolean | null>(null);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   
-  // React Query hooks - 항상 호출
-  const { data: users = [], isLoading, error } = useAdminUsers(isUserAdmin === true ? true : false);
+  // React Query hooks - 항상 호출 (권한 확인 제거)
+  const { data: users = [], isLoading, error } = useAdminUsers();
   const { data: expandedUserData } = useAdminUser(expandedUser);
   const createUserMutation = useCreateUser();
   const updateUserMutation = useUpdateUser();
   const deleteUserMutation = useDeleteUser();
   const approveUserMutation = useApproveUser();
   
-  // 권한 확인 - 완전히 단순화된 로직
+  // 에러 처리 - 401/403이면 리다이렉트
   useEffect(() => {
-    // 마운트되지 않았으면 아무것도 하지 않음
-    if (!mounted) return;
+    if (!mounted || !error) return;
     
-    // 인증되지 않았으면 즉시 리다이렉트
-    if (isAuthenticated === false) {
-      setIsCheckingAuth(false);
-      setIsUserAdmin(false);
-      router.push('/dashboard');
-      return;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('401') || errorMessage.includes('Authentication required') || 
+        errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+      toast.error('Admin 권한이 필요합니다.');
+      setTimeout(() => router.push('/dashboard'), 1000);
     }
-    
-    // 인증 확인 중이면 대기
-    if (isAuthenticated === null) {
-      return;
-    }
-    
-    // 인증되었으면 Admin 권한 확인
-    let cancelled = false;
-    const checkAdmin = async () => {
-      try {
-        const admin = await isAdmin();
-        if (cancelled) return;
-        
-        setIsUserAdmin(admin);
-        setIsCheckingAuth(false);
-        
-        if (!admin) {
-          toast.error('Admin 권한이 필요합니다.');
-          setTimeout(() => router.push('/dashboard'), 1000);
-        }
-      } catch (error) {
-        if (cancelled) return;
-        console.error('[UserManagement] Admin check failed:', error);
-        setIsUserAdmin(false);
-        setIsCheckingAuth(false);
-        toast.error('Admin 권한 확인에 실패했습니다.');
-        setTimeout(() => router.push('/dashboard'), 1000);
-      }
-    };
-    
-    checkAdmin();
-    
-    return () => {
-      cancelled = true;
-    };
-  }, [mounted, isAuthenticated, router, toast]);
+  }, [mounted, error, router, toast]);
   
   // 로딩 상태
-  if (!mounted || isCheckingAuth || isAuthenticated === null || isUserAdmin === null) {
+  if (!mounted || isLoading) {
     return (
       <div className="min-h-screen p-8 bg-gray-50 text-gray-900 font-sans">
         <main className="max-w-6xl mx-auto flex flex-col gap-8">
-          <Loading message="Checking permissions..." size="md" />
-        </main>
-      </div>
-    );
-  }
-  
-  // Admin이 아니면 리다이렉트
-  if (isAuthenticated === false || isUserAdmin === false) {
-    return (
-      <div className="min-h-screen p-8 bg-gray-50 text-gray-900 font-sans">
-        <main className="max-w-6xl mx-auto flex flex-col gap-8">
-          <Loading message="Redirecting..." size="md" />
+          <Loading message="Loading..." size="md" />
         </main>
       </div>
     );
