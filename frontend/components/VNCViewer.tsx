@@ -1259,13 +1259,13 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-2 text-gray-300">
-                      Select ISO File
+                      Select Media File
                     </label>
                     {isLoadingISOs ? (
                       <div className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-400 text-sm">
-                        Loading ISO list...
+                        Loading media list...
                       </div>
-                    ) : availableISOs.length > 0 ? (
+                    ) : (availableISOs.length > 0 || availableVMDisks.length > 0) ? (
                       <select
                         value={isoPath}
                         onChange={(e) => setIsoPath(e.target.value)}
@@ -1277,12 +1277,25 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
                         }}
                         autoFocus
                       >
-                        <option value="">-- Select ISO --</option>
-                        {availableISOs.map((iso, index) => (
-                          <option key={index} value={iso.path}>
-                            {iso.name} ({(iso.size / 1024 / 1024 / 1024).toFixed(2)} GB)
-                          </option>
-                        ))}
+                        <option value="">-- Select Media --</option>
+                        {availableISOs.length > 0 && (
+                          <optgroup label="ISO Files">
+                            {availableISOs.map((iso, index) => (
+                              <option key={`iso-${index}`} value={iso.path}>
+                                {iso.name} ({(iso.size / 1024 / 1024 / 1024).toFixed(2)} GB)
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {availableVMDisks.length > 0 && (
+                          <optgroup label="VM Disks">
+                            {availableVMDisks.map((disk, index) => (
+                              <option key={`disk-${index}`} value={disk.path}>
+                                {disk.name} - {disk.vm_name} ({(disk.size_gb || disk.size / 1024 / 1024 / 1024).toFixed(2)} GB)
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                     ) : (
                       <div className="space-y-2">
@@ -1302,7 +1315,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
                           autoFocus
                         />
                         <p className="text-xs text-gray-500">
-                          No ISO files found. Enter path manually.
+                          No media files found. Enter path manually.
                         </p>
                       </div>
                     )}
