@@ -1,9 +1,10 @@
 'use client';
 
-// 동적 렌더링 강제
+// 클라이언트 전용 렌더링 강제
 export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
 
-import React, { useState, useEffect, startTransition } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAdmin } from '../../../../lib/api';
 import { useToast } from '../../../../components/ToastContainer';
@@ -21,110 +22,80 @@ import type { UpdateUserRequest } from '../../../../lib/types';
 import Loading from '../../../../components/Loading';
 
 export default function UserManagementPage() {
-  // React Error #310 완전 해결: 모든 hooks를 항상 같은 순서로 호출
-  // 1. 기본 hooks
+  // 클라이언트 마운트 확인
   const mounted = useMounted();
   const toast = useToast();
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   
-  // 2. 상태 hooks
+  // 상태 관리 - 단순화
   const [expandedUser, setExpandedUser] = useState<number | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingUser, setEditingUser] = useState<number | null>(null);
   const [isUserAdmin, setIsUserAdmin] = useState<boolean | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [shouldRedirect, setShouldRedirect] = useState(false);
   
-  // 3. React Query hooks - 항상 호출 (조건부로만 사용)
-  // React Error #310 해결: useAdminUsers에 isUserAdmin을 전달하여 Admin 권한 확인 후에만 API 호출
-  const { data: users = [], isLoading, error } = useAdminUsers(isUserAdmin);
+  // React Query hooks - 항상 호출
+  const { data: users = [], isLoading, error } = useAdminUsers(isUserAdmin === true ? true : false);
   const { data: expandedUserData } = useAdminUser(expandedUser);
   const createUserMutation = useCreateUser();
   const updateUserMutation = useUpdateUser();
   const deleteUserMutation = useDeleteUser();
   const approveUserMutation = useApproveUser();
   
-  // 4. 인증 및 Admin 권한 확인
-  // React Error #310 해결: queueMicrotask와 startTransition을 사용하여 hydration mismatch 방지
+  // 권한 확인 - 완전히 단순화된 로직
   useEffect(() => {
     // 마운트되지 않았으면 아무것도 하지 않음
     if (!mounted) return;
     
-    // 인증 상태 확인
-    if (isAuthenticated === null) {
-      // 아직 확인 중이면 상태 유지
+    // 인증되지 않았으면 즉시 리다이렉트
+    if (isAuthenticated === false) {
+      setIsCheckingAuth(false);
+      setIsUserAdmin(false);
+      router.push('/dashboard');
       return;
     }
     
-    // 인증되지 않았으면 리다이렉트
-    if (isAuthenticated === false) {
-      // React Error #310 해결: queueMicrotask로 상태 업데이트를 다음 마이크로태스크로 지연
-      queueMicrotask(() => {
-        startTransition(() => {
-          setIsCheckingAuth(false);
-          setIsUserAdmin(false);
-          setShouldRedirect(true);
-        });
-      });
+    // 인증 확인 중이면 대기
+    if (isAuthenticated === null) {
       return;
     }
     
     // 인증되었으면 Admin 권한 확인
     let cancelled = false;
-    isAdmin().then((admin) => {
-      if (cancelled) return;
-      // React Error #310 해결: queueMicrotask로 상태 업데이트를 다음 마이크로태스크로 지연
-      queueMicrotask(() => {
-        startTransition(() => {
-          setIsUserAdmin(admin);
-          setIsCheckingAuth(false);
-          // Admin이 아니면 리다이렉트
-          if (!admin) {
-            setShouldRedirect(true);
-          }
-        });
-      });
-      // toast는 queueMicrotask 밖에서 호출 (사이드 이펙트)
-      if (!admin) {
-        queueMicrotask(() => {
+    const checkAdmin = async () => {
+      try {
+        const admin = await isAdmin();
+        if (cancelled) return;
+        
+        setIsUserAdmin(admin);
+        setIsCheckingAuth(false);
+        
+        if (!admin) {
           toast.error('Admin 권한이 필요합니다.');
-        });
+          setTimeout(() => router.push('/dashboard'), 1000);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        console.error('[UserManagement] Admin check failed:', error);
+        setIsUserAdmin(false);
+        setIsCheckingAuth(false);
+        toast.error('Admin 권한 확인에 실패했습니다.');
+        setTimeout(() => router.push('/dashboard'), 1000);
       }
-    }).catch((error) => {
-      if (cancelled) return;
-      console.error('[UserManagement] Admin check failed:', error);
-      // React Error #310 해결: queueMicrotask로 상태 업데이트를 다음 마이크로태스크로 지연
-      queueMicrotask(() => {
-        startTransition(() => {
-          setIsUserAdmin(false);
-          setIsCheckingAuth(false);
-          setShouldRedirect(true);
-        });
-      });
-      // toast는 queueMicrotask 밖에서 호출 (사이드 이펙트)
-      queueMicrotask(() => {
-        toast.error('Admin 권한 확인에 실패했습니다. 다시 시도해주세요.');
-      });
-    });
+    };
+    
+    checkAdmin();
     
     return () => {
       cancelled = true;
     };
-  }, [mounted, isAuthenticated, toast]);
+  }, [mounted, isAuthenticated, router, toast]);
   
-  // 5. 리다이렉트 처리 (별도 useEffect로 분리)
-  useEffect(() => {
-    if (shouldRedirect) {
-      // router.push는 startTransition 밖에서 호출 (리다이렉트는 즉시 필요)
-      router.push('/dashboard');
-    }
-  }, [shouldRedirect, router]);
-  
-  // 인증 확인 중이거나 Admin 권한 확인 중이면 로딩 표시
-  if (isCheckingAuth || isAuthenticated === null || isUserAdmin === null) {
+  // 로딩 상태
+  if (!mounted || isCheckingAuth || isAuthenticated === null || isUserAdmin === null) {
     return (
-      <div className="min-h-screen p-8 bg-gray-50 text-gray-900 font-sans transition-colors">
+      <div className="min-h-screen p-8 bg-gray-50 text-gray-900 font-sans">
         <main className="max-w-6xl mx-auto flex flex-col gap-8">
           <Loading message="Checking permissions..." size="md" />
         </main>
@@ -132,10 +103,10 @@ export default function UserManagementPage() {
     );
   }
   
-  // Admin이 아니면 리다이렉트 중 (조건부 렌더링으로 처리)
-  if (isAuthenticated === false || isUserAdmin === false || shouldRedirect) {
+  // Admin이 아니면 리다이렉트
+  if (isAuthenticated === false || isUserAdmin === false) {
     return (
-      <div className="min-h-screen p-8 bg-gray-50 text-gray-900 font-sans transition-colors">
+      <div className="min-h-screen p-8 bg-gray-50 text-gray-900 font-sans">
         <main className="max-w-6xl mx-auto flex flex-col gap-8">
           <Loading message="Redirecting..." size="md" />
         </main>
@@ -145,11 +116,10 @@ export default function UserManagementPage() {
 
   // 외부 클릭 시 Create User 팝업 닫기
   useEffect(() => {
-    if (!showCreateModal) return; // showCreateModal이 false면 아무것도 하지 않음
+    if (!showCreateModal) return;
     
     const handleClickOutside = (event: MouseEvent) => {
       if (!(event.target as Element).closest('.create-user-popup-container')) {
-        // React Error #310 해결: startTransition 제거 (불필요한 복잡성 제거)
         setShowCreateModal(false);
       }
     };
@@ -177,11 +147,7 @@ export default function UserManagementPage() {
       { username, password, role: role || 'user' },
       {
         onSuccess: () => {
-          // React Error #321 완전 해결: 상태 업데이트를 startTransition으로 감싸기
-          startTransition(() => {
-            setShowCreateModal(false);
-          });
-          // 폼 리셋은 DOM 조작이므로 startTransition 불필요
+          setShowCreateModal(false);
           (e.target as HTMLFormElement).reset();
         },
       }
@@ -209,10 +175,7 @@ export default function UserManagementPage() {
       { id: editingUser, data: updateData },
       {
         onSuccess: () => {
-          // React Error #321 완전 해결: 상태 업데이트를 startTransition으로 감싸기
-          startTransition(() => {
-            setEditingUser(null);
-          });
+          setEditingUser(null);
         },
       }
     );
@@ -221,7 +184,6 @@ export default function UserManagementPage() {
   const handleDeleteUser = (userId: number, username: string) => {
     if (!confirm(`Are you sure you want to delete user "${username}"?`)) return;
 
-    // Optimistic update는 mutation에서 처리됨
     if (expandedUser === userId) {
       setExpandedUser(null);
     }
@@ -255,25 +217,16 @@ export default function UserManagementPage() {
     }
   };
 
-  // 에러 처리: 401/403 에러 시 대시보드로 리다이렉트
+  // 에러 처리
   useEffect(() => {
-    // React Error #310 해결: 조건을 더 명확하게 설정하고, 상태 업데이트를 분리
-    if (!error || isUserAdmin !== true) {
-      return; // 에러가 없거나 Admin 권한이 확인되지 않았으면 처리하지 않음
-    }
+    if (!error || isUserAdmin !== true) return;
     
-    // Admin 권한이 확인된 후에만 에러 처리 (권한 확인 중 에러는 무시)
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (errorMessage.includes('401') || errorMessage.includes('Authentication required') || 
         errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
-      // React Error #310 해결: router.push와 toast를 분리하여 처리
       toast.error('인증이 만료되었습니다. 다시 로그인해주세요.');
-      // router.push는 startTransition 밖에서 호출 (리다이렉트는 즉시 필요)
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 100);
+      setTimeout(() => router.push('/dashboard'), 1000);
     } else {
-      // 기타 에러는 사용자에게 표시
       const friendlyMessage = errorMessage.includes('Network') || errorMessage.includes('fetch')
         ? '네트워크 오류가 발생했습니다. 연결을 확인하고 다시 시도해주세요.'
         : `오류가 발생했습니다: ${errorMessage}`;
@@ -281,20 +234,9 @@ export default function UserManagementPage() {
     }
   }, [error, isUserAdmin, toast, router]);
 
-  // Admin 권한이 확인되지 않았으면 로딩 표시 (리다이렉트 중)
-  if (isUserAdmin !== true) {
-    return (
-      <div className="min-h-screen p-8 bg-gray-50 text-gray-900 font-sans transition-colors">
-        <main className="max-w-6xl mx-auto flex flex-col gap-8">
-          <Loading message="Checking permissions..." size="md" />
-        </main>
-      </div>
-    );
-  }
-
   if (isLoading) {
     return (
-      <div className="min-h-screen p-8 bg-gray-50 text-gray-900 font-sans transition-colors">
+      <div className="min-h-screen p-8 bg-gray-50 text-gray-900 font-sans">
         <main className="max-w-6xl mx-auto flex flex-col gap-8">
           <Loading message="Loading users..." size="md" />
         </main>
@@ -324,7 +266,6 @@ export default function UserManagementPage() {
               >
                 + New User
               </button>
-              {/* Create User Popup */}
               {showCreateModal && (
                 <div 
                   className="absolute right-0 top-full mt-2 z-50 bg-white p-6 rounded-xl shadow-lg border border-gray-200 w-80 transition-all"
