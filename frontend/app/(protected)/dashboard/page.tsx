@@ -555,7 +555,28 @@ export default function Home() {
           {/* VM List Section */}
           <VMListSection 
             onAction={handleAction}
-            onEdit={setEditingVM}
+            onEdit={(vm) => {
+              // 최신 VM 데이터를 React Query 캐시에서 가져와서 설정
+              if (vm) {
+                const currentVMs = queryClient.getQueryData<VM[]>(['vms']);
+                const latestVM = currentVMs?.find(v => v.uuid === vm.uuid);
+                if (latestVM) {
+                  window.console.log('[onEdit] Using latest VM data from cache:', {
+                    uuid: latestVM.uuid,
+                    name: latestVM.name,
+                    cpu: latestVM.cpu,
+                    memory: latestVM.memory,
+                    boot_order: latestVM.boot_order,
+                  });
+                  setEditingVM(latestVM);
+                } else {
+                  window.console.log('[onEdit] VM not found in cache, using provided VM:', vm);
+                  setEditingVM(vm);
+                }
+              } else {
+                setEditingVM(null);
+              }
+            }}
             processingId={processingId}
             editingVM={editingVM}
             selectedVMForSnapshot={selectedVMForSnapshot}
