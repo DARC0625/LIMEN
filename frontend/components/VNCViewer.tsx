@@ -72,26 +72,6 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
   const BASE_RECONNECT_DELAY = 1000; // 1초부터 시작
   const MAX_RECONNECT_DELAY = 30000; // 최대 30초
 
-  // VM Restart - React Error #321 fix: Remove useCallback
-  const handleRestart = async () => {
-    if (isProcessing) return;
-    if (!confirm('Restart VM? Media state will be preserved.')) {
-      return;
-    }
-
-    setIsProcessing(true);
-    setStatus('Restarting...');
-    try {
-      await vmAPI.action(uuid, 'restart', {});
-      setStatus('VM restarting... Connection will resume shortly.');
-      // Auto-reconnect after restart is handled by WebSocket
-    } catch (error: unknown) {
-        handleError(error, { component: 'VNCViewer', action: 'restart' });
-      setStatus(`Error: ${getErrorMessage(error)}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   // Available ISO files
   const [availableISOs, setAvailableISOs] = useState<Array<{ name: string; path: string; size: number; modified: string }>>([]);
@@ -513,11 +493,20 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
           return;
         }
         
-        logger.log('[VNCViewer] VM status:', vm.status);
+        logger.log('[VNCViewer] VM status check:', {
+          uuid,
+          status: vm.status,
+          fullVM: vm,
+          allVMs: vms.map(v => ({ uuid: v.uuid, status: v.status, name: v.name }))
+        });
         
         if (vm.status !== 'Running') {
           setStatus(`VM is not running. Current status: ${vm.status}. Please start the VM first.`);
-          logger.log(`[VNCViewer] VM is not running (status: ${vm.status}), aborting VNC connection`);
+          logger.log(`[VNCViewer] VM is not running (status: ${vm.status}), aborting VNC connection`, {
+            uuid,
+            status: vm.status,
+            allVMs: vms.map(v => ({ uuid: v.uuid, status: v.status }))
+          });
           return;
         }
         
@@ -884,15 +873,27 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
                 }
                 
                 const vm = vms.find(v => v.uuid === uuid);
-                logger.log('[VNCViewer] VM status check:', { found: !!vm, status: vm?.status });
+                logger.log('[VNCViewer] VM status check (reconnect):', {
+                  uuid,
+                  found: !!vm,
+                  status: vm?.status,
+                  fullVM: vm,
+                  allVMs: vms.map(v => ({ uuid: v.uuid, status: v.status, name: v.name }))
+                });
                 
                 if (!vm) {
                   setStatus('VM not found');
+                  logger.warn('[VNCViewer] VM not found during reconnect check', { uuid, allVMs: vms.map(v => v.uuid) });
                   return false;
                 }
                 
                 if (vm.status !== 'Running') {
                   setStatus(`VM is not running. Current status: ${vm.status}. Please start the VM first.`);
+                  logger.log(`[VNCViewer] VM is not running during reconnect (status: ${vm.status})`, {
+                    uuid,
+                    status: vm.status,
+                    allVMs: vms.map(v => ({ uuid: v.uuid, status: v.status }))
+                  });
                   return false;
                 }
                 
@@ -1121,18 +1122,6 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
             </div>
           </div>
           <div className="flex items-center gap-2 relative">
-            {/* Restart Button */}
-            <button
-              onClick={handleRestart}
-              disabled={isProcessing}
-              className="p-2 bg-gray-800 border border-gray-700 rounded-md hover:bg-gray-700 text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Restart VM (Media state preserved)"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-            
             {/* Media Management Dropdown */}
             <div className="relative media-menu-container">
               <button
@@ -1336,16 +1325,6 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
             zIndex: 50
           }}
         >
-          <button
-            onClick={handleRestart}
-            disabled={isProcessing}
-            className="p-2 bg-gray-900/80 backdrop-blur-sm border border-gray-700 rounded-md hover:bg-gray-800 text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Restart VM"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
           <div className="relative media-menu-container">
             <button
               onClick={() => setShowMediaMenu(!showMediaMenu)}
