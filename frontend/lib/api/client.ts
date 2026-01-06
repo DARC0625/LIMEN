@@ -365,7 +365,24 @@ async function handleResponse<T>(
       }
     } catch (refreshError) {
       // 토큰 갱신 실패
+      const refreshErrorMessage = refreshError instanceof Error ? refreshError.message : String(refreshError);
       logger.warn('[apiRequest] Token refresh failed:', refreshError);
+      
+      // Refresh token이 만료되었거나 유효하지 않은 경우
+      if (refreshErrorMessage.includes('Invalid or expired refresh token') || 
+          refreshErrorMessage.includes('expired') ||
+          refreshErrorMessage.includes('invalid')) {
+        // 토큰 클리어 및 로그인 페이지로 리다이렉트
+        tokenManager.clearTokens();
+        
+        if (typeof window !== 'undefined') {
+          logger.warn('[apiRequest] Refresh token expired, redirecting to login');
+          // AuthGuard가 자동으로 처리하도록 하기 위해 약간의 지연을 두고 리다이렉트
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 100);
+        }
+      }
     }
 
     // 토큰 갱신 실패 또는 재시도 실패

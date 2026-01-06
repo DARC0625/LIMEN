@@ -177,7 +177,27 @@ class TokenManager {
       return data.access_token;
     } catch (error) {
       logger.error(error instanceof Error ? error : new Error(String(error)), { component: 'tokenManager', action: 'refresh_token' });
-      this.clearTokens();
+      
+      // Refresh token이 만료되었거나 유효하지 않은 경우
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Invalid or expired refresh token') || 
+          errorMessage.includes('expired') ||
+          errorMessage.includes('invalid')) {
+        logger.warn('[tokenManager] Refresh token expired or invalid, clearing tokens and redirecting to login');
+        this.clearTokens();
+        
+        // 로그인 페이지로 리다이렉트 (클라이언트 사이드에서만)
+        if (typeof window !== 'undefined') {
+          // AuthGuard가 자동으로 처리하도록 하기 위해 약간의 지연을 두고 리다이렉트
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 100);
+        }
+      } else {
+        // 기타 에러는 토큰만 클리어
+        this.clearTokens();
+      }
+      
       throw error;
     }
   }
