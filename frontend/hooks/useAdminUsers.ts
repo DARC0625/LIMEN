@@ -57,10 +57,17 @@ export function useAdminUsers() {
  * 사용자 상세 조회 훅 (VM 목록 포함)
  */
 export function useAdminUser(userId: number | null) {
+  // React Error #310 해결: useAuth와 useMounted를 항상 호출하여 hooks 순서 일관성 유지
+  const { isAuthenticated } = useAuth();
+  const mounted = useMounted();
+  
+  // enabled 조건: mounted, authenticated, userId가 모두 있어야 함
+  const enabled = mounted && isAuthenticated === true && !!userId;
+  
   return useQuery({
     queryKey: ['admin', 'users', userId],
     queryFn: () => adminAPI.getUser(userId!),
-    enabled: !!userId, // userId가 있을 때만 실행
+    enabled: enabled,
     staleTime: 30000,
   });
 }

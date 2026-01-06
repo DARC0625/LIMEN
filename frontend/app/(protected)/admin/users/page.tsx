@@ -108,10 +108,8 @@ export default function UserManagementPage() {
     
     const handleClickOutside = (event: MouseEvent) => {
       if (!(event.target as Element).closest('.create-user-popup-container')) {
-        // React Error #310 해결: 상태 업데이트를 startTransition으로 감싸기
-        startTransition(() => {
-          setShowCreateModal(false);
-        });
+        // React Error #310 해결: startTransition 제거 (불필요한 복잡성 제거)
+        setShowCreateModal(false);
       }
     };
     
