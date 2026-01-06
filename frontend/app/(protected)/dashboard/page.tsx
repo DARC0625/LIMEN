@@ -287,9 +287,14 @@ export default function Home() {
         );
       });
       
-      // 편집 모달 닫기
+      // 편집 모달은 닫지 않음 (Update 버튼으로만 닫히도록)
+      // editingVM 상태만 업데이트
       if (editingVM?.uuid === uuid) {
-        setEditingVM(null);
+        setEditingVM({
+          ...editingVM,
+          boot_order: 'hdd-only' as BootOrder,
+          installation_status: 'installed' as const
+        });
       }
       
       // VM 목록 새로고침

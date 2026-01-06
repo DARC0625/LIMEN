@@ -37,11 +37,19 @@ export default function BootOrderSelector({ value, onChange, disabled = false }:
     onChange(newValue);
   };
 
+  // 현재 선택된 부팅 순서의 라벨 찾기
+  const currentLabel = bootOrderOptions.find(opt => opt.value === selectedValue)?.label || 'HDD만';
+  
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700">
-        부팅 순서
-      </label>
+      <div className="flex items-center justify-between">
+        <label className="block text-sm font-medium text-gray-700">
+          부팅 순서
+        </label>
+        <span className="text-xs font-semibold text-cyan-600 bg-cyan-50 px-2 py-1 rounded">
+          현재: {currentLabel}
+        </span>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {bootOrderOptions.map((option) => (
           <button
