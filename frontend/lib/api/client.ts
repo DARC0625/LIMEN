@@ -287,6 +287,26 @@ async function handleResponse<T>(
       // 응답 본문 읽기 실패는 무시
     }
     
+    // wait 관련 응답인지 확인
+    const isWaitError = errorMessage.toLowerCase().includes('wait') || 
+                        errorMessage.toLowerCase().includes('retry') ||
+                        errorMessage.toLowerCase().includes('please wait') ||
+                        (errorDetails && (
+                          (errorDetails.error && typeof errorDetails.error === 'string' && errorDetails.error.toLowerCase().includes('wait')) ||
+                          (errorDetails.message && typeof errorDetails.message === 'string' && errorDetails.message.toLowerCase().includes('wait'))
+                        ));
+    
+    if (isWaitError) {
+      // wait 관련 오류는 특별한 에러 타입으로 표시
+      const waitError: APIError = new Error(errorMessage);
+      waitError.status = 500;
+      (waitError as any).isWaitError = true;
+      if (errorDetails) {
+        (waitError as any).details = errorDetails;
+      }
+      throw waitError;
+    }
+    
     window.console.error('[handleResponse] 500 Internal Server Error:', {
       endpoint,
       url,

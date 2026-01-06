@@ -148,12 +148,20 @@ export default function Home() {
   const queryClient = useQueryClient();
 
   // 부팅 순서 변경 핸들러
-  const handleBootOrderChange = async (uuid: string, bootOrder: BootOrder) => {
-    window.console.log('[handleBootOrderChange] Called:', { uuid, bootOrder });
+  const handleBootOrderChange = async (uuid: string, bootOrder: BootOrder, retryCount: number = 0) => {
+    window.console.log('[handleBootOrderChange] Called:', { uuid, bootOrder, retryCount });
+    
+    // 대기 상태 표시
+    setProcessingId(uuid);
+    
     try {
       window.console.log('[handleBootOrderChange] Calling API...');
       const updatedVM = await vmAPI.setBootOrder(uuid, bootOrder);
       window.console.log('[handleBootOrderChange] API success:', updatedVM);
+      
+      // 성공 시 처리 ID 제거
+      setProcessingId(null);
+      
       toast.success('부팅 순서가 변경되었습니다.');
       // React Query 자동 갱신
       startTransition(() => {
@@ -168,12 +176,40 @@ export default function Home() {
       window.console.error('[handleBootOrderChange] API error:', error);
       console.error('[handleBootOrderChange] API error:', error);
       
+      const apiError = error as any;
+      
+      // wait 관련 오류인지 확인
+      if (apiError.isWaitError) {
+        window.console.log('[handleBootOrderChange] Wait error detected, will retry...');
+        
+        // 최대 5번까지 재시도 (약 25초)
+        if (retryCount < 5) {
+          const delay = (retryCount + 1) * 5000; // 5초, 10초, 15초, 20초, 25초
+          window.console.log(`[handleBootOrderChange] Retrying in ${delay / 1000} seconds...`);
+          
+          toast.info(`대기 중... (${retryCount + 1}/5)`, { duration: delay });
+          
+          setTimeout(() => {
+            handleBootOrderChange(uuid, bootOrder, retryCount + 1);
+          }, delay);
+          
+          return; // 처리 ID는 유지 (대기 상태 표시)
+        } else {
+          // 최대 재시도 횟수 초과
+          setProcessingId(null);
+          toast.error('부팅 순서 변경 대기 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+          return;
+        }
+      }
+      
+      // 일반 에러 처리
+      setProcessingId(null);
+      
       let errorMessage = '부팅 순서 변경 실패';
       if (error instanceof Error) {
         errorMessage = error.message;
         
         // 백엔드에서 제공한 상세 에러 정보 확인
-        const apiError = error as any;
         if (apiError.details) {
           const details = apiError.details;
           if (details.error || details.message) {
@@ -195,12 +231,15 @@ export default function Home() {
     }
   };
 
-  const handleFinalizeInstall = async (uuid: string) => {
-    window.console.log('[handleFinalizeInstall] Called with uuid:', uuid);
+  const handleFinalizeInstall = async (uuid: string, retryCount: number = 0) => {
+    window.console.log('[handleFinalizeInstall] Called with uuid:', uuid, 'retryCount:', retryCount);
     
-    if (!confirm('Finalize installation?\n\nThis will:\n- Remove CDROM device\n- Set boot order to HDD only\n- Mark installation as complete\n\nVM will be shut down if running.')) {
-      window.console.log('[handleFinalizeInstall] User cancelled');
-      return;
+    // 첫 호출 시에만 확인 다이얼로그 표시
+    if (retryCount === 0) {
+      if (!confirm('Finalize installation?\n\nThis will:\n- Remove CDROM device\n- Set boot order to HDD only\n- Mark installation as complete\n\nVM will be shut down if running.')) {
+        window.console.log('[handleFinalizeInstall] User cancelled');
+        return;
+      }
     }
 
     window.console.log('[handleFinalizeInstall] Starting finalize install...');
@@ -209,6 +248,10 @@ export default function Home() {
       window.console.log('[handleFinalizeInstall] Calling API...');
       const result = await vmAPI.finalizeInstall(uuid);
       window.console.log('[handleFinalizeInstall] API success:', result);
+      
+      // 성공 시 처리 ID 제거
+      setProcessingId(null);
+      
       toast.success(result.message || 'Installation finalized successfully');
       
       // React Query 캐시 업데이트
@@ -236,12 +279,40 @@ export default function Home() {
       window.console.error('[handleFinalizeInstall] API error:', error);
       console.error('[handleFinalizeInstall] API error:', error);
       
+      const apiError = error as any;
+      
+      // wait 관련 오류인지 확인
+      if (apiError.isWaitError) {
+        window.console.log('[handleFinalizeInstall] Wait error detected, will retry...');
+        
+        // 최대 5번까지 재시도 (약 25초)
+        if (retryCount < 5) {
+          const delay = (retryCount + 1) * 5000; // 5초, 10초, 15초, 20초, 25초
+          window.console.log(`[handleFinalizeInstall] Retrying in ${delay / 1000} seconds...`);
+          
+          toast.info(`대기 중... (${retryCount + 1}/5)`, { duration: delay });
+          
+          setTimeout(() => {
+            handleFinalizeInstall(uuid, retryCount + 1);
+          }, delay);
+          
+          return; // 처리 ID는 유지 (대기 상태 표시)
+        } else {
+          // 최대 재시도 횟수 초과
+          setProcessingId(null);
+          toast.error('설치 완료 처리 대기 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+          return;
+        }
+      }
+      
+      // 일반 에러 처리
+      setProcessingId(null);
+      
       let errorMessage = 'Failed to finalize installation';
       if (error instanceof Error) {
         errorMessage = error.message;
         
         // 백엔드에서 제공한 상세 에러 정보 확인
-        const apiError = error as any;
         if (apiError.details) {
           const details = apiError.details;
           if (details.error || details.message) {
@@ -260,8 +331,6 @@ export default function Home() {
       if (errorMessage.includes('\n')) {
         window.console.error('[handleFinalizeInstall] Full error message:', errorMessage);
       }
-    } finally {
-      setProcessingId(null);
     }
   };
 
