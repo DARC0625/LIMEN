@@ -357,7 +357,8 @@ export default function RootLayout({
                   const scripts = document.querySelectorAll('script[src]');
                   scripts.forEach(function(script) {
                     script.addEventListener('error', function(e) {
-                      const src = (e.target as HTMLScriptElement)?.src;
+                      const target = e.target;
+                      const src = target && target.tagName === 'SCRIPT' ? target.src : null;
                       if (src && (src.includes('/_next/static/chunks/') || src.includes('/next/static/chunks/'))) {
                         console.warn('[Script Load] 스크립트 로드 실패 감지:', src);
                         // 손상된 콘텐츠로 간주하고 즉시 새로고침
