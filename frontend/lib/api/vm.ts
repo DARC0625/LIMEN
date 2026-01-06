@@ -82,11 +82,14 @@ export const vmAPI = {
       vnc_enabled?: boolean;
     }
     
+    // 백엔드 호환성: windows11을 windows로 변환
+    const backendOsType = vm.os_type === 'windows11' ? 'windows' : vm.os_type;
+    
     const vmData: VMCreateData = {
       name: vm.name,
       cpu: vm.cpu,
       memory: vm.memory,
-      os_type: vm.os_type,
+      os_type: backendOsType,
     };
     
     // Add VNC graphics configuration (if explicitly specified)
@@ -150,7 +153,8 @@ export const vmAPI = {
         body.name = options.name.trim();
       }
       if (options.os_type !== undefined && options.os_type !== null) {
-        body.os_type = options.os_type;
+        // 백엔드 호환성: windows11을 windows로 변환
+        body.os_type = options.os_type === 'windows11' ? 'windows' : options.os_type;
       }
       // Add VNC graphics configuration
       if (options.graphics_type !== undefined) {
