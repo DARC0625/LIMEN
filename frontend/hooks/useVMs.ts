@@ -428,6 +428,18 @@ export function useVMAction() {
           // 백엔드는 delete 액션에 대해 VM 객체가 아닌 메시지만 반환하므로
           // 목록에서 직접 제거
           
+          // protectedVMStates에서 삭제된 VM 제거
+          protectedVMStates.delete(variables.uuid);
+          // localStorage에서도 제거
+          try {
+            const protectedStates = JSON.parse(localStorage.getItem('protectedVMStates') || '{}');
+            delete protectedStates[variables.uuid];
+            localStorage.setItem('protectedVMStates', JSON.stringify(protectedStates));
+            window.console.log('[useVMAction] Delete: Removed from protectedVMStates:', { uuid: variables.uuid });
+          } catch (e) {
+            // localStorage 제거 실패는 무시
+          }
+          
           // 캐시에서 VM 목록 가져오기
           const currentVMs = queryClient.getQueryData<VM[]>(['vms']);
           
@@ -437,35 +449,38 @@ export function useVMAction() {
             deletedUUID: variables.uuid,
           });
           
-          // 캐시가 비어있거나 없으면 서버에서 가져오기
-          if (!currentVMs || currentVMs.length === 0) {
-            window.console.log('[useVMAction] Delete: Cache is empty, will fetch from server after delay');
-            // 할당량만 무효화 (VM 목록은 나중에 가져옴)
-            queryClient.invalidateQueries({ queryKey: ['quota'] });
-            
-            // 성공 토스트 표시
-            queueMicrotask(() => {
-              toast.success('VM deleted successfully');
+          // 캐시에 VM 목록이 있으면 필터링
+          if (currentVMs && currentVMs.length > 0) {
+            queryClient.setQueryData<VM[]>(['vms'], (old) => {
+              if (!old) return [];
+              
+              const filtered = old.filter(v => v.uuid !== variables.uuid);
+              
+              window.console.log('[useVMAction] Delete: VM list updated:', {
+                beforeCount: old.length,
+                afterCount: filtered.length,
+                deletedUUID: variables.uuid,
+                removedCount: old.length - filtered.length,
+              });
+              
+              return filtered;
             });
-            return; // 여기서 종료 (나중에 백그라운드 폴링이 최신 목록을 가져옴)
           }
           
-          // 캐시에 VM 목록이 있으면 필터링
-          queryClient.setQueryData<VM[]>(['vms'], (old) => {
-            if (!old) return [];
-            
-            const filtered = old.filter(v => v.uuid !== variables.uuid);
-            
-            window.console.log('[useVMAction] Delete: VM list updated:', {
-              beforeCount: old.length,
-              afterCount: filtered.length,
-              deletedUUID: variables.uuid,
-              removedCount: old.length - filtered.length,
-            });
-            
-            return filtered;
-          });
+          // 할당량 무효화
           queryClient.invalidateQueries({ queryKey: ['quota'] });
+          
+          // 삭제 성공 후 강제로 invalidateQueries 실행 (백엔드가 삭제를 완료한 후)
+          // 약간의 지연을 두어 백엔드가 완전히 삭제를 완료할 시간 확보
+          setTimeout(() => {
+            queueMicrotask(() => {
+              startTransition(() => {
+                window.console.log('[useVMAction] Delete: Forcing invalidateQueries after delay');
+                queryClient.invalidateQueries({ queryKey: ['vms'] });
+                queryClient.invalidateQueries({ queryKey: ['quota'] });
+              });
+            });
+          }, 1000); // 1초 지연
           
           // 성공 토스트 표시
           queueMicrotask(() => {
