@@ -225,7 +225,6 @@ export function useCreateVM() {
     
     // 에러 발생: 롤백
     onError: (error: unknown, variables, context) => {
-      const errorMessage = error instanceof Error ? error.message : String(error);
       // React Error #321 완전 해결: 비동기 처리
       queueMicrotask(() => {
         startTransition(() => {
@@ -238,9 +237,37 @@ export function useCreateVM() {
           }
         });
       });
+      
+      // 에러 메시지 처리
       queueMicrotask(() => {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        toast.error(`Error creating VM: ${errorMessage}`);
+        let errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // 500 에러인 경우 상세 정보 확인
+        if (error instanceof Error && (error as any).status === 500) {
+          const apiError = error as any;
+          if (apiError.details) {
+            const details = apiError.details;
+            // 백엔드에서 제공한 상세 에러 메시지 사용
+            if (details.error || details.message) {
+              errorMessage = `${errorMessage}\n${details.error || details.message}`;
+            }
+          }
+          
+          window.console.error('[useCreateVM] 500 Internal Server Error:', {
+            errorMessage,
+            errorDetails: apiError.details,
+            requestData: variables,
+          });
+        }
+        
+        // 에러 메시지를 여러 줄로 표시 (toast는 한 줄만 지원하므로 첫 줄만 표시)
+        const firstLine = errorMessage.split('\n')[0];
+        toast.error(`VM 생성 실패: ${firstLine}`);
+        
+        // 전체 에러 메시지는 콘솔에만 출력
+        if (errorMessage.includes('\n')) {
+          window.console.error('[useCreateVM] Full error message:', errorMessage);
+        }
       });
     },
     

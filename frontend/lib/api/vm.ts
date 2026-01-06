@@ -107,10 +107,61 @@ export const vmAPI = {
       }
     }
     
-    return apiRequest<VM>('/vms', {
-      method: 'POST',
-      body: JSON.stringify(vmData),
+    // VM 생성 요청 전 로깅
+    window.console.log('[vmAPI.create] Creating VM with data:', {
+      name: vmData.name,
+      cpu: vmData.cpu,
+      memory: vmData.memory,
+      os_type: vmData.os_type,
+      graphics_type: vmData.graphics_type,
+      vnc_enabled: vmData.vnc_enabled,
+      original_os_type: vm.os_type,
     });
+    
+    try {
+      const result = await apiRequest<VM>('/vms', {
+        method: 'POST',
+        body: JSON.stringify(vmData),
+      });
+      
+      window.console.log('[vmAPI.create] VM created successfully:', {
+        uuid: result.uuid,
+        name: result.name,
+        status: result.status,
+      });
+      
+      return result;
+    } catch (error) {
+      // 500 에러인 경우 상세 정보 로깅
+      if (error instanceof Error && (error as any).status === 500) {
+        const apiError = error as any;
+        window.console.error('[vmAPI.create] 500 Internal Server Error:', {
+          endpoint: '/vms',
+          method: 'POST',
+          errorMessage: apiError.message,
+          errorDetails: apiError.details,
+          requestData: vmData,
+        });
+        
+        // 백엔드에서 제공한 상세 에러 정보가 있으면 사용
+        if (apiError.details) {
+          const details = apiError.details;
+          let detailedMessage = apiError.message;
+          
+          if (details.error || details.message) {
+            detailedMessage = `${apiError.message}\n${details.error || details.message}`;
+          }
+          
+          // 더 구체적인 에러 메시지로 재생성
+          const enhancedError = new Error(detailedMessage);
+          (enhancedError as any).status = 500;
+          (enhancedError as any).details = details;
+          throw enhancedError;
+        }
+      }
+      
+      throw error;
+    }
   },
 
   /**
