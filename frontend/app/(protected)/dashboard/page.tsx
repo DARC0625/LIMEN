@@ -518,14 +518,14 @@ export default function Home() {
                     <div className="border border-gray-300 rounded-lg bg-gray-50 overflow-hidden">
                       <RevolverPicker
                         items={Array.from({ length: 32 }, (_, i) => i + 1)}
-                        value={editingVM.cpu}
+                        value={editingVM.cpu || 1}
                         onChange={(cpu) => setEditingVM({ ...editingVM, cpu })}
                         formatLabel={(v) => `${v}`}
                         itemHeight={40}
                         visibleItems={3}
                       />
                     </div>
-                    <p className="text-xs text-gray-500">Selected: {editingVM.cpu} core{editingVM.cpu !== 1 ? 's' : ''}</p>
+                    <p className="text-xs text-gray-500">Selected: {editingVM.cpu || 1} core{(editingVM.cpu || 1) !== 1 ? 's' : ''}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2 text-gray-700">
@@ -533,22 +533,17 @@ export default function Home() {
                     </label>
                     <div className="border border-gray-300 rounded-lg bg-gray-50 overflow-hidden">
                       <RevolverPicker
-                        items={Array.from({ length: 8 }, (_, i) => i + 1)}
-                        value={Math.round(editingVM.memory / 1024)}
+                        items={Array.from({ length: 160 }, (_, i) => i + 1)}
+                        value={Math.round((editingVM.memory || 1024) / 1024)}
                         onChange={(gb) => {
-                          const maxGB = 8; // 최대 8GB (8192 MB)
-                          const clampedGB = Math.min(gb, maxGB);
-                          setEditingVM({ ...editingVM, memory: clampedGB * 1024 });
-                          if (gb > maxGB) {
-                            toast.error(`Memory limit: Maximum ${maxGB} GB (8192 MB) per VM.`);
-                          }
+                          setEditingVM({ ...editingVM, memory: gb * 1024 });
                         }}
                         formatLabel={(v) => `${v} GB`}
                         itemHeight={40}
                         visibleItems={3}
                       />
                     </div>
-                    <p className="text-xs text-gray-500">Selected: {Math.round(editingVM.memory / 1024)} GB ({editingVM.memory} MB)</p>
+                    <p className="text-xs text-gray-500">Selected: {Math.round((editingVM.memory || 1024) / 1024)} GB ({editingVM.memory || 1024} MB)</p>
                   </div>
                 </div>
                 <div>
