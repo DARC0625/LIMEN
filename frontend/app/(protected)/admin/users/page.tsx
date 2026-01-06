@@ -40,41 +40,29 @@ export default function UserManagementPage() {
   const approveUserMutation = useApproveUser();
   
   // 인증 및 Admin 권한 확인 (hooks 호출 후에 처리)
-  // React Error #310 해결: useEffect를 두 개로 분리하여 dependency 최소화
+  // React Error #310 해결: 단일 useEffect로 통합하고, 상태 업데이트를 최소화
   useEffect(() => {
-    // 인증 상태만 확인
+    // 인증 상태 확인
     if (isAuthenticated === null) {
-      return; // 아직 확인 중
+      // 아직 확인 중이면 상태 유지
+      return;
     }
     
+    // 인증되지 않았으면 리다이렉트
     if (isAuthenticated === false) {
-      startTransition(() => {
-        setIsCheckingAuth(false);
-        setIsUserAdmin(false);
-      });
+      setIsCheckingAuth(false);
+      setIsUserAdmin(false);
       router.push('/dashboard');
       return;
     }
     
-    // 인증되었으면 Admin 권한 확인 시작
-    startTransition(() => {
-      setIsCheckingAuth(false);
-    });
-  }, [isAuthenticated, router]);
-  
-  // Admin 권한 확인 (인증된 경우에만 실행)
-  useEffect(() => {
-    if (isAuthenticated !== true) {
-      return; // 인증되지 않았으면 실행하지 않음
-    }
+    // 인증되었으면 Admin 권한 확인
+    setIsCheckingAuth(false);
     
-    // Admin 권한 확인
     let cancelled = false;
     isAdmin().then((admin) => {
       if (cancelled) return;
-      startTransition(() => {
-        setIsUserAdmin(admin);
-      });
+      setIsUserAdmin(admin);
       if (!admin) {
         toast.error('Admin access required');
         router.push('/dashboard');
@@ -82,9 +70,7 @@ export default function UserManagementPage() {
     }).catch((error) => {
       if (cancelled) return;
       console.error('[UserManagement] Admin check failed:', error);
-      startTransition(() => {
-        setIsUserAdmin(false);
-      });
+      setIsUserAdmin(false);
       toast.error('Admin access required');
       router.push('/dashboard');
     });
@@ -92,7 +78,7 @@ export default function UserManagementPage() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, toast, router]);
+  }, [isAuthenticated, router, toast]);
   
   // 인증 확인 중이거나 Admin 권한 확인 중이면 로딩 표시
   if (isCheckingAuth || isAuthenticated === null || isUserAdmin === null) {
