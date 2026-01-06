@@ -73,14 +73,11 @@ func (s *VMService) IsAlive() bool {
 
 func (s *VMService) EnsureISO(osType string) (string, error) {
 	var image models.VMImage
-	// For Windows, prefer Windows 10 ISO if available, otherwise use any Windows ISO
+	// For Windows, always use Windows 10 ISO
 	if strings.Contains(strings.ToLower(osType), "windows") {
-		// Try to find Windows 10 first
-		if err := s.db.Where("os_type = ? AND (LOWER(name) LIKE '%windows 10%' OR LOWER(path) LIKE '%windows10%')", osType).First(&image).Error; err != nil {
-			// If Windows 10 not found, use any Windows ISO
-			if err := s.db.Where("os_type = ?", osType).First(&image).Error; err != nil {
-				return "", fmt.Errorf("image not found for os type: %s", osType)
-			}
+		// Find Windows 10 ISO by path containing "Windows10.iso" (case-insensitive)
+		if err := s.db.Where("os_type = ? AND LOWER(path) LIKE '%windows10%' AND LOWER(path) NOT LIKE '%windows11%'", osType).First(&image).Error; err != nil {
+			return "", fmt.Errorf("Windows 10 ISO not found for os type: %s", osType)
 		}
 	} else {
 		if err := s.db.Where("os_type = ?", osType).First(&image).Error; err != nil {
@@ -196,13 +193,13 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
 		graphicsXML = `    <graphics type='vnc' port='-1' autoport='yes' listen='0.0.0.0'>
       <listen type='address' address='0.0.0.0'/>
     </graphics>
-`
+    `
 		logger.Log.Info("VNC graphics enabled for VM", zap.String("vm_name", name), zap.String("os_type", osType))
 	} else if graphicsTypeToUse == "spice" {
 		graphicsXML = `    <graphics type='spice' port='-1' autoport='yes' listen='0.0.0.0'>
       <listen type='address' address='0.0.0.0'/>
     </graphics>
-`
+    `
 		logger.Log.Info("SPICE graphics enabled for VM", zap.String("vm_name", name))
 	} else {
 		logger.Log.Info("No graphics configured for VM", zap.String("vm_name", name), zap.String("graphics_type", graphicsTypeToUse))
@@ -216,49 +213,6 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
 		bootXML += fmt.Sprintf("    <boot dev='%s'/>\n", device)
 	}
 
-	// Windows 11 requires TPM 2.0 and Secure Boot
-	// Check if OS type is Windows
-	isWindows := strings.Contains(strings.ToLower(osType), "windows")
-	
-	// Build TPM XML for Windows
-	tpmXML := ""
-	loaderXML := ""
-	nvramPath := ""
-	if isWindows {
-		// TPM 2.0 device
-		tpmXML = `    <tpm model='tpm-tis'>
-      <backend type='emulator' version='2.0'/>
-    </tpm>
-`
-		// Secure Boot with OVMF (UEFI) - use secboot version for Secure Boot
-		nvramPath = fmt.Sprintf("/var/lib/libvirt/qemu/nvram/%s_VARS.fd", name)
-		loaderXML = fmt.Sprintf(`
-    <loader readonly='yes' type='pflash'>/usr/share/OVMF/OVMF_CODE_4M.secboot.fd</loader>
-    <nvram>%s</nvram>
-`, nvramPath)
-		// Ensure NVRAM file exists (copy from template)
-		nvramTemplate := "/usr/share/OVMF/OVMF_VARS_4M.fd"
-		if _, err := os.Stat(nvramPath); os.IsNotExist(err) {
-			if templateData, err := os.ReadFile(nvramTemplate); err == nil {
-				if err := os.MkdirAll(filepath.Dir(nvramPath), 0755); err == nil {
-					if err := os.WriteFile(nvramPath, templateData, 0644); err != nil {
-						logger.Log.Warn("Failed to create NVRAM file, libvirt will create it", zap.String("nvram_path", nvramPath), zap.Error(err))
-					} else {
-						logger.Log.Info("NVRAM file created", zap.String("nvram_path", nvramPath))
-					}
-				} else {
-					logger.Log.Warn("Failed to create NVRAM directory, libvirt will create it", zap.String("nvram_path", nvramPath), zap.Error(err))
-				}
-			} else {
-				logger.Log.Warn("Failed to read NVRAM template, libvirt will create it", zap.String("template", nvramTemplate), zap.Error(err))
-			}
-		}
-		// For Windows, use UEFI boot (loader handles boot order)
-		bootXML = `    <boot dev='cdrom'/>
-    <boot dev='hd'/>
-`
-	}
-
 	vmXML := fmt.Sprintf(`
 <domain type='kvm'>
   <name>%s</name>
@@ -266,7 +220,8 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
   <vcpu placement='static'>%d</vcpu>
   <os>
     <type arch='x86_64' machine='pc-q35-7.2'>hvm</type>
-%s%s  </os>
+%s
+  </os>
   <features>
     <acpi/>
     <apic/>
@@ -350,21 +305,16 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
     <input type='mouse' bus='ps2'/>
     <input type='keyboard' bus='ps2'/>
     <input type='tablet' bus='usb'/>
-%s    <video>
+    <video>
       <model type='virtio' heads='1' primary='yes'/>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x0'/>
     </video>
     <memballoon model='virtio'>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
     </memballoon>
-  </devices>
+%s</devices>
 </domain>
-`, name, memoryMB*1024, vcpu, bootXML, loaderXML, vmDiskPath, isoPath, func() string {
-		if isWindows {
-			return tpmXML
-		}
-		return ""
-	}(), graphicsXML)
+`, name, memoryMB*1024, vcpu, bootXML, vmDiskPath, isoPath, graphicsXML)
 
 	dom, err := s.conn.DomainDefineXML(vmXML)
 	if err != nil {
@@ -472,7 +422,8 @@ func (s *VMService) DeleteVM(name string) error {
 		// Use transaction to ensure atomic deletion
 		err := s.db.Transaction(func(tx *gorm.DB) error {
 			// Delete console_sessions by vm_id (most reliable)
-			result := tx.Where("vm_id = ?", vmRec.ID).Delete(&models.ConsoleSession{})
+			// Use Unscoped() to perform hard delete (not soft delete)
+			result := tx.Unscoped().Where("vm_id = ?", vmRec.ID).Delete(&models.ConsoleSession{})
 			if result.Error != nil {
 				logger.Log.Error("Failed to delete console sessions for VM by ID", zap.String("vm_name", name), zap.Uint("vm_id", vmRec.ID), zap.Error(result.Error))
 				return fmt.Errorf("failed to delete console sessions: %w", result.Error)
@@ -484,8 +435,9 @@ func (s *VMService) DeleteVM(name string) error {
 			}
 			
 			// Also try to delete by UUID as a safety measure
+			// Use Unscoped() to perform hard delete (not soft delete)
 			if vmRec.UUID != "" {
-				result := tx.Where("vm_uuid = ? AND vm_id != ?", vmRec.UUID, vmRec.ID).Delete(&models.ConsoleSession{})
+				result := tx.Unscoped().Where("vm_uuid = ? AND vm_id != ?", vmRec.UUID, vmRec.ID).Delete(&models.ConsoleSession{})
 				if result.Error != nil {
 					logger.Log.Warn("Failed to delete console sessions for VM by UUID", zap.String("vm_name", name), zap.String("vm_uuid", vmRec.UUID), zap.Error(result.Error))
 					// Don't return error - this is just a safety check
