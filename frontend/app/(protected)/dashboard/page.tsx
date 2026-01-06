@@ -222,8 +222,33 @@ export default function Home() {
     } catch (error) {
       window.console.error('[handleFinalizeInstall] API error:', error);
       console.error('[handleFinalizeInstall] API error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to finalize installation';
-      toast.error(`Failed to finalize installation: ${errorMessage}`);
+      
+      let errorMessage = 'Failed to finalize installation';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        
+        // 백엔드에서 제공한 상세 에러 정보 확인
+        const apiError = error as any;
+        if (apiError.details) {
+          const details = apiError.details;
+          if (details.error || details.message) {
+            errorMessage = `${error.message}\n${details.error || details.message}`;
+          }
+        }
+      } else {
+        errorMessage = String(error);
+      }
+      
+      // 에러 메시지를 여러 줄로 표시 (toast는 한 줄만 지원하므로 첫 줄만 표시)
+      const firstLine = errorMessage.split('\n')[0];
+      toast.error(`Failed to finalize installation: ${firstLine}`, {
+        duration: 5000,
+      });
+      
+      // 전체 에러 메시지는 콘솔에만 출력
+      if (errorMessage.includes('\n')) {
+        window.console.error('[handleFinalizeInstall] Full error message:', errorMessage);
+      }
     } finally {
       setProcessingId(null);
     }

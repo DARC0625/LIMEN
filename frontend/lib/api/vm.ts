@@ -288,9 +288,52 @@ export const vmAPI = {
       return result;
     } catch (error) {
       const errorContext = error instanceof Error 
-        ? { message: error.message, stack: error.stack, name: error.name }
+        ? { 
+            message: error.message, 
+            stack: error.stack, 
+            name: error.name,
+            status: (error as any).status,
+            details: (error as any).details,
+          }
         : { error: String(error) };
+      
+      window.console.error('[vmAPI.finalizeInstall] API error details:', {
+        uuid,
+        ...errorContext,
+      });
+      
       logger.error('[vmAPI.finalizeInstall] API error:', errorContext);
+      
+      // 더 명확한 에러 메시지 생성
+      if (error instanceof Error) {
+        const apiError = error as any;
+        if (apiError.status === 500 && apiError.details) {
+          const details = apiError.details;
+          let enhancedMessage = error.message;
+          
+          // 백엔드에서 제공한 상세 에러 정보 추가
+          if (details.error || details.message) {
+            enhancedMessage = `${error.message}: ${details.error || details.message}`;
+          }
+          
+          // 특정 에러 타입에 대한 안내 추가
+          if (details.error && typeof details.error === 'string') {
+            if (details.error.includes('running') || details.error.includes('shutdown')) {
+              enhancedMessage += '\n\nVM이 실행 중일 수 있습니다. VM을 중지한 후 다시 시도해주세요.';
+            } else if (details.error.includes('CDROM') || details.error.includes('cdrom')) {
+              enhancedMessage += '\n\nCDROM 디바이스를 찾을 수 없습니다.';
+            } else if (details.error.includes('XML') || details.error.includes('libvirt')) {
+              enhancedMessage += '\n\nVM 설정을 업데이트하는 중 오류가 발생했습니다.';
+            }
+          }
+          
+          const enhancedError = new Error(enhancedMessage);
+          (enhancedError as any).status = 500;
+          (enhancedError as any).details = details;
+          throw enhancedError;
+        }
+      }
+      
       throw error;
     }
   },
