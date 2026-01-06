@@ -389,8 +389,8 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   if (!mounted || isAuthenticated === null) {
     return (
       <AuthContext.Provider value={loadingContextValue}>
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900" suppressHydrationWarning>
-          <div className="text-gray-500 dark:text-gray-400">Authenticating...</div>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50" suppressHydrationWarning>
+          <div className="text-gray-500">Authenticating...</div>
         </div>
       </AuthContext.Provider>
     );
@@ -408,8 +408,8 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   // 인증되지 않았으면 리다이렉트 중 (위 useEffect에서 처리)
   return (
     <AuthContext.Provider value={unauthenticatedContextValue}>
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900" suppressHydrationWarning>
-        <div className="text-gray-500 dark:text-gray-400">리다이렉트 중...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50" suppressHydrationWarning>
+        <div className="text-gray-500">리다이렉트 중...</div>
       </div>
     </AuthContext.Provider>
   );

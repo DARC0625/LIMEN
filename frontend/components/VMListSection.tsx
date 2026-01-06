@@ -19,7 +19,7 @@ const SnapshotManager = dynamicImport(
 );
 
 interface VMListSectionProps {
-  onAction?: (uuid: string, action: 'start' | 'stop' | 'restart' | 'delete') => void;
+  onAction?: (uuid: string, action: 'start' | 'stop' | 'delete') => void;
   onEdit?: (vm: VM | null) => void;
   processingId?: string | null;
   editingVM?: VM | null;
@@ -63,7 +63,7 @@ export default function VMListSection({
   const animationFrameRef = useRef<number | null>(null);
 
   // React Error #310 완전 해결: useMemo 제거, 직접 계산 (hydration mismatch 방지)
-  const cardWidth = windowWidth < 640 ? 280 : 240;
+  const cardWidth = windowWidth < 640 ? 260 : 220; // 카드 크기 약간 축소 (그림자 여유 공간 확보)
   const cardGap = 40; // 카드 간격 증가
 
   // 윈도우 크기 추적 (반응형 카루셀 계산용)
@@ -288,13 +288,13 @@ export default function VMListSection({
 
   if (isLoading) {
     return (
-      <div className="lg:col-span-2 p-4 sm:p-6 bg-white dark:bg-gray-800/90 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 transition-all backdrop-blur-sm min-h-[400px] flex flex-col">
+      <div className="lg:col-span-2 p-4 sm:p-6 bg-white rounded-xl shadow-lg border border-gray-200 transition-all backdrop-blur-sm min-h-[400px] flex flex-col">
         <h2 className="text-lg sm:text-xl font-semibold mb-4">Virtual Machines</h2>
         <div className="relative" role="status" aria-live="polite">
           <div className="overflow-hidden">
             <div className="flex gap-4 sm:gap-6 justify-center">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="w-56 h-[280px] bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
+                <div key={i} className="w-56 h-[280px] bg-gray-200 rounded-lg animate-pulse" />
               ))}
             </div>
           </div>
@@ -306,9 +306,9 @@ export default function VMListSection({
 
   if (vms.length === 0) {
     return (
-      <div className="lg:col-span-2 p-4 sm:p-6 bg-white dark:bg-gray-800/90 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 transition-all backdrop-blur-sm min-h-[400px] flex flex-col">
+      <div className="lg:col-span-2 p-4 sm:p-6 bg-white rounded-xl shadow-lg border border-gray-200 transition-all backdrop-blur-sm min-h-[400px] flex flex-col">
         <h2 className="text-lg sm:text-xl font-semibold mb-4">Virtual Machines</h2>
-        <div className="text-center py-12 text-gray-500 dark:text-gray-400" role="status">
+        <div className="text-center py-12 text-gray-500" role="status">
           No VMs found.
         </div>
       </div>
@@ -316,9 +316,9 @@ export default function VMListSection({
   }
 
   return (
-    <div className="lg:col-span-2 p-4 sm:p-6 bg-white dark:bg-gray-800/90 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 transition-all backdrop-blur-sm flex flex-col" style={{ minHeight: '400px' }}>
+    <div className="lg:col-span-2 p-4 sm:p-6 bg-white rounded-xl shadow-lg border border-gray-200 transition-all backdrop-blur-sm flex flex-col" style={{ minHeight: '400px' }}>
       <h2 className="text-lg sm:text-xl font-semibold mb-4">Virtual Machines</h2>
-      <div className="relative flex-1 overflow-hidden" role="region" aria-label="Virtual machines carousel" style={{ minHeight: '400px', paddingTop: '20px', paddingBottom: '20px' }}>
+      <div className="relative flex-1 overflow-visible" role="region" aria-label="Virtual machines carousel" style={{ minHeight: '400px', paddingTop: '20px', paddingBottom: '80px' }}>
         {/* Carousel Container */}
         <div 
           ref={containerRef}
@@ -454,23 +454,19 @@ export default function VMListSection({
               return (
                 <article
                   key={vm.uuid}
-                  className={`relative rounded-xl p-4 hover:shadow-lg transition-all duration-500 flex flex-col w-[280px] sm:w-[240px] flex-shrink-0 h-[320px] group ${
+                  className={`relative rounded-xl p-4 hover:shadow-lg transition-all duration-500 flex flex-col w-[260px] sm:w-[220px] flex-shrink-0 h-[300px] group ${
                     isTouched ? 'active' : ''
                   } ${
                     isActive 
-                      ? 'bg-blue-50/50 dark:bg-blue-900/20' 
-                      : 'bg-white dark:bg-gray-800'
+                      ? 'bg-blue-50/50' 
+                      : 'bg-white'
                   }`}
                   style={{
                     border: isActive 
                       ? '2px solid transparent'
                       : '2px solid rgb(229 231 235 / 0.5)',
                     backgroundImage: isActive
-                      ? (() => {
-                          const isDark = typeof window !== 'undefined' && (document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches);
-                          const bgColor = isDark ? 'rgb(31 41 55)' : 'white';
-                          return `linear-gradient(${bgColor}, ${bgColor}), linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%)`;
-                        })()
+                      ? `linear-gradient(white, white), linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%)`
                       : undefined,
                     backgroundOrigin: isActive ? 'border-box' : undefined,
                     backgroundClip: isActive ? 'padding-box, border-box' : undefined,
@@ -479,10 +475,10 @@ export default function VMListSection({
                     opacity: opacity,
                     zIndex: isCenter ? 30 : isNearCenter ? 20 : 10,
                     boxShadow: isCenter 
-                      ? '0 20px 40px -10px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1)'
+                      ? '0 10px 20px -8px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1)'
                       : isNearCenter
-                      ? '0 10px 20px -5px rgba(0, 0, 0, 0.2)'
-                      : '0 4px 6px -2px rgba(0, 0, 0, 0.1)',
+                      ? '0 6px 12px -6px rgba(0, 0, 0, 0.18)'
+                      : '0 3px 5px -2px rgba(0, 0, 0, 0.08)',
                     filter: isCenter ? 'brightness(1.05)' : isNearCenter ? 'brightness(0.98)' : 'brightness(0.95)',
                   }}
                   aria-label={`Virtual machine: ${vm.name}, Status: ${vm.status}, CPU: ${vm.cpu} cores, Memory: ${formatBytes(vm.memory * 1024 * 1024)}`}
@@ -581,7 +577,7 @@ export default function VMListSection({
                           : 'opacity-100 pointer-events-auto'
                       }`}>
                         {/* VM 이름 */}
-                        <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100 truncate px-1" title={vm.name}>
+                        <h3 className="text-sm sm:text-base font-semibold text-gray-900 truncate px-1" title={vm.name}>
                           <span className="sr-only">Virtual machine name: </span>
                           {vm.name}
                         </h3>
@@ -592,13 +588,13 @@ export default function VMListSection({
                             <svg className="w-4 h-4 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                             </svg>
-                            <span className="font-medium text-gray-700 dark:text-gray-300">{vm.cpu} vCPU</span>
+                            <span className="font-medium text-gray-700">{vm.cpu} vCPU</span>
                           </div>
                           <div className="flex items-center gap-2 text-sm justify-center">
                             <svg className="w-4 h-4 text-purple-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                             </svg>
-                            <span className="font-medium text-gray-700 dark:text-gray-300">{formatBytes(vm.memory * 1024 * 1024)}</span>
+                            <span className="font-medium text-gray-700">{formatBytes(vm.memory * 1024 * 1024)}</span>
                           </div>
                         </div>
 
@@ -606,9 +602,9 @@ export default function VMListSection({
                         <div className="flex justify-center">
                           <span 
                             className={`px-2 py-0.5 rounded-full text-xs ${
-                              vm.status === 'Running' ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' : 
-                              vm.status === 'Stopped' ? 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200' :
-                              'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
+                              vm.status === 'Running' ? 'bg-green-100 text-green-800' : 
+                              vm.status === 'Stopped' ? 'bg-gray-100 text-gray-800' :
+                              'bg-yellow-100 text-yellow-800'
                             }`}
                             role="status"
                             aria-label={`VM status: ${vm.status}`}
@@ -619,24 +615,33 @@ export default function VMListSection({
                       </div>
 
                       {/* Action Buttons (shown on hover/touch for active card only) */}
-                      <div className={`absolute inset-0 transition-opacity duration-200 flex items-center justify-center bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-lg ${
+                      <div className={`absolute inset-0 transition-opacity duration-200 flex items-center justify-center bg-white/95 backdrop-blur-sm rounded-lg ${
                         isActive && isTouched
                           ? 'opacity-100 pointer-events-auto'
                           : isActive
                             ? 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto'
                             : 'opacity-0 pointer-events-none'
                       }`}>
-                        <div className="grid grid-cols-3 gap-2 max-w-[200px] mx-auto px-2">
-                          {/* Row 1: Start, Restart, Stop */}
+                        <div className="grid grid-cols-3 grid-rows-2 gap-3 max-w-[240px] mx-auto px-2">
+                          {/* Row 1: Start, Stop, VNC */}
                           {onAction && (
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onAction(vm.uuid, 'start');
+                                setTouchedVM(null);
+                              }}
+                              onTouchEnd={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                if (!processingId && vm.status !== 'Running') {
+                                  onAction(vm.uuid, 'start');
+                                  setTouchedVM(null);
+                                }
                               }}
                               disabled={processingId === vm.uuid || vm.status === 'Running'}
                               aria-label={`Start virtual machine ${vm.name}`}
-                              className="w-10 h-10 flex items-center justify-center text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              className="w-12 h-12 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 hover:shadow-md rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
                             >
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -648,44 +653,28 @@ export default function VMListSection({
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onAction?.(vm.uuid, 'restart');
-                                setTouchedVM(null);
-                              }}
-                              onTouchEnd={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                if (!processingId && vm.status === 'Running') {
-                                  onAction?.(vm.uuid, 'restart');
+                                console.log('[VMListSection] Stop button clicked:', { uuid: vm.uuid, status: vm.status, processingId });
+                                if (vm.status === 'Running' && processingId !== vm.uuid) {
+                                  onAction(vm.uuid, 'stop');
                                   setTouchedVM(null);
+                                } else {
+                                  console.warn('[VMListSection] Stop button click ignored:', { status: vm.status, processingId });
                                 }
                               }}
-                              disabled={processingId === vm.uuid || vm.status !== 'Running'}
-                              aria-label={`Restart virtual machine ${vm.name}`}
-                              className="w-10 h-10 flex items-center justify-center text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                              </svg>
-                            </button>
-                          )}
-                          {onAction && (
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onAction?.(vm.uuid, 'stop');
-                                setTouchedVM(null);
-                              }}
                               onTouchEnd={(e) => {
                                 e.stopPropagation();
                                 e.preventDefault();
+                                console.log('[VMListSection] Stop button touchEnd:', { uuid: vm.uuid, status: vm.status, processingId });
                                 if (!processingId && vm.status === 'Running') {
-                                  onAction?.(vm.uuid, 'stop');
+                                  onAction(vm.uuid, 'stop');
                                   setTouchedVM(null);
+                                } else {
+                                  console.warn('[VMListSection] Stop button touchEnd ignored:', { status: vm.status, processingId });
                                 }
                               }}
                               disabled={processingId === vm.uuid || vm.status !== 'Running'}
                               aria-label={`Stop virtual machine ${vm.name}`}
-                              className="w-10 h-10 flex items-center justify-center text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
+                              className="w-12 h-12 flex items-center justify-center text-amber-600 hover:bg-amber-50 hover:shadow-md rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2"
                             >
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -693,7 +682,6 @@ export default function VMListSection({
                               </svg>
                             </button>
                           )}
-                          {/* Row 2: VNC, Edit, Snapshot */}
                           <a 
                             href={`/vnc/${vm.uuid}`}
                             onClick={(e) => {
@@ -714,7 +702,7 @@ export default function VMListSection({
                               }
                             }}
                             aria-label={`Open VNC console for ${vm.name}`}
-                            className={`w-10 h-10 flex items-center justify-center text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${vm.status !== 'Running' ? 'pointer-events-none opacity-30' : ''}`}
+                            className={`w-12 h-12 flex items-center justify-center text-cyan-600 hover:bg-cyan-50 hover:shadow-md rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 ${vm.status !== 'Running' ? 'pointer-events-none opacity-30' : ''}`}
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -729,7 +717,7 @@ export default function VMListSection({
                               }}
                               disabled={processingId === vm.uuid || vm.status === 'Running'}
                               aria-label={`Edit virtual machine ${vm.name}`}
-                              className="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              className="w-12 h-12 flex items-center justify-center text-slate-600 hover:bg-slate-50 hover:shadow-md rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
                             >
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -743,7 +731,7 @@ export default function VMListSection({
                                 onSnapshotSelect(selectedVMForSnapshot === vm.uuid ? null : vm.uuid);
                               }}
                               aria-label={`Manage snapshots for ${vm.name}`}
-                              className={`w-10 h-10 flex items-center justify-center text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors ${selectedVMForSnapshot === vm.uuid ? 'bg-purple-100 dark:bg-purple-900/30' : ''}`}
+                              className={`w-12 h-12 flex items-center justify-center text-violet-600 hover:bg-violet-50 hover:shadow-md rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 ${selectedVMForSnapshot === vm.uuid ? 'bg-violet-100 shadow-md' : ''}`}
                             >
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -758,7 +746,7 @@ export default function VMListSection({
                               }}
                               disabled={processingId === vm.uuid}
                               aria-label={`Delete virtual machine ${vm.name}`}
-                              className="w-10 h-10 flex items-center justify-center text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              className="w-12 h-12 flex items-center justify-center text-rose-600 hover:bg-rose-50 hover:shadow-md rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2"
                             >
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -770,12 +758,12 @@ export default function VMListSection({
                     </div>
 
                     {/* UUID (맨 하단) */}
-                    <div className="pt-1.5 border-t border-gray-100 dark:border-gray-700 mt-auto">
+                    <div className="pt-1.5 border-t border-gray-100 mt-auto">
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(vm.uuid || '');
                         }}
-                        className="w-full text-xs text-gray-400 dark:text-gray-500 font-mono hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors text-center truncate"
+                        className="w-full text-xs text-gray-400 font-mono hover:text-blue-600 hover:underline cursor-pointer transition-colors text-center truncate"
                         aria-label={`Copy UUID for ${vm.name}`}
                       >
                         {vm.uuid ? `${vm.uuid.substring(0, 8)}...` : 'N/A'}
@@ -791,7 +779,7 @@ export default function VMListSection({
 
         {/* 인디케이터 (점 표시) */}
         {vms.length > 1 && (
-          <div className="flex justify-center gap-2 mt-4" role="tablist" aria-label="VM carousel indicators">
+          <div className="flex justify-center gap-2 mt-8" role="tablist" aria-label="VM carousel indicators">
             {vms.map((_, index) => (
               <button
                 key={index}
@@ -801,8 +789,8 @@ export default function VMListSection({
                 }}
                 className={`h-2 rounded-full transition-all duration-300 ${
                   index === currentIndex
-                    ? 'w-8 bg-blue-600 dark:bg-blue-500'
-                    : 'w-2 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
+                    ? 'w-8 bg-blue-600'
+                    : 'w-2 bg-gray-300 hover:bg-gray-400'
                 }`}
                 aria-label={`Go to VM ${index + 1}`}
                 aria-selected={index === currentIndex}

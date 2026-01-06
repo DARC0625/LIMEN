@@ -95,16 +95,19 @@ if (!foundCssName) {
   }
 }
 
+// 심볼릭 링크 대신 실제 파일 복사 (심볼릭 링크는 웹 서버에서 문제를 일으킬 수 있음)
 // 알려진 CSS 파일명도 체크 (이전 빌드에서 사용된 파일명)
 const knownCssNames = ['c67ed24decc4485f.css'];
 for (const knownName of knownCssNames) {
   const testPath = path.join(chunksDir, knownName);
   if (!fs.existsSync(testPath) && knownName !== actualCss) {
     try {
-      fs.symlinkSync(actualCss, testPath);
-      console.log(`✅ CSS 심볼릭 링크 생성: ${knownName} -> ${actualCss}`);
+      // 심볼릭 링크 대신 실제 파일 복사
+      const actualPath = path.join(chunksDir, actualCss);
+      fs.copyFileSync(actualPath, testPath);
+      console.log(`✅ CSS 파일 복사: ${knownName} <- ${actualCss}`);
     } catch (e) {
-      // 이미 존재하면 무시
+      console.error(`❌ CSS 파일 복사 실패: ${knownName}`, e.message);
     }
   }
 }
@@ -115,10 +118,11 @@ if (foundCssName && foundCssName !== actualCss) {
   
   if (!fs.existsSync(oldPath) && fs.existsSync(newPath)) {
     try {
-      fs.symlinkSync(actualCss, oldPath);
-      console.log(`✅ CSS 심볼릭 링크 생성: ${foundCssName} -> ${actualCss}`);
+      // 심볼릭 링크 대신 실제 파일 복사
+      fs.copyFileSync(newPath, oldPath);
+      console.log(`✅ CSS 파일 복사: ${foundCssName} <- ${actualCss}`);
     } catch (e) {
-      // 이미 존재하면 무시
+      console.error(`❌ CSS 파일 복사 실패: ${foundCssName}`, e.message);
     }
   }
 }

@@ -22,28 +22,6 @@ export default function RootLayout({
   return (
     <html lang="ko" suppressHydrationWarning>
       <head>
-        {/* 초기 테마 적용 스크립트 (FOUC 방지) - suppressHydrationWarning으로 경고 억제 */}
-        <script
-          suppressHydrationWarning
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  const theme = localStorage.getItem('theme') || 'system';
-                  let resolvedTheme = theme;
-                  if (theme === 'system') {
-                    resolvedTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-                  }
-                  if (resolvedTheme === 'dark') {
-                    document.documentElement.classList.add('dark');
-                  } else {
-                    document.documentElement.classList.remove('dark');
-                  }
-                } catch (e) {}
-              })();
-            `,
-          }}
-        />
         {/* noVNC OS 감지 함수 전역 설정 + rfb.css 제거 (모든 스크립트 로드 전에 실행) */}
         <script
           suppressHydrationWarning
@@ -303,14 +281,42 @@ export default function RootLayout({
                 observer.observe(document.head, { childList: true, subtree: true });
                 
                 // 스크립트 로드 에러 핸들링
+                let scriptErrorCount = 0;
+                const MAX_SCRIPT_ERRORS = 3;
+                let lastReloadTime = 0;
+                const RELOAD_COOLDOWN = 5000; // 5초 쿨다운
+                
                 window.addEventListener('error', function(e) {
                   if (e.target && e.target.tagName === 'SCRIPT' && e.target.src) {
                     // Next.js 청크 파일 로드 실패 처리
                     const src = e.target.src;
                     if (src.includes('/_next/static/chunks/') || src.includes('/next/static/chunks/')) {
-                      // 경로 문제 감지 (프록시 설정 문제일 수 있음)
-                      // 개발 환경 체크는 서버 사이드에서만 가능하므로 제거
-                      console.warn('[Script Load] 청크 파일 로드 실패 (빌드 버전 불일치 가능):', src);
+                      scriptErrorCount++;
+                      console.warn('[Script Load] 청크 파일 로드 실패 (빌드 버전 불일치 가능):', src, '에러 횟수:', scriptErrorCount);
+                      
+                      // 500 에러인 경우 즉시 새로고침 (서버 오류)
+                      if (e.target.src && e.target.onerror) {
+                        // 500 에러는 서버 문제이므로 즉시 처리
+                        const now = Date.now();
+                        if (now - lastReloadTime > RELOAD_COOLDOWN) {
+                          lastReloadTime = now;
+                          console.warn('[Script Load] 서버 오류 감지, 페이지 새로고침 시도...');
+                          // 하드 리로드로 캐시 무시
+                          window.location.reload();
+                        }
+                      }
+                      
+                      // 여러 번 실패하면 페이지 새로고침 (빌드 버전 불일치 해결)
+                      if (scriptErrorCount >= MAX_SCRIPT_ERRORS) {
+                        const now = Date.now();
+                        if (now - lastReloadTime > RELOAD_COOLDOWN) {
+                          lastReloadTime = now;
+                          console.warn('[Script Load] 빌드 버전 불일치 감지, 페이지 새로고침 시도...');
+                          // 하드 리로드로 캐시 무시
+                          window.location.reload();
+                        }
+                      }
+                      
                       // 에러는 무시 (프록시 문제 또는 빌드 버전 불일치)
                       e.preventDefault();
                       return false;

@@ -283,13 +283,6 @@ export default function RevolverPicker({
           background: 'linear-gradient(to bottom, rgb(249, 250, 251) 0%, rgba(249, 250, 251, 0.8) 40%, rgba(249, 250, 251, 0) 100%)',
         }}
       />
-      <div 
-        className="absolute top-0 left-0 right-0 z-10 pointer-events-none dark:block hidden"
-        style={{
-          height: itemHeight * centerIndex,
-          background: 'linear-gradient(to bottom, rgb(17, 24, 39) 0%, rgba(17, 24, 39, 0.8) 40%, rgba(17, 24, 39, 0) 100%)',
-        }}
-      />
       
       {/* 선택 영역 하이라이트 - 더 세련된 디자인 */}
       <div
@@ -302,16 +295,6 @@ export default function RevolverPicker({
           borderBottom: '1px solid rgba(0, 0, 0, 0.08)',
         }}
       />
-      <div
-        className="absolute left-0 right-0 z-0 pointer-events-none dark:block hidden"
-        style={{
-          top: itemHeight * centerIndex,
-          height: itemHeight,
-          background: 'linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.03) 100%)',
-          borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-        }}
-      />
       
       {/* 그라데이션 오버레이 (아래) - 더 부드러운 페이드 */}
       <div 
@@ -319,13 +302,6 @@ export default function RevolverPicker({
         style={{
           height: itemHeight * centerIndex,
           background: 'linear-gradient(to top, rgb(249, 250, 251) 0%, rgba(249, 250, 251, 0.8) 40%, rgba(249, 250, 251, 0) 100%)',
-        }}
-      />
-      <div 
-        className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none dark:block hidden"
-        style={{
-          height: itemHeight * centerIndex,
-          background: 'linear-gradient(to top, rgb(17, 24, 39) 0%, rgba(17, 24, 39, 0.8) 40%, rgba(17, 24, 39, 0) 100%)',
         }}
       />
       
@@ -374,8 +350,8 @@ export default function RevolverPicker({
                 <div
                   className={`transition-all duration-150 ease-out ${
                     isSelected 
-                      ? 'text-gray-900 dark:text-gray-100 font-semibold' 
-                      : 'text-gray-400 dark:text-gray-500 font-normal'
+                      ? 'text-gray-900 font-semibold' 
+                      : 'text-gray-400 font-normal'
                   }`}
                   style={{
                     fontSize: fontSize,

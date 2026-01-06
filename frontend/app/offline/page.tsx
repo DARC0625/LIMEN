@@ -2,11 +2,11 @@
 
 export default function OfflinePage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-4">
       <div className="text-center max-w-md">
         <div className="mb-6">
           <svg
-            className="w-24 h-24 mx-auto text-gray-400 dark:text-gray-600"
+            className="w-24 h-24 mx-auto text-gray-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -20,10 +20,10 @@ export default function OfflinePage() {
             />
           </svg>
         </div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+        <h1 className="text-3xl font-bold text-gray-900 mb-4">
           오프라인 상태
         </h1>
-        <p className="text-gray-600 dark:text-gray-400 mb-6">
+        <p className="text-gray-600 mb-6">
           인터넷 연결을 확인해주세요. 네트워크가 복구되면 자동으로 다시 시도합니다.
         </p>
         <button

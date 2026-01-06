@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+/* Tailwind CSS v4: content 경로는 tailwind.config.js에서 설정 */
+
 /* FOUC 방지를 위한 초기 스타일 */
 html, body {
   margin: 0;

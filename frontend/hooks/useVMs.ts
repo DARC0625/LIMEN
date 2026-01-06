@@ -239,7 +239,7 @@ export function useVMAction() {
   return useMutation({
     mutationFn: ({ uuid, action, cpu, memory, name }: { 
       uuid: string; 
-      action: 'start' | 'stop' | 'restart' | 'delete' | 'update';
+      action: 'start' | 'stop' | 'delete' | 'update';
       cpu?: number;
       memory?: number;
       name?: string;
@@ -247,7 +247,9 @@ export function useVMAction() {
       // 중복 요청 방지: 같은 UUID + action 조합이 이미 진행 중이면 에러
       const actionKey = `${uuid}:${action}`;
       if (pendingActions.get(actionKey)) {
-        throw new Error('This request was recently processed. Please wait a moment before retrying.');
+        // 프론트엔드에서 중복 요청을 조용히 무시 (에러를 throw하지 않음)
+        // 사용자에게는 이미 처리 중이라는 메시지만 표시
+        return Promise.reject(new Error('This request is already being processed. Please wait a moment.'));
       }
       
       // 요청 시작 표시
@@ -261,9 +263,10 @@ export function useVMAction() {
       });
     },
     
-    // 낙관적 업데이트: 서버 응답 전에 UI 즉시 업데이트
+    // 낙관적 업데이트 제거: 서버 응답만 신뢰하여 VM 실행 문제 해결
+    // start/stop 액션은 서버 응답을 기다린 후에만 상태 업데이트
     onMutate: async ({ uuid, action, cpu, memory }) => {
-      // 진행 중인 쿼리 취소하여 낙관적 업데이트가 덮어쓰이지 않도록
+      // 진행 중인 쿼리 취소
       await queryClient.cancelQueries({ queryKey: ['vms'] });
       await queryClient.cancelQueries({ queryKey: ['quota'] });
       
@@ -271,112 +274,89 @@ export function useVMAction() {
       const previousVMs = queryClient.getQueryData<VM[]>(['vms']);
       const previousQuota = queryClient.getQueryData(['quota']);
       
-      // React Error #321 완전 해결: queueMicrotask로 비동기 처리
-      queueMicrotask(() => {
-        startTransition(() => {
-          // 즉시 UI 업데이트
-          if (action === 'delete') {
-          // 삭제: 목록에서 즉시 제거
-          queryClient.setQueryData<VM[]>(['vms'], (old) => {
-            if (!old) return [];
-            return old.filter(v => v.uuid !== uuid);
-          });
-          // 할당량도 즉시 업데이트 (VM 삭제 시 할당량 감소, 메모리는 MB 단위)
-          queryClient.setQueryData(['quota'], (old: QuotaUsage | undefined) => {
-            if (!old) return old;
-            const deletedVM = previousVMs?.find(v => v.uuid === uuid);
-            if (deletedVM) {
-              return {
-                ...old,
-                usage: {
-                  ...old.usage,
-                  vms: Math.max(0, old.usage.vms - 1),
-                  cpu: Math.max(0, old.usage.cpu - deletedVM.cpu),
-                  memory: Math.max(0, old.usage.memory - deletedVM.memory), // MB 단위로 저장되므로 그냥 뺌
-                },
-              };
-            }
-            return old;
-          });
-        } else if (action === 'start' || action === 'stop' || action === 'restart') {
-          // 시작/중지/재시작: 상태만 즉시 업데이트
-          queryClient.setQueryData<VM[]>(['vms'], (old) => {
-            if (!old) return [];
-            return old.map(vm => {
-              if (vm.uuid === uuid) {
+      // delete 액션만 낙관적 업데이트 (즉시 피드백 제공)
+      // start/stop은 서버 응답을 기다려서 정확한 상태 반영
+      if (action === 'delete') {
+        queueMicrotask(() => {
+          startTransition(() => {
+            // 삭제: 목록에서 즉시 제거
+            queryClient.setQueryData<VM[]>(['vms'], (old) => {
+              if (!old) return [];
+              return old.filter(v => v.uuid !== uuid);
+            });
+            // 할당량도 즉시 업데이트 (VM 삭제 시 할당량 감소, 메모리는 MB 단위)
+            queryClient.setQueryData(['quota'], (old: QuotaUsage | undefined) => {
+              if (!old) return old;
+              const deletedVM = previousVMs?.find(v => v.uuid === uuid);
+              if (deletedVM) {
                 return {
-                  ...vm,
-                  status: action === 'start' ? 'Running' : action === 'restart' ? 'Restarting' : 'Stopped',
+                  ...old,
+                  usage: {
+                    ...old.usage,
+                    vms: Math.max(0, old.usage.vms - 1),
+                    cpu: Math.max(0, old.usage.cpu - deletedVM.cpu),
+                    memory: Math.max(0, old.usage.memory - deletedVM.memory), // MB 단위로 저장되므로 그냥 뺌
+                  },
                 };
               }
-              return vm;
+              return old;
             });
           });
-        } else if (action === 'update' && (cpu !== undefined || memory !== undefined || name !== undefined)) {
-          // 업데이트: CPU/Memory/Name 즉시 업데이트
-          queryClient.setQueryData<VM[]>(['vms'], (old) => {
-            if (!old) return [];
-            return old.map(vm => {
-              if (vm.uuid === uuid) {
-                return {
-                  ...vm,
-                  cpu: cpu !== undefined ? cpu : vm.cpu,
-                  memory: memory !== undefined ? memory : vm.memory,
-                  name: name !== undefined ? name : vm.name,
-                };
-              }
-              return vm;
-            });
-          });
-          // 할당량도 즉시 업데이트 (메모리는 MB 단위로 저장됨)
-          queryClient.setQueryData(['quota'], (old: QuotaUsage | undefined) => {
-            if (!old) return old;
-            const updatedVM = previousVMs?.find(v => v.uuid === uuid);
-            if (updatedVM) {
-              const oldCpu = updatedVM.cpu;
-              const oldMemory = updatedVM.memory; // MB 단위
-              const newCpu = cpu !== undefined ? cpu : oldCpu;
-              const newMemory = memory !== undefined ? memory : updatedVM.memory; // MB 단위
-              
-              return {
-                ...old,
-                usage: {
-                  ...old.usage,
-                  cpu: old.usage.cpu - oldCpu + newCpu,
-                  memory: old.usage.memory - oldMemory + newMemory, // MB 단위로 계산
-                },
-              };
-            }
-            return old;
-          });
-        }
         });
-      });
+      } else if (action === 'update' && (cpu !== undefined || memory !== undefined)) {
+        // update 액션도 낙관적 업데이트 (CPU/Memory 변경)
+        queueMicrotask(() => {
+          startTransition(() => {
+            queryClient.setQueryData<VM[]>(['vms'], (old) => {
+              if (!old) return [];
+              return old.map(vm => {
+                if (vm.uuid === uuid) {
+                  return {
+                    ...vm,
+                    cpu: cpu !== undefined ? cpu : vm.cpu,
+                    memory: memory !== undefined ? memory : vm.memory,
+                  };
+                }
+                return vm;
+              });
+            });
+            // 할당량도 즉시 업데이트 (메모리는 MB 단위로 저장됨)
+            queryClient.setQueryData(['quota'], (old: QuotaUsage | undefined) => {
+              if (!old) return old;
+              const updatedVM = previousVMs?.find(v => v.uuid === uuid);
+              if (updatedVM) {
+                const oldCpu = updatedVM.cpu;
+                const oldMemory = updatedVM.memory; // MB 단위
+                const newCpu = cpu !== undefined ? cpu : oldCpu;
+                const newMemory = memory !== undefined ? memory : updatedVM.memory; // MB 단위
+                
+                return {
+                  ...old,
+                  usage: {
+                    ...old.usage,
+                    cpu: old.usage.cpu - oldCpu + newCpu,
+                    memory: old.usage.memory - oldMemory + newMemory, // MB 단위로 계산
+                  },
+                };
+              }
+              return old;
+            });
+          });
+        });
+      }
+      // start/stop 액션은 낙관적 업데이트 하지 않음 - 서버 응답만 신뢰
       
       // 롤백용 컨텍스트 반환
       return { previousVMs, previousQuota };
     },
     
     // 서버 응답 성공: 최종 데이터로 업데이트
-    onSuccess: (updatedVM, variables) => {
+    onSuccess: (updatedVM, variables, context) => {
       logger.log('[useVMAction] onSuccess called:', {
         action: variables.action,
         uuid: variables.uuid,
         updatedVMStatus: updatedVM.status,
         updatedVM: updatedVM,
-      });
-      
-      // start 액션 실패 여부를 먼저 확인 (queueMicrotask 밖에서)
-      const startFailed = variables.action === 'start' && updatedVM.status === 'Stopped';
-      // stop 액션 실패 여부 확인 (서버가 Running을 반환하면 stop 실패)
-      const stopFailed = variables.action === 'stop' && updatedVM.status === 'Running';
-      
-      logger.log('[useVMAction] Action result check:', {
-        action: variables.action,
-        expectedStatus: variables.action === 'start' ? 'Running' : variables.action === 'stop' ? 'Stopped' : 'any',
-        actualStatus: updatedVM.status,
-        startFailed,
-        stopFailed,
       });
       
       queueMicrotask(() => {
@@ -388,49 +368,44 @@ export function useVMAction() {
             return old.filter(v => v.uuid !== variables.uuid);
           });
           queryClient.invalidateQueries({ queryKey: ['quota'] });
-        } else {
-          // 서버 응답으로 최종 업데이트
-          // 중요: start 액션의 경우 서버 응답 상태를 확인
-          // 만약 서버가 'Stopped'를 반환하면 VM이 시작 실패한 것
-          if (startFailed) {
-            // VM 시작 실패: 상태를 원래대로 되돌리고 에러 메시지 표시
-            logger.warn('[useVMAction] VM start failed, status is Stopped', {
-              uuid: variables.uuid,
-              vm: updatedVM,
-            });
-            queryClient.setQueryData<VM[]>(['vms'], (old) => {
-              if (!old) return [];
-              return old.map(v => {
-                if (v.uuid === variables.uuid) {
-                  return { ...v, status: 'Stopped' };
-                }
-                return v;
-              });
-            });
-            // 에러 토스트는 onError에서 처리하지 않고 여기서 처리
-            queueMicrotask(() => {
-              toast.error('VM failed to start. Please check VM configuration or logs.');
-            });
-            return; // 조기 반환하여 성공 토스트 방지
-          }
+        } else if (variables.action === 'start' || variables.action === 'stop') {
+          // start/stop 액션: 서버 응답 상태를 신뢰하여 업데이트
+          // 서버가 반환한 상태가 예상과 다르면 실패로 간주
+          const expectedStatus = variables.action === 'start' ? 'Running' : 'Stopped';
+          const actualStatus = updatedVM.status;
           
-          // stop 액션 실패 처리
-          if (stopFailed) {
-            logger.warn('[useVMAction] VM stop failed, status is Running', {
+          logger.log('[useVMAction] Action result check:', {
+            action: variables.action,
+            expectedStatus,
+            actualStatus,
+            uuid: variables.uuid,
+            fullVMResponse: updatedVM,
+          });
+          
+          // 서버 응답 상태를 일단 반영 (서버가 최종 상태를 결정)
+          // 하지만 예상과 다르면 경고 표시
+          if (actualStatus !== expectedStatus) {
+            // 액션 실패: 서버가 예상과 다른 상태를 반환
+            logger.warn(`[useVMAction] VM ${variables.action} returned unexpected status, expected ${expectedStatus} but got ${actualStatus}`, {
               uuid: variables.uuid,
               vm: updatedVM,
             });
+            
+            // 서버 응답 상태를 그대로 사용하되, 에러 메시지 표시
             queryClient.setQueryData<VM[]>(['vms'], (old) => {
               if (!old) return [];
               return old.map(v => {
                 if (v.uuid === variables.uuid) {
-                  return { ...v, status: 'Running' };
+                  // 서버가 반환한 상태를 그대로 사용
+                  return updatedVM;
                 }
                 return v;
               });
             });
+            
+            // 에러 메시지 표시
             queueMicrotask(() => {
-              toast.error('VM failed to stop. Please check VM configuration or logs.');
+              toast.error(`VM ${variables.action} may have failed. Server returned status: ${actualStatus}. Expected: ${expectedStatus}. Please check VM logs.`);
             });
             return; // 조기 반환하여 성공 토스트 방지
           }
@@ -441,6 +416,8 @@ export function useVMAction() {
             action: variables.action,
             newStatus: updatedVM.status,
           });
+          
+          // 서버 응답으로 업데이트 (서버가 최종 상태를 결정)
           queryClient.setQueryData<VM[]>(['vms'], (old) => {
             if (!old) return [];
             return old.map(v => {
@@ -450,34 +427,62 @@ export function useVMAction() {
                   oldStatus: v.status,
                   newStatus: updatedVM.status,
                 });
-                return updatedVM; // 서버 응답으로 완전히 교체
+                // 서버 응답으로 완전히 교체 (서버가 최종 상태를 결정)
+                return updatedVM;
               }
               return v;
             });
           });
           
-          // CPU/Memory 변경 시 할당량 무효화
-          if (variables.action === 'update') {
-            queryClient.invalidateQueries({ queryKey: ['quota'] });
+          // 리소스 쿼타 무효화 (VM start/stop 시 리소스 사용량 변경)
+          // start: 리소스 사용량 증가, stop: 리소스 사용량 감소
+          queryClient.invalidateQueries({ queryKey: ['quota'] });
+          
+          // VM start/stop은 비동기 작업이므로, 서버 응답 후 실제 상태를 확인하기 위해
+          // 여러 번 확인하여 실제 상태 반영
+          if (variables.action === 'start' || variables.action === 'stop') {
+            // 성공 메시지 표시
+            queueMicrotask(() => {
+              if (variables.action === 'start') {
+                toast.success('VM start requested. Checking status...');
+              } else if (variables.action === 'stop') {
+                toast.success('VM stop requested. Checking status...');
+              }
+            });
+            
+            // 실제 VM 상태 확인 (여러 번 확인하여 안정적인 상태 반영)
+            // 2초, 4초, 6초 후에 각각 확인
+            [2000, 4000, 6000].forEach((delay) => {
+              setTimeout(() => {
+                queueMicrotask(() => {
+                  startTransition(() => {
+                    queryClient.invalidateQueries({ queryKey: ['vms'] });
+                  });
+                });
+              }, delay);
+            });
           }
+        } else if (variables.action === 'update') {
+          // 업데이트: 서버 응답으로 업데이트
+          queryClient.setQueryData<VM[]>(['vms'], (old) => {
+            if (!old) return [];
+            return old.map(v => {
+              if (v.uuid === variables.uuid) {
+                return updatedVM;
+              }
+              return v;
+            });
+          });
+          
+          // 할당량 무효화
+          queryClient.invalidateQueries({ queryKey: ['quota'] });
+          
+          // 성공 메시지 표시
+          queueMicrotask(() => {
+            toast.success('VM updated successfully');
+          });
         }
         });
-      });
-      
-      // start 또는 stop 액션이 실패한 경우는 토스트를 표시하지 않음
-      if (startFailed || stopFailed) {
-        return;
-      }
-      
-      queueMicrotask(() => {
-        const actionMessages = {
-        start: 'VM started successfully',
-        stop: 'VM stopped successfully',
-        restart: 'VM restarted successfully',
-        update: 'VM updated successfully',
-          delete: 'VM deleted successfully',
-        };
-        toast.success(actionMessages[variables.action]);
       });
     },
     
@@ -500,12 +505,24 @@ export function useVMAction() {
         const actionMessages = {
         start: 'starting',
         stop: 'stopping',
-        restart: 'restarting',
         delete: 'deleting',
           update: 'updating',
         };
         const errorMessage = error instanceof Error ? error.message : String(error);
-        toast.error(`Error ${actionMessages[variables.action]} VM: ${errorMessage}`);
+        
+        // 특정 에러 메시지는 사용자 친화적으로 변경
+        let userFriendlyMessage = errorMessage;
+        if (errorMessage.includes('Memory limit exceeded')) {
+          userFriendlyMessage = 'Memory limit exceeded. Maximum 8192 MB per VM.';
+        } else if (errorMessage.includes('This request is already being processed')) {
+          // 중복 요청은 조용히 무시 (이미 처리 중이라는 메시지만 표시)
+          userFriendlyMessage = 'This request is already being processed. Please wait a moment.';
+        } else if (errorMessage.includes('This request was recently processed')) {
+          // 백엔드에서 온 중복 요청 메시지도 사용자 친화적으로 변경
+          userFriendlyMessage = 'This request was recently processed. Please wait a moment before retrying.';
+        }
+        
+        toast.error(`Error ${actionMessages[variables.action]} VM: ${userFriendlyMessage}`);
       });
     },
     
@@ -523,13 +540,18 @@ export function useVMAction() {
               });
             });
           }, 500);
-        } else {
-          // 다른 액션은 즉시 무효화
+        } else if (variables.action === 'start' || variables.action === 'stop') {
+          // start/stop 액션: 서버 응답을 신뢰하므로 invalidateQueries를 호출하지 않음
+          // 서버가 start/stop 액션에 대해 반환한 상태(Running/Stopped)를 우선함
+          // invalidateQueries를 호출하면 서버에서 최신 상태를 가져오는데,
+          // VM 시작/중지는 비동기 작업이므로 서버가 아직 상태를 업데이트하지 않았을 수 있음
+          // 따라서 서버 응답을 신뢰하고, 백그라운드 폴링(5분마다)만 사용하여 동기화
+          // 이렇게 하면 서버 응답(Running)이 invalidateQueries로 인해 덮어쓰이지 않음
+        } else if (variables.action === 'update') {
+          // 업데이트: 즉시 무효화
           startTransition(() => {
             queryClient.invalidateQueries({ queryKey: ['vms'] });
-            if (variables.action === 'update') {
-              queryClient.invalidateQueries({ queryKey: ['quota'] });
-            }
+            queryClient.invalidateQueries({ queryKey: ['quota'] });
           });
         }
       });

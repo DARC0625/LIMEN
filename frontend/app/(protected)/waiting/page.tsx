@@ -71,8 +71,8 @@ export default function WaitingPage() {
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
             <p className="text-sm text-gray-600">
               문의사항이 있으시면{' '}
-              <a href="mailto:support@limen.example.com" className="text-blue-600 hover:underline">
-                support@limen.example.com
+              <a href="mailto:darc0625@proton.me" className="text-blue-600 hover:underline">
+                darc0625@proton.me
               </a>
               으로 연락해주세요.
             </p>
