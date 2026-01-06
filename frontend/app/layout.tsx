@@ -282,38 +282,57 @@ export default function RootLayout({
                 
                 // 스크립트 로드 에러 핸들링
                 let scriptErrorCount = 0;
-                const MAX_SCRIPT_ERRORS = 3;
+                const MAX_SCRIPT_ERRORS = 2; // 2번 실패하면 즉시 새로고침
                 let lastReloadTime = 0;
-                const RELOAD_COOLDOWN = 5000; // 5초 쿨다운
+                const RELOAD_COOLDOWN = 3000; // 3초 쿨다운
+                const errorUrls = new Set(); // 중복 에러 URL 추적
                 
+                // NS_ERROR_CORRUPTED_CONTENT 오류 감지
                 window.addEventListener('error', function(e) {
                   if (e.target && e.target.tagName === 'SCRIPT' && e.target.src) {
                     // Next.js 청크 파일 로드 실패 처리
                     const src = e.target.src;
                     if (src.includes('/_next/static/chunks/') || src.includes('/next/static/chunks/')) {
-                      scriptErrorCount++;
-                      console.warn('[Script Load] 청크 파일 로드 실패 (빌드 버전 불일치 가능):', src, '에러 횟수:', scriptErrorCount);
-                      
-                      // 500 에러인 경우 즉시 새로고침 (서버 오류)
-                      if (e.target.src && e.target.onerror) {
-                        // 500 에러는 서버 문제이므로 즉시 처리
+                      // 중복 에러 URL 체크
+                      if (errorUrls.has(src)) {
+                        // 같은 파일이 여러 번 실패하면 즉시 새로고침
                         const now = Date.now();
                         if (now - lastReloadTime > RELOAD_COOLDOWN) {
                           lastReloadTime = now;
-                          console.warn('[Script Load] 서버 오류 감지, 페이지 새로고침 시도...');
-                          // 하드 리로드로 캐시 무시
-                          window.location.reload();
+                          console.warn('[Script Load] 동일 파일 반복 실패 감지, 즉시 새로고침:', src);
+                          // 캐시 무시하고 하드 리로드
+                          window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now();
+                          return;
                         }
                       }
                       
-                      // 여러 번 실패하면 페이지 새로고침 (빌드 버전 불일치 해결)
-                      if (scriptErrorCount >= MAX_SCRIPT_ERRORS) {
+                      errorUrls.add(src);
+                      scriptErrorCount++;
+                      
+                      // NS_ERROR_CORRUPTED_CONTENT 또는 기타 손상 오류 감지
+                      const isCorrupted = e.message && (
+                        e.message.includes('CORRUPTED') ||
+                        e.message.includes('corrupted') ||
+                        e.message.includes('NS_ERROR')
+                      );
+                      
+                      console.warn('[Script Load] 청크 파일 로드 실패:', {
+                        src: src,
+                        error: e.message,
+                        isCorrupted: isCorrupted,
+                        errorCount: scriptErrorCount,
+                        errorName: e.error?.name || 'Unknown'
+                      });
+                      
+                      // 손상된 콘텐츠 오류는 즉시 새로고침
+                      if (isCorrupted || scriptErrorCount >= MAX_SCRIPT_ERRORS) {
                         const now = Date.now();
                         if (now - lastReloadTime > RELOAD_COOLDOWN) {
                           lastReloadTime = now;
-                          console.warn('[Script Load] 빌드 버전 불일치 감지, 페이지 새로고침 시도...');
-                          // 하드 리로드로 캐시 무시
-                          window.location.reload();
+                          console.warn('[Script Load] 손상된 콘텐츠 감지, 페이지 새로고침 시도...');
+                          // 캐시 무시하고 하드 리로드
+                          window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now();
+                          return;
                         }
                       }
                       
@@ -328,6 +347,26 @@ export default function RootLayout({
                     return false;
                   }
                 }, true);
+                
+                // 스크립트 로드 실패 이벤트도 감지 (onerror 핸들러)
+                document.addEventListener('DOMContentLoaded', function() {
+                  const scripts = document.querySelectorAll('script[src]');
+                  scripts.forEach(function(script) {
+                    script.addEventListener('error', function(e) {
+                      const src = (e.target as HTMLScriptElement)?.src;
+                      if (src && (src.includes('/_next/static/chunks/') || src.includes('/next/static/chunks/'))) {
+                        console.warn('[Script Load] 스크립트 로드 실패 감지:', src);
+                        // 손상된 콘텐츠로 간주하고 즉시 새로고침
+                        const now = Date.now();
+                        if (now - lastReloadTime > RELOAD_COOLDOWN) {
+                          lastReloadTime = now;
+                          console.warn('[Script Load] 스크립트 로드 실패, 페이지 새로고침 시도...');
+                          window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now();
+                        }
+                      }
+                    });
+                  });
+                });
               })();
             `,
           }}
