@@ -32,8 +32,6 @@ export default function UserManagementPage() {
   
   // React Query hooks - 항상 호출 (조건부로만 사용)
   // 중요: 모든 hooks는 조건부 return 전에 호출되어야 함
-  // 인증 및 Admin 확인이 완료된 후에만 쿼리 활성화
-  // shouldEnableQuery는 hooks 호출 후에 계산하되, useAdminUsers는 항상 호출
   const { data: users = [], isLoading, error } = useAdminUsers();
   const { data: expandedUserData } = useAdminUser(expandedUser);
   const createUserMutation = useCreateUser();
@@ -42,14 +40,11 @@ export default function UserManagementPage() {
   const approveUserMutation = useApproveUser();
   
   // 인증 및 Admin 권한 확인 (hooks 호출 후에 처리)
+  // React Error #310 해결: useEffect를 두 개로 분리하여 dependency 최소화
   useEffect(() => {
-    // React Error #310 해결: 상태 업데이트를 startTransition으로 감싸기
+    // 인증 상태만 확인
     if (isAuthenticated === null) {
-      startTransition(() => {
-        setIsCheckingAuth(true);
-        setIsUserAdmin(null);
-      });
-      return;
+      return; // 아직 확인 중
     }
     
     if (isAuthenticated === false) {
@@ -61,12 +56,22 @@ export default function UserManagementPage() {
       return;
     }
     
-    // 인증되었으면 Admin 권한 확인
+    // 인증되었으면 Admin 권한 확인 시작
     startTransition(() => {
       setIsCheckingAuth(false);
     });
+  }, [isAuthenticated, router]);
+  
+  // Admin 권한 확인 (인증된 경우에만 실행)
+  useEffect(() => {
+    if (isAuthenticated !== true) {
+      return; // 인증되지 않았으면 실행하지 않음
+    }
     
+    // Admin 권한 확인
+    let cancelled = false;
     isAdmin().then((admin) => {
+      if (cancelled) return;
       startTransition(() => {
         setIsUserAdmin(admin);
       });
@@ -75,6 +80,7 @@ export default function UserManagementPage() {
         router.push('/dashboard');
       }
     }).catch((error) => {
+      if (cancelled) return;
       console.error('[UserManagement] Admin check failed:', error);
       startTransition(() => {
         setIsUserAdmin(false);
@@ -82,6 +88,10 @@ export default function UserManagementPage() {
       toast.error('Admin access required');
       router.push('/dashboard');
     });
+    
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthenticated, toast, router]);
   
   // 인증 확인 중이거나 Admin 권한 확인 중이면 로딩 표시
