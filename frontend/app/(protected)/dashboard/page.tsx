@@ -159,6 +159,10 @@ export default function Home() {
       const updatedVM = await vmAPI.setBootOrder(uuid, bootOrder);
       window.console.log('[handleBootOrderChange] API success:', updatedVM);
       
+      // API 응답에서 실제 boot_order 값 가져오기
+      const actualBootOrder = updatedVM.boot_order || bootOrder;
+      window.console.log('[handleBootOrderChange] Actual boot_order from API:', actualBootOrder);
+      
       // 성공 시 처리 ID 제거
       setProcessingId(null);
       
@@ -166,12 +170,17 @@ export default function Home() {
       // React Query 자동 갱신
       startTransition(() => {
         queryClient.invalidateQueries({ queryKey: ['vms'] });
-        // VM 데이터 직접 업데이트
+        // VM 데이터 직접 업데이트 (API 응답의 실제 값 사용)
         queryClient.setQueryData<VM[]>(['vms'], (old) => {
           if (!old) return [];
-          return old.map(v => v.uuid === uuid ? { ...v, boot_order: bootOrder } : v);
+          return old.map(v => v.uuid === uuid ? { ...v, boot_order: actualBootOrder } : v);
         });
       });
+      
+      // editingVM 상태도 업데이트 (모달이 열려있을 때)
+      if (editingVM && editingVM.uuid === uuid) {
+        setEditingVM({ ...editingVM, boot_order: actualBootOrder });
+      }
     } catch (error) {
       window.console.error('[handleBootOrderChange] API error:', error);
       console.error('[handleBootOrderChange] API error:', error);
@@ -640,8 +649,10 @@ export default function Home() {
                     value={editingVM.boot_order}
                     onChange={(bootOrder) => {
                       if (editingVM) {
-                        handleBootOrderChange(editingVM.uuid, bootOrder);
+                        // 즉시 UI 업데이트 (낙관적 업데이트)
                         setEditingVM({ ...editingVM, boot_order: bootOrder });
+                        // API 호출
+                        handleBootOrderChange(editingVM.uuid, bootOrder);
                       }
                     }}
                     disabled={vmActionMutation.isPending || processingId === editingVM.uuid}

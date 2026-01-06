@@ -19,10 +19,14 @@ const bootOrderOptions: { value: BootOrder; label: string; description: string }
 export default function BootOrderSelector({ value, onChange, disabled = false }: BootOrderSelectorProps) {
   const [selectedValue, setSelectedValue] = useState<BootOrder>(value || 'hdd-only');
 
-  // value prop이 변경되면 상태 업데이트
+  // value prop이 변경되면 상태 업데이트 (값이 없어도 업데이트)
   useEffect(() => {
-    if (value) {
+    if (value !== undefined && value !== null) {
+      console.log('[BootOrderSelector] Value prop changed:', { from: selectedValue, to: value });
       setSelectedValue(value);
+    } else if (value === undefined || value === null) {
+      // 값이 없으면 기본값으로 설정
+      setSelectedValue('hdd-only');
     }
   }, [value]);
 
