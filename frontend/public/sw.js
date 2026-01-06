@@ -66,9 +66,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Next.js 정적 파일은 ServiceWorker가 처리하지 않음 (보안 및 안정성)
-  // /_next/static/ 경로는 네트워크로 직접 전달
-  if (url.pathname.startsWith('/_next/static/')) {
+  // Next.js RSC (React Server Components) 요청은 ServiceWorker가 처리하지 않음
+  // RSC 요청은 ?_rsc= 쿼리 파라미터를 포함
+  if (url.searchParams.has('_rsc')) {
+    return; // ServiceWorker가 가로채지 않음 - 브라우저가 직접 처리
+  }
+
+  // Next.js 내부 경로는 ServiceWorker가 처리하지 않음 (보안 및 안정성)
+  // /_next/ 경로는 네트워크로 직접 전달
+  if (url.pathname.startsWith('/_next/')) {
     return; // ServiceWorker가 가로채지 않음 - 브라우저가 직접 처리
   }
 
@@ -98,8 +104,8 @@ async function networkFirst(request) {
   try {
     const response = await fetch(request);
     
-    // Next.js 정적 파일은 캐시하지 않음 (항상 최신 버전 사용)
-    if (request.url.includes('/_next/static/')) {
+    // Next.js 내부 파일은 캐시하지 않음 (항상 최신 버전 사용)
+    if (request.url.includes('/_next/') || request.url.includes('?_rsc=')) {
       return response;
     }
     
@@ -111,8 +117,8 @@ async function networkFirst(request) {
     
     return response;
   } catch (error) {
-    // Next.js 정적 파일은 캐시에서 찾지 않음
-    if (request.url.includes('/_next/static/')) {
+    // Next.js 내부 파일은 캐시에서 찾지 않음
+    if (request.url.includes('/_next/') || request.url.includes('?_rsc=')) {
       throw error;
     }
 
@@ -137,8 +143,8 @@ async function networkFirst(request) {
 
 // 캐시 우선 전략
 async function cacheFirst(request) {
-  // Next.js 정적 파일은 캐시 우선 전략 사용하지 않음
-  if (request.url.includes('/_next/static/')) {
+  // Next.js 내부 파일은 캐시 우선 전략 사용하지 않음
+  if (request.url.includes('/_next/') || request.url.includes('?_rsc=')) {
     try {
       return await fetch(request);
     } catch (error) {
