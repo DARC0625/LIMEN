@@ -214,8 +214,21 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
       // Reload media state
       setTimeout(() => loadMountedMedia(), 1000);
     } catch (error: unknown) {
-        handleError(error, { component: 'VNCViewer', action: 'attach_media' });
+      handleError(error, { component: 'VNCViewer', action: 'attach_media' });
       const errorMessage = error instanceof Error ? error.message : 'Failed to attach media';
+      
+      // 409 Conflict 에러 처리: 중복 요청 방지
+      const apiError = error as { status?: number; message?: string };
+      if (apiError?.status === 409) {
+        setStatus('This request was recently processed. Please wait a moment before retrying.');
+        // 2초 후 자동으로 미디어 상태 다시 로드
+        setTimeout(() => {
+          loadMountedMedia();
+          setIsProcessing(false);
+        }, 2000);
+        return;
+      }
+      
       setStatus(`Error: ${errorMessage}`);
     } finally {
       setIsProcessing(false);
