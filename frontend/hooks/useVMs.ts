@@ -244,14 +244,10 @@ export function useCreateVM() {
     },
     
     // 성공/실패 관계없이 항상 실행
+    // 중요: delete 액션은 useVMAction의 onSettled에서 처리하므로 여기서는 호출하지 않음
     onSettled: () => {
-      queueMicrotask(() => {
-        startTransition(() => {
-          // 최신 데이터 확보
-          queryClient.invalidateQueries({ queryKey: ['vms'] });
-          queryClient.invalidateQueries({ queryKey: ['quota'] });
-        });
-      });
+      // create 액션만 여기서 처리 (delete는 useVMAction에서 처리)
+      // delete 액션은 useVMAction의 onSettled에서 처리하므로 중복 호출 방지
     },
   });
 }
@@ -434,20 +430,39 @@ export function useVMAction() {
           queryClient.setQueryData<VM[]>(['vms'], (old) => {
             if (!old) return [];
             
-            // 디버깅: 실제 UUID 비교
+            // 디버깅: 실제 UUID 비교 (상세 로그)
+            const oldVMDetails = old.map(v => ({ uuid: v.uuid, name: v.name }));
             window.console.log('[useVMAction] Delete: Before filter:', {
-              oldVMs: old.map(v => ({ uuid: v.uuid, name: v.name })),
+              oldVMs: oldVMDetails,
+              oldVMsCount: old.length,
               deletedUUID: variables.uuid,
-              uuidType: typeof variables.uuid,
+              deletedUUIDType: typeof variables.uuid,
+              deletedUUIDLength: variables.uuid?.length,
+            });
+            
+            // 각 VM의 UUID를 상세히 비교
+            old.forEach((v, index) => {
+              const matches = v.uuid === variables.uuid;
+              window.console.log(`[useVMAction] Delete: VM[${index}] comparison:`, {
+                vmUUID: v.uuid,
+                vmUUIDType: typeof v.uuid,
+                vmUUIDLength: v.uuid?.length,
+                deletedUUID: variables.uuid,
+                deletedUUIDType: typeof variables.uuid,
+                deletedUUIDLength: variables.uuid?.length,
+                exactMatch: matches,
+                strictEqual: v.uuid === variables.uuid,
+                looseEqual: v.uuid == variables.uuid,
+                includes: v.uuid?.includes(variables.uuid) || variables.uuid?.includes(v.uuid),
+              });
             });
             
             const filtered = old.filter(v => {
               const matches = v.uuid === variables.uuid;
               if (matches) {
-                window.console.log('[useVMAction] Delete: Found matching VM:', {
+                window.console.log('[useVMAction] Delete: Found matching VM to remove:', {
                   vmUUID: v.uuid,
                   deletedUUID: variables.uuid,
-                  match: matches,
                 });
               }
               return !matches;
@@ -458,7 +473,15 @@ export function useVMAction() {
               afterCount: filtered.length,
               deletedUUID: variables.uuid,
               filteredVMs: filtered.map(v => ({ uuid: v.uuid, name: v.name })),
+              removedCount: old.length - filtered.length,
             });
+            
+            if (old.length === filtered.length) {
+              window.console.error('[useVMAction] Delete: WARNING - No VM was removed!', {
+                oldVMs: oldVMDetails,
+                deletedUUID: variables.uuid,
+              });
+            }
             
             return filtered;
           });
@@ -673,14 +696,21 @@ export function useVMAction() {
       queueMicrotask(() => {
         if (variables.action === 'delete') {
           // 삭제 후에는 조금 지연시켜서 무효화 (백엔드가 완전히 처리할 시간 확보)
+          // 중요: onSuccess에서 이미 setQueryData로 목록에서 제거했으므로,
+          // invalidateQueries는 서버에서 최신 목록을 가져와서 동기화하는 용도
+          // 하지만 너무 빨리 호출하면 백엔드가 아직 삭제를 완료하지 않아서
+          // 삭제 전 목록이 다시 로드될 수 있음
           setTimeout(() => {
             queueMicrotask(() => {
               startTransition(() => {
+                window.console.log('[useVMAction] Delete: Invalidating queries after delay');
+                // 서버에서 최신 목록을 가져와서 동기화
+                // onSuccess에서 이미 목록에서 제거했으므로, 이건 백업용
                 queryClient.invalidateQueries({ queryKey: ['vms'] });
                 queryClient.invalidateQueries({ queryKey: ['quota'] });
               });
             });
-          }, 500);
+          }, 2000); // 500ms -> 2000ms로 증가하여 백엔드 처리 시간 확보
         } else if (variables.action === 'start' || variables.action === 'stop') {
           // start/stop 액션: 서버 응답을 신뢰하되, 적절한 타이밍에 invalidateQueries 호출
           // 서버가 start/stop 액션에 대해 반환한 상태(Running/Stopped)를 우선하되,
