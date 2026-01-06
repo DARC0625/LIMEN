@@ -347,7 +347,8 @@ export default function VMListSection({
           >
             {vms.map((vm, index) => {
               // OS 타입에 따른 로고 결정
-              // OS 로고를 안정적으로 유지하기 위해 useMemo 사용 (액션 버튼 클릭 시 리렌더링 방지)
+              // os_type을 안정적으로 참조하기 위해 변수로 저장 (액션 버튼 클릭 시 리렌더링 방지)
+              const vmOsType = vm.os_type; // os_type을 변수로 저장하여 안정성 확보
               const getOSLogo = (osType?: string) => {
                 if (!osType || osType.trim() === '') {
                   return (
