@@ -43,32 +43,42 @@ export default function UserManagementPage() {
   
   // 인증 및 Admin 권한 확인 (hooks 호출 후에 처리)
   useEffect(() => {
-    // 인증 확인 중이면 대기
+    // React Error #310 해결: 상태 업데이트를 startTransition으로 감싸기
     if (isAuthenticated === null) {
-      setIsCheckingAuth(true);
-      setIsUserAdmin(null);
+      startTransition(() => {
+        setIsCheckingAuth(true);
+        setIsUserAdmin(null);
+      });
       return;
     }
     
-    // 인증되지 않았으면 대시보드로 리다이렉트
     if (isAuthenticated === false) {
-      setIsCheckingAuth(false);
-      setIsUserAdmin(false);
+      startTransition(() => {
+        setIsCheckingAuth(false);
+        setIsUserAdmin(false);
+      });
       router.push('/dashboard');
       return;
     }
     
     // 인증되었으면 Admin 권한 확인
-    setIsCheckingAuth(false);
+    startTransition(() => {
+      setIsCheckingAuth(false);
+    });
+    
     isAdmin().then((admin) => {
-      setIsUserAdmin(admin);
+      startTransition(() => {
+        setIsUserAdmin(admin);
+      });
       if (!admin) {
         toast.error('Admin access required');
         router.push('/dashboard');
       }
     }).catch((error) => {
       console.error('[UserManagement] Admin check failed:', error);
-      setIsUserAdmin(false);
+      startTransition(() => {
+        setIsUserAdmin(false);
+      });
       toast.error('Admin access required');
       router.push('/dashboard');
     });
