@@ -269,6 +269,31 @@ export const vmAPI = {
   getBootOrder: async (uuid: string): Promise<{ boot_order: BootOrder }> => {
     return apiRequest<{ boot_order: BootOrder }>(`/vms/${uuid}/boot-order`);
   },
+
+  /**
+   * VM 설치 완료 처리
+   * CDROM 제거 및 디스크 부팅으로 전환
+   */
+  finalizeInstall: async (uuid: string): Promise<{ message: string; vm_uuid: string }> => {
+    const logger = (await import('../utils/logger')).logger;
+    logger.log('[vmAPI.finalizeInstall] Calling API:', { uuid });
+    try {
+      const result = await apiRequest<{ message: string; vm_uuid: string }>(
+        `/vms/${uuid}/finalize-install`,
+        {
+          method: 'POST',
+        }
+      );
+      logger.log('[vmAPI.finalizeInstall] API success:', result);
+      return result;
+    } catch (error) {
+      const errorContext = error instanceof Error 
+        ? { message: error.message, stack: error.stack, name: error.name }
+        : { error: String(error) };
+      logger.error('[vmAPI.finalizeInstall] API error:', errorContext);
+      throw error;
+    }
+  },
 };
 
 
