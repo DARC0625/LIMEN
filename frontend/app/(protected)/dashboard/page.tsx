@@ -159,9 +159,9 @@ export default function Home() {
       const updatedVM = await vmAPI.setBootOrder(uuid, bootOrder);
       window.console.log('[handleBootOrderChange] API success:', updatedVM);
       
-      // API 응답에서 실제 boot_order 값 가져오기
+      // API 응답에서 실제 boot_order 값 가져오기 (이미 프론트엔드 형식으로 변환됨)
       const actualBootOrder = updatedVM.boot_order || bootOrder;
-      window.console.log('[handleBootOrderChange] Actual boot_order from API:', actualBootOrder);
+      window.console.log('[handleBootOrderChange] Actual boot_order from API (normalized):', actualBootOrder);
       
       // 성공 시 처리 ID 제거
       setProcessingId(null);
@@ -273,27 +273,30 @@ export default function Home() {
       
       toast.success(result.message || 'Installation finalized successfully');
       
-      // React Query 캐시 업데이트
+      // 백엔드 응답에 VM 정보가 있으면 사용, 없으면 기존 값 유지
+      // boot_order는 백엔드가 유지하므로 강제로 변경하지 않음
       queryClient.setQueryData<VM[]>(['vms'], (old) => {
         if (!old) return [];
         return old.map(v => 
           v.uuid === uuid 
             ? { 
                 ...v, 
-                boot_order: 'hdd-only' as BootOrder,
-                installation_status: 'installed' as const
+                installation_status: 'installed' as const,
+                // 백엔드 응답에 VM 정보가 있으면 사용 (boot_order는 이미 변환됨)
+                ...(result.vm ? { boot_order: result.vm.boot_order } : {})
               } 
             : v
         );
       });
       
       // 편집 모달은 닫지 않음 (Update 버튼으로만 닫히도록)
-      // editingVM 상태만 업데이트
+      // editingVM 상태만 업데이트 (boot_order는 백엔드가 유지하므로 강제 변경하지 않음)
       if (editingVM?.uuid === uuid) {
         setEditingVM({
           ...editingVM,
-          boot_order: 'hdd-only' as BootOrder,
-          installation_status: 'installed' as const
+          installation_status: 'installed' as const,
+          // 백엔드 응답에 VM 정보가 있으면 사용 (boot_order는 이미 변환됨)
+          ...(result.vm ? { boot_order: result.vm.boot_order } : {})
         });
       }
       

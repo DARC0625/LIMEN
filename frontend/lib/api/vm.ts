@@ -12,12 +12,53 @@ import type {
   BootOrder,
 } from '../types';
 
+/**
+ * 백엔드 부팅 순서 형식을 프론트엔드 형식으로 변환
+ * 백엔드: cdrom, hd, cdrom_hd, hd_cdrom
+ * 프론트엔드: cdrom-only, hdd-only, cdrom-hdd, hdd-cdrom
+ */
+export function normalizeBootOrderFromBackend(backendBootOrder: string | undefined | null): BootOrder {
+  if (!backendBootOrder) {
+    return 'hdd-only';
+  }
+  
+  const mapping: Record<string, BootOrder> = {
+    'cdrom': 'cdrom-only',
+    'hd': 'hdd-only',
+    'cdrom_hd': 'cdrom-hdd',
+    'hd_cdrom': 'hdd-cdrom',
+  };
+  
+  return mapping[backendBootOrder] || 'hdd-only';
+}
+
+/**
+ * 프론트엔드 부팅 순서 형식을 백엔드 형식으로 변환
+ * 프론트엔드: cdrom-only, hdd-only, cdrom-hdd, hdd-cdrom
+ * 백엔드: cdrom, hd, cdrom_hd, hd_cdrom
+ */
+export function normalizeBootOrderToBackend(frontendBootOrder: BootOrder): string {
+  const mapping: Record<BootOrder, string> = {
+    'cdrom-only': 'cdrom',
+    'hdd-only': 'hd',
+    'cdrom-hdd': 'cdrom_hd',
+    'hdd-cdrom': 'hd_cdrom',
+  };
+  
+  return mapping[frontendBootOrder] || 'hd';
+}
+
 export const vmAPI = {
   /**
    * VM 목록 조회
    */
   list: async (): Promise<VM[]> => {
-    return apiRequest<VM[]>('/vms');
+    const vms = await apiRequest<VM[]>('/vms');
+    // 백엔드 부팅 순서 형식을 프론트엔드 형식으로 변환
+    return vms.map(vm => ({
+      ...vm,
+      boot_order: normalizeBootOrderFromBackend(vm.boot_order as any),
+    }));
   },
 
   /**
@@ -248,12 +289,23 @@ export const vmAPI = {
     const logger = (await import('../utils/logger')).logger;
     logger.log('[vmAPI.setBootOrder] Calling API:', { uuid, bootOrder });
     try {
+      // 프론트엔드 형식을 백엔드 형식으로 변환
+      const backendBootOrder = normalizeBootOrderToBackend(bootOrder);
+      logger.log('[vmAPI.setBootOrder] Converted to backend format:', { frontend: bootOrder, backend: backendBootOrder });
+      
       const result = await apiRequest<VM>(`/vms/${uuid}/boot-order`, {
         method: 'POST',
-        body: JSON.stringify({ boot_order: bootOrder }),
+        body: JSON.stringify({ boot_order: backendBootOrder }),
       });
-      logger.log('[vmAPI.setBootOrder] API success:', result);
-      return result;
+      
+      // 백엔드 응답을 프론트엔드 형식으로 변환
+      const normalizedResult = {
+        ...result,
+        boot_order: normalizeBootOrderFromBackend(result.boot_order as any),
+      };
+      
+      logger.log('[vmAPI.setBootOrder] API success:', normalizedResult);
+      return normalizedResult;
     } catch (error) {
       const errorContext = error instanceof Error 
         ? { 
@@ -309,26 +361,39 @@ export const vmAPI = {
    * 부팅 순서 조회
    */
   getBootOrder: async (uuid: string): Promise<{ boot_order: BootOrder }> => {
-    return apiRequest<{ boot_order: BootOrder }>(`/vms/${uuid}/boot-order`);
+    const result = await apiRequest<{ boot_order: string }>(`/vms/${uuid}/boot-order`);
+    // 백엔드 형식을 프론트엔드 형식으로 변환
+    return {
+      boot_order: normalizeBootOrderFromBackend(result.boot_order),
+    };
   },
 
   /**
    * VM 설치 완료 처리
    * CDROM 제거 및 디스크 부팅으로 전환
    */
-  finalizeInstall: async (uuid: string): Promise<{ message: string; vm_uuid: string }> => {
+  finalizeInstall: async (uuid: string): Promise<{ message: string; vm_uuid: string; vm?: VM }> => {
     const logger = (await import('../utils/logger')).logger;
     logger.log('[vmAPI.finalizeInstall] Calling API:', { uuid });
     try {
       // finalize-install 작업은 VM graceful shutdown, XML 수정, DB 업데이트 등 시간이 오래 걸릴 수 있음
       // 타임아웃을 60초로 설정
-      const result = await apiRequest<{ message: string; vm_uuid: string }>(
+      const result = await apiRequest<{ message: string; vm_uuid: string; vm?: VM }>(
         `/vms/${uuid}/finalize-install`,
         {
           method: 'POST',
           timeout: 60000, // 60초
         }
       );
+      
+      // VM 정보가 있으면 boot_order 변환
+      if (result.vm) {
+        result.vm = {
+          ...result.vm,
+          boot_order: normalizeBootOrderFromBackend(result.vm.boot_order as any),
+        };
+      }
+      
       logger.log('[vmAPI.finalizeInstall] API success:', result);
       return result;
     } catch (error) {

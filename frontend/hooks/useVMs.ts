@@ -43,6 +43,7 @@ export function useVMs() {
         }
         
         // 보호된 VM 상태가 있으면 서버 응답 상태를 우선
+        // boot_order는 이미 vmAPI.list()에서 변환됨
         const protectedData = data.map(vm => {
           const protectedState = protectedVMStates.get(vm.uuid);
           if (protectedState && (Date.now() - protectedState.timestamp) < 30000) {
