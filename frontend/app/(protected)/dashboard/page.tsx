@@ -182,6 +182,46 @@ export default function Home() {
     }
   };
 
+  const handleFinalizeInstall = async (uuid: string) => {
+    if (!confirm('Finalize installation?\n\nThis will:\n- Remove CDROM device\n- Set boot order to HDD only\n- Mark installation as complete\n\nVM will be shut down if running.')) {
+      return;
+    }
+
+    setProcessingId(uuid);
+    try {
+      const result = await vmAPI.finalizeInstall(uuid);
+      toast.success(result.message || 'Installation finalized successfully');
+      
+      // React Query 캐시 업데이트
+      queryClient.setQueryData<VM[]>(['vms'], (old) => {
+        if (!old) return [];
+        return old.map(v => 
+          v.uuid === uuid 
+            ? { 
+                ...v, 
+                boot_order: 'hdd-only' as BootOrder,
+                installation_status: 'installed' as const
+              } 
+            : v
+        );
+      });
+      
+      // 편집 모달 닫기
+      if (editingVM?.uuid === uuid) {
+        setEditingVM(null);
+      }
+      
+      // VM 목록 새로고침
+      queryClient.invalidateQueries({ queryKey: ['vms'] });
+    } catch (error) {
+      console.error('[handleFinalizeInstall] API error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to finalize installation';
+      toast.error(`Failed to finalize installation: ${errorMessage}`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const handleAction = async (uuid: string, action: 'start' | 'stop' | 'delete') => {
     // 강제 로깅 - 가장 먼저 실행
     window.console.log('[handleAction] ====== HANDLE ACTION CALLED ======');
