@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, startTransition, memo } from 'react';
+import { useState, useEffect, useRef, startTransition, memo, useMemo } from 'react';
 import { useVMs } from '../hooks/useVMs';
 import { useQueryClient } from '@tanstack/react-query';
 import type { VM } from '../lib/types';
@@ -347,6 +347,7 @@ export default function VMListSection({
           >
             {vms.map((vm, index) => {
               // OS 타입에 따른 로고 결정
+              // OS 로고를 안정적으로 유지하기 위해 useMemo 사용 (액션 버튼 클릭 시 리렌더링 방지)
               const getOSLogo = (osType?: string) => {
                 if (!osType || osType.trim() === '') {
                   return (
@@ -363,38 +364,48 @@ export default function VMListSection({
                 
                 if (os === 'ubuntu-desktop' || (os.includes('ubuntu') && os.includes('desktop'))) {
                   return (
-                    <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" fill="#E95420"/>
-                      <circle cx="12" cy="12" r="8" fill="#77216F"/>
-                      <circle cx="12" cy="12" r="6" fill="#5E2750"/>
-                      <path d="M12 2L15 9L12 7L9 9L12 2Z" fill="white"/>
-                      <path d="M12 22L9 15L12 17L15 15L12 22Z" fill="white"/>
-                      <path d="M2 12L9 9L7 12L9 15L2 12Z" fill="white"/>
-                      <path d="M22 12L15 15L17 12L15 9L22 12Z" fill="white"/>
-                    </svg>
+                    <img 
+                      src="https://www.freelogovectors.net/wp-content/uploads/2023/09/ubuntu-logo-freelogovectors.net_.png" 
+                      alt="Ubuntu Desktop Logo" 
+                      className="w-12 h-12 object-contain"
+                      onError={(e) => {
+                        // 이미지 로드 실패 시 기본 SVG 표시
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const fallback = target.nextElementSibling as HTMLElement;
+                        if (fallback) fallback.style.display = 'block';
+                      }}
+                    />
                   );
                 } else if (os === 'ubuntu-server' || (os.includes('ubuntu') && os.includes('server'))) {
                   return (
-                    <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" fill="#E95420"/>
-                      <circle cx="12" cy="12" r="8" fill="#77216F"/>
-                      <circle cx="12" cy="12" r="6" fill="#5E2750"/>
-                      <path d="M12 2L15 9L12 7L9 9L12 2Z" fill="white"/>
-                      <path d="M12 22L9 15L12 17L15 15L12 22Z" fill="white"/>
-                      <path d="M2 12L9 9L7 12L9 15L2 12Z" fill="white"/>
-                      <path d="M22 12L15 15L17 12L15 9L22 12Z" fill="white"/>
-                    </svg>
+                    <img 
+                      src="https://www.freelogovectors.net/wp-content/uploads/2023/09/ubuntu-logo-freelogovectors.net_.png" 
+                      alt="Ubuntu Server Logo" 
+                      className="w-12 h-12 object-contain"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const fallback = target.nextElementSibling as HTMLElement;
+                        if (fallback) fallback.style.display = 'block';
+                      }}
+                    />
                   );
                 } else if (os === 'kali' || os.includes('kali')) {
                   return (
-                    <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" fill="#557C94"/>
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="#557C94"/>
-                      <path d="M8 10c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2-2-.9-2-2zm4 4c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2-2-.9-2-2z" fill="#557C94"/>
-                      <path d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" fill="#557C94"/>
-                    </svg>
+                    <img 
+                      src="https://www.freelogovectors.net/wp-content/uploads/2021/12/kalilogolinux-freelogovectors.net_.png" 
+                      alt="Kali Linux Logo" 
+                      className="w-12 h-12 object-contain"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const fallback = target.nextElementSibling as HTMLElement;
+                        if (fallback) fallback.style.display = 'block';
+                      }}
+                    />
                   );
-                } else if (os === 'windows' || os.includes('windows')) {
+                } else if (os === 'windows' || os.includes('windows') || os === 'windows11') {
                   return (
                     <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none">
                       <path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z" fill="#0078D4"/>
@@ -404,7 +415,8 @@ export default function VMListSection({
                 return null;
               };
 
-              const osLogo = getOSLogo(vm.os_type);
+              // os_type이 변경되지 않는 한 동일한 로고 유지 (vmOsType 변수 사용으로 안정성 확보)
+              const osLogo = getOSLogo(vmOsType);
               const isTouched = touchedVM === vm.uuid;
               
               const isActive = index === currentIndex;
