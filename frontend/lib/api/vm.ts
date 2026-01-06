@@ -200,24 +200,29 @@ export const vmAPI = {
 
   /**
    * 미디어 연결/분리
+   * ISO 파일(.iso, .img) 또는 VM 디스크(.qcow2) 지원
    */
   media: async (
     uuid: string,
     action: 'detach' | 'attach',
-    iso_path?: string
+    media_path?: string
   ): Promise<{ message: string; vm_uuid?: string; previous_media_path?: string }> => {
     interface MediaActionBody {
       action: 'detach' | 'attach';
-      iso_path?: string;
+      iso_path?: string; // 하위 호환성
+      media_path?: string; // 새로운 파라미터 (ISO 및 VM 디스크 지원)
     }
     
     const body: MediaActionBody = { action };
     
     if (action === 'attach') {
-      if (!iso_path || !iso_path.trim()) {
-        throw new Error('ISO path is required for attach action');
+      if (!media_path || !media_path.trim()) {
+        throw new Error('Media path is required for attach action');
       }
-      body.iso_path = iso_path.trim();
+      const trimmedPath = media_path.trim();
+      // media_path를 우선 사용하고, 하위 호환성을 위해 iso_path도 설정
+      body.media_path = trimmedPath;
+      body.iso_path = trimmedPath;
     }
     
     return apiRequest<{ message: string; vm_uuid?: string; previous_media_path?: string }>(
