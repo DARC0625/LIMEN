@@ -241,9 +241,7 @@ export default function Home() {
       
       // 에러 메시지를 여러 줄로 표시 (toast는 한 줄만 지원하므로 첫 줄만 표시)
       const firstLine = errorMessage.split('\n')[0];
-      toast.error(`Failed to finalize installation: ${firstLine}`, {
-        duration: 5000,
-      });
+      toast.error(`Failed to finalize installation: ${firstLine}`);
       
       // 전체 에러 메시지는 콘솔에만 출력
       if (errorMessage.includes('\n')) {
