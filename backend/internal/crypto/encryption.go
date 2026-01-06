@@ -118,14 +118,36 @@ func CheckPassword(password, hash string) bool {
 		return false
 	}
 
-	// Use default config for verification (stored hash length determines key length)
-	config := DefaultArgon2idConfig()
-	config.KeyLength = uint32(len(storedHash))
+	// Try multiple configs for verification (hash doesn't store config, so we try common configs)
+	// First try default config
+	configs := []Argon2idConfig{
+		DefaultArgon2idConfig(),
+		{
+			Memory:      64 * 1024,
+			Iterations:  3,
+			Parallelism: 2,
+			KeyLength:   uint32(len(storedHash)),
+			SaltLength:  16,
+		},
+		{
+			Memory:      65536,
+			Iterations:  3,
+			Parallelism: 4,
+			KeyLength:   uint32(len(storedHash)),
+			SaltLength:  16,
+		},
+	}
 
-	// Compute hash and compare
-	computedHash := argon2.IDKey([]byte(password), salt, config.Iterations, config.Memory, config.Parallelism, config.KeyLength)
+	// Try each config until one matches
+	for _, config := range configs {
+		config.KeyLength = uint32(len(storedHash))
+		computedHash := argon2.IDKey([]byte(password), salt, config.Iterations, config.Memory, config.Parallelism, config.KeyLength)
+		if constantTimeCompare(computedHash, storedHash) {
+			return true
+		}
+	}
 
-	return constantTimeCompare(computedHash, storedHash)
+	return false
 }
 
 // ChaCha20Poly1305Encrypt encrypts data using ChaCha20-Poly1305.

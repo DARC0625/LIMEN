@@ -10,10 +10,10 @@ import (
 func TestChaCha20Poly1305Encrypt_Decrypt(t *testing.T) {
 	plaintext := []byte("test message for encryption")
 	key := make([]byte, 32) // 256-bit key
-	nonce := make([]byte, 12) // 96-bit nonce
+	copy(key, []byte("test-key-32-bytes-long-key!!"))
 
-	// Encrypt
-	ciphertext, err := ChaCha20Poly1305Encrypt(plaintext, key, nonce)
+	// Encrypt (nonce is generated internally)
+	ciphertext, err := ChaCha20Poly1305Encrypt(plaintext, key)
 	if err != nil {
 		t.Fatalf("ChaCha20Poly1305Encrypt failed: %v", err)
 	}
@@ -23,7 +23,7 @@ func TestChaCha20Poly1305Encrypt_Decrypt(t *testing.T) {
 	}
 
 	// Decrypt
-	decrypted, err := ChaCha20Poly1305Decrypt(ciphertext, key, nonce)
+	decrypted, err := ChaCha20Poly1305Decrypt(ciphertext, key)
 	if err != nil {
 		t.Fatalf("ChaCha20Poly1305Decrypt failed: %v", err)
 	}
@@ -36,9 +36,8 @@ func TestChaCha20Poly1305Encrypt_Decrypt(t *testing.T) {
 func TestChaCha20Poly1305Encrypt_InvalidKey(t *testing.T) {
 	plaintext := []byte("test message")
 	key := make([]byte, 16) // Wrong key size (should be 32)
-	nonce := make([]byte, 12)
 
-	_, err := ChaCha20Poly1305Encrypt(plaintext, key, nonce)
+	_, err := ChaCha20Poly1305Encrypt(plaintext, key)
 	if err == nil {
 		t.Error("ChaCha20Poly1305Encrypt should fail with invalid key size")
 	}
@@ -47,41 +46,41 @@ func TestChaCha20Poly1305Encrypt_InvalidKey(t *testing.T) {
 func TestChaCha20Poly1305Decrypt_InvalidKey(t *testing.T) {
 	ciphertext := []byte("test ciphertext")
 	key := make([]byte, 16) // Wrong key size (should be 32)
-	nonce := make([]byte, 12)
 
-	_, err := ChaCha20Poly1305Decrypt(ciphertext, key, nonce)
+	_, err := ChaCha20Poly1305Decrypt(ciphertext, key)
 	if err == nil {
 		t.Error("ChaCha20Poly1305Decrypt should fail with invalid key size")
 	}
 }
 
-func TestChaCha20Poly1305Decrypt_InvalidNonce(t *testing.T) {
+func TestChaCha20Poly1305Decrypt_InvalidCiphertext(t *testing.T) {
 	plaintext := []byte("test message")
 	key := make([]byte, 32)
-	nonce := make([]byte, 12)
+	copy(key, []byte("test-key-32-bytes-long-key!!"))
 
-	ciphertext, err := ChaCha20Poly1305Encrypt(plaintext, key, nonce)
+	ciphertext, err := ChaCha20Poly1305Encrypt(plaintext, key)
 	if err != nil {
 		t.Fatalf("ChaCha20Poly1305Encrypt failed: %v", err)
 	}
 
-	// Try to decrypt with wrong nonce
-	wrongNonce := make([]byte, 12)
-	wrongNonce[0] = 0xFF // Change nonce
+	// Try to decrypt with corrupted ciphertext
+	corruptedCiphertext := make([]byte, len(ciphertext))
+	copy(corruptedCiphertext, ciphertext)
+	corruptedCiphertext[0] ^= 0xFF // Corrupt first byte
 
-	_, err = ChaCha20Poly1305Decrypt(ciphertext, key, wrongNonce)
+	_, err = ChaCha20Poly1305Decrypt(corruptedCiphertext, key)
 	if err == nil {
-		t.Error("ChaCha20Poly1305Decrypt should fail with wrong nonce")
+		t.Error("ChaCha20Poly1305Decrypt should fail with corrupted ciphertext")
 	}
 }
 
 func TestAES256GCMEncrypt_Decrypt(t *testing.T) {
 	plaintext := []byte("test message for AES encryption")
 	key := make([]byte, 32) // 256-bit key
-	nonce := make([]byte, 12) // 96-bit nonce
+	copy(key, []byte("test-key-32-bytes-long-key!!"))
 
-	// Encrypt
-	ciphertext, err := AES256GCMEncrypt(plaintext, key, nonce)
+	// Encrypt (nonce is generated internally)
+	ciphertext, err := AES256GCMEncrypt(plaintext, key)
 	if err != nil {
 		t.Fatalf("AES256GCMEncrypt failed: %v", err)
 	}
@@ -91,7 +90,7 @@ func TestAES256GCMEncrypt_Decrypt(t *testing.T) {
 	}
 
 	// Decrypt
-	decrypted, err := AES256GCMDecrypt(ciphertext, key, nonce)
+	decrypted, err := AES256GCMDecrypt(ciphertext, key)
 	if err != nil {
 		t.Fatalf("AES256GCMDecrypt failed: %v", err)
 	}
@@ -104,9 +103,8 @@ func TestAES256GCMEncrypt_Decrypt(t *testing.T) {
 func TestAES256GCMEncrypt_InvalidKey(t *testing.T) {
 	plaintext := []byte("test message")
 	key := make([]byte, 16) // Wrong key size (should be 32)
-	nonce := make([]byte, 12)
 
-	_, err := AES256GCMEncrypt(plaintext, key, nonce)
+	_, err := AES256GCMEncrypt(plaintext, key)
 	if err == nil {
 		t.Error("AES256GCMEncrypt should fail with invalid key size")
 	}
@@ -115,31 +113,31 @@ func TestAES256GCMEncrypt_InvalidKey(t *testing.T) {
 func TestAES256GCMDecrypt_InvalidKey(t *testing.T) {
 	ciphertext := []byte("test ciphertext")
 	key := make([]byte, 16) // Wrong key size (should be 32)
-	nonce := make([]byte, 12)
 
-	_, err := AES256GCMDecrypt(ciphertext, key, nonce)
+	_, err := AES256GCMDecrypt(ciphertext, key)
 	if err == nil {
 		t.Error("AES256GCMDecrypt should fail with invalid key size")
 	}
 }
 
-func TestAES256GCMDecrypt_InvalidNonce(t *testing.T) {
+func TestAES256GCMDecrypt_InvalidCiphertext(t *testing.T) {
 	plaintext := []byte("test message")
 	key := make([]byte, 32)
-	nonce := make([]byte, 12)
+	copy(key, []byte("test-key-32-bytes-long-key!!"))
 
-	ciphertext, err := AES256GCMEncrypt(plaintext, key, nonce)
+	ciphertext, err := AES256GCMEncrypt(plaintext, key)
 	if err != nil {
 		t.Fatalf("AES256GCMEncrypt failed: %v", err)
 	}
 
-	// Try to decrypt with wrong nonce
-	wrongNonce := make([]byte, 12)
-	wrongNonce[0] = 0xFF // Change nonce
+	// Try to decrypt with corrupted ciphertext
+	corruptedCiphertext := make([]byte, len(ciphertext))
+	copy(corruptedCiphertext, ciphertext)
+	corruptedCiphertext[0] ^= 0xFF // Corrupt first byte
 
-	_, err = AES256GCMDecrypt(ciphertext, key, wrongNonce)
+	_, err = AES256GCMDecrypt(corruptedCiphertext, key)
 	if err == nil {
-		t.Error("AES256GCMDecrypt should fail with wrong nonce")
+		t.Error("AES256GCMDecrypt should fail with corrupted ciphertext")
 	}
 }
 

@@ -179,3 +179,4 @@ cd /home/darc0/LIMEN/backend
 **실행 환경**: WSL2 Linux  
 **서버 상태**: 재시작 완료 (PID: 108552)
 
+

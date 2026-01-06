@@ -31,7 +31,7 @@ func GetRequestDeduplicator() *RequestDeduplicator {
 	deduplicatorOnce.Do(func() {
 		deduplicatorInstance = &RequestDeduplicator{
 			recentRequests:  make(map[string]time.Time),
-			windowDuration:  5 * time.Second,  // 5 seconds deduplication window
+			windowDuration:  5 * time.Second, // 5 seconds deduplication window
 			cleanupInterval: 1 * time.Minute, // Cleanup every minute
 		}
 		go deduplicatorInstance.cleanupLoop()
@@ -43,7 +43,7 @@ func GetRequestDeduplicator() *RequestDeduplicator {
 // It uses request method, path, body hash, and user ID to identify duplicates.
 func Deduplication() func(http.Handler) http.Handler {
 	dedup := GetRequestDeduplicator()
-	
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Skip deduplication for GET requests (idempotent)
@@ -51,8 +51,8 @@ func Deduplication() func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			
-			// Skip deduplication for VM creation and action endpoints
+
+			// Skip deduplication for VM creation, action, and media endpoints
 			// VM operations may be retried quickly and should not be blocked
 			if r.URL.Path == "/api/vms" && r.Method == "POST" {
 				// VM creation - allow immediate retries
@@ -61,6 +61,16 @@ func Deduplication() func(http.Handler) http.Handler {
 			}
 			if strings.HasPrefix(r.URL.Path, "/api/vms/") && strings.HasSuffix(r.URL.Path, "/action") {
 				// VM actions - allow immediate retries
+				next.ServeHTTP(w, r)
+				return
+			}
+			if strings.HasPrefix(r.URL.Path, "/api/vms/") && strings.HasSuffix(r.URL.Path, "/media") {
+				// VM media operations (attach/detach) - allow immediate retries
+				next.ServeHTTP(w, r)
+				return
+			}
+			if strings.HasPrefix(r.URL.Path, "/api/vms/") && strings.HasSuffix(r.URL.Path, "/boot-order") {
+				// VM boot order changes - allow immediate retries
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -164,4 +174,3 @@ func generateRequestHash(r *http.Request) (string, error) {
 	hash := hasher.Sum(nil)
 	return hex.EncodeToString(hash), nil
 }
-

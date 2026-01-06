@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -666,6 +667,23 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 		}
 		
 		if err := h.VMService.StartVM(vmRec.Name); err != nil {
+			// Check if error is "VM not found" - this means VM exists in DB but not in libvirt
+			if strings.Contains(err.Error(), "Domain not found") || strings.Contains(err.Error(), "VM not found") {
+				logger.Log.Warn("VM not found in libvirt, marking as stopped in DB", 
+					zap.String("vm_name", vmRec.Name), 
+					zap.Error(err))
+				// Update DB status to Stopped since VM doesn't exist in libvirt
+				vmRec.Status = models.VMStatusStopped
+				if err := h.DB.Save(&vmRec).Error; err != nil {
+					logger.Log.Error("Failed to update VM status in DB", zap.Error(err), zap.String("vm_name", vmRec.Name))
+				}
+				// Broadcast status update
+				h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
+				// Return user-friendly error
+				errors.WriteError(w, http.StatusNotFound, "VM not found in libvirt. The VM may have been deleted or not created properly. Please recreate the VM.", err)
+				audit.LogVMStart(r.Context(), userID, vmRec.UUID, false)
+				return
+			}
 			logger.Log.Error("Failed to start VM", zap.Error(err), zap.String("vm_name", vmRec.Name))
 			audit.LogVMStart(r.Context(), userID, vmRec.UUID, false)
 			errors.WriteInternalError(w, err, h.Config.Env == "development")
@@ -788,21 +806,22 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 		if err := h.DB.Select("id", "uuid", "name", "status", "cpu", "memory").Find(&allVMs).Error; err == nil {
 			h.VMStatusBroadcaster.BroadcastVMList(allVMs)
 		}
-
-		// Update metrics
+		
+		// Update metrics before returning
 		metrics.VMDeleteTotal.Inc()
 		if err := h.UpdateMetrics(); err != nil {
 			logger.Log.Warn("Failed to update metrics", zap.Error(err))
 		}
 
-		// Return success response with JSON
+		// Return deleted VM info for frontend (before deletion, so we have the data)
+		// Set status to "Deleted" to indicate successful deletion
+		vmRec.Status = models.VMStatusStopped // Use Stopped as deleted indicator
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"message": "VM deleted successfully",
-			"vm_uuid": uuidStr,
-		})
-		return
+		if err := json.NewEncoder(w).Encode(vmRec); err != nil {
+			logger.Log.Error("Failed to encode deleted VM response", zap.Error(err))
+		}
+		return // Early return for delete action
 	case models.VMActionUpdate:
 		if h.VMService == nil {
 			errors.WriteInternalError(w, fmt.Errorf("VM service is not available"), h.Config.Env == "development")
@@ -821,6 +840,14 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := h.VMService.UpdateVM(vmRec.Name, req.Memory, req.CPU); err != nil {
+			// Check if error is "VM not found in libvirt"
+			if strings.Contains(err.Error(), "VM not found in libvirt") || strings.Contains(err.Error(), "Domain not found") {
+				logger.Log.Warn("VM not found in libvirt", 
+					zap.String("vm_name", vmRec.Name), 
+					zap.Error(err))
+				errors.WriteError(w, http.StatusNotFound, "VM not found in libvirt. The VM may have been deleted or not created properly.", err)
+				return
+			}
 			logger.Log.Error("Failed to update VM", zap.Error(err), zap.String("vm_name", vmRec.Name))
 			errors.WriteInternalError(w, err, h.Config.Env == "development")
 			return
@@ -1898,7 +1925,7 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Handle GET request - return current media information
+	// Handle GET request - return current media information and available options
 	if r.Method == "GET" {
 		if h.VMService == nil {
 			errors.WriteInternalError(w, fmt.Errorf("VM service is not available"), h.Config.Env == "development")
@@ -1909,18 +1936,34 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			// Check if error is "no CDROM device" - return empty media instead of error
 			if strings.Contains(err.Error(), "no CDROM device") {
-				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"vm_uuid":    uuidStr,
-					"media_path": "",
-					"attached":   false,
-					"message":    "No CDROM device found in VM configuration",
-				})
+				mediaPath = ""
+			} else {
+				logger.Log.Error("Failed to get current media", zap.Error(err), zap.String("vm_name", vmRec.Name))
+				errors.WriteInternalError(w, err, h.Config.Env == "development")
 				return
 			}
-			logger.Log.Error("Failed to get current media", zap.Error(err), zap.String("vm_name", vmRec.Name))
-			errors.WriteInternalError(w, err, h.Config.Env == "development")
-			return
+		}
+
+		// Get available ISO files
+		isos, err := h.VMService.ListISOs()
+		if err != nil {
+			logger.Log.Warn("Failed to list ISOs", zap.Error(err))
+			isos = []map[string]interface{}{} // Continue with empty list
+		}
+
+		// Get VM's virtual disk path
+		vmDiskPath := vmRec.DiskPath
+		if vmDiskPath == "" && vmRec.UUID != "" {
+			// Fallback: construct path from UUID if not in DB
+			vmDiskPath = filepath.Join(h.VMService.GetVMDir(), vmRec.UUID+".qcow2")
+		}
+
+		// Check if disk file exists
+		diskExists := false
+		if vmDiskPath != "" {
+			if _, err := os.Stat(vmDiskPath); err == nil {
+				diskExists = true
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -1928,6 +1971,14 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 			"vm_uuid":    uuidStr,
 			"media_path": mediaPath,
 			"attached":   mediaPath != "",
+			"available_media": map[string]interface{}{
+				"isos": isos,
+				"vm_disk": map[string]interface{}{
+					"path":   vmDiskPath,
+					"exists": diskExists,
+					"name":   filepath.Base(vmDiskPath),
+				},
+			},
 		})
 		return
 	}
@@ -1939,8 +1990,9 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Action  string `json:"action" example:"detach"` // "attach" or "detach"
-		ISOPath string `json:"iso_path,omitempty" example:"/path/to/ubuntu.iso"` // Required for attach action
+		Action    string `json:"action" example:"detach"` // "attach" or "detach"
+		ISOPath   string `json:"iso_path,omitempty" example:"/path/to/ubuntu.iso"` // ISO file path (for attach)
+		MediaPath string `json:"media_path,omitempty" example:"/path/to/disk.qcow2"` // Media file path (ISO or VM disk, for attach)
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1966,33 +2018,52 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 			"previous_media_path": currentMediaPath,
 		})
 	case "attach":
-		if req.ISOPath == "" {
-			errors.WriteBadRequest(w, "ISO path is required for attach", nil)
+		// Support both iso_path (legacy) and media_path (new, supports both ISO and VM disk)
+		mediaPath := req.MediaPath
+		if mediaPath == "" {
+			mediaPath = req.ISOPath // Fallback to iso_path for backward compatibility
+		}
+		
+		if mediaPath == "" {
+			errors.WriteBadRequest(w, "Media path (iso_path or media_path) is required for attach", nil)
 			return
 		}
-		if err := h.VMService.AttachMedia(vmRec.Name, req.ISOPath); err != nil {
-			logger.Log.Error("Failed to attach media", zap.Error(err), zap.String("vm_name", vmRec.Name))
+		
+		if err := h.VMService.AttachMedia(vmRec.Name, mediaPath); err != nil {
+			// Check if error is "VM not found in libvirt"
+			if strings.Contains(err.Error(), "VM not found in libvirt") || strings.Contains(err.Error(), "Domain not found") {
+				logger.Log.Warn("VM not found in libvirt", zap.String("vm_name", vmRec.Name), zap.Error(err))
+				errors.WriteError(w, http.StatusNotFound, "VM not found in libvirt. The VM may have been deleted or not created properly.", err)
+				return
+			}
+			// Check if error is "CDROM device not found"
+			if strings.Contains(err.Error(), "CDROM device not found") {
+				logger.Log.Warn("CDROM device not found in VM", zap.String("vm_name", vmRec.Name), zap.Error(err))
+				errors.WriteError(w, http.StatusBadRequest, "CDROM device not found in VM configuration. This VM was created without ISO support. Please recreate the VM with ISO support enabled.", err)
+				return
+			}
+			logger.Log.Error("Failed to attach media", zap.Error(err), zap.String("vm_name", vmRec.Name), zap.String("media_path", mediaPath))
 			errors.WriteInternalError(w, err, h.Config.Env == "development")
 			return
 		}
-		logger.Log.Info("Media attached", zap.String("vm_name", vmRec.Name), zap.String("iso_path", req.ISOPath))
+		logger.Log.Info("Media attached", zap.String("vm_name", vmRec.Name), zap.String("media_path", mediaPath))
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"message": "Media attached successfully",
-			"vm_uuid": uuidStr,
-			"iso_path": req.ISOPath,
+			"message":    "Media attached successfully",
+			"vm_uuid":    uuidStr,
+			"media_path": mediaPath,
 		})
 	default:
 		errors.WriteBadRequest(w, fmt.Sprintf("Invalid action: %s. Valid actions: attach, detach", req.Action), nil)
 	}
 }
 
-// HandleListISOs returns a list of available ISO files
-// @Summary List available ISO files
-// @Description Get a list of all available ISO files in the ISO directory
+// HandleListISOs returns a list of available ISO files and VM virtual disks
+// @Summary List available ISO files and VM disks
+// @Description Get a list of all available ISO files in the ISO directory and VM virtual disks
 // @Tags vms
 // @Produce json
-// @Success 200 {object} map[string]interface{} "List of ISO files"
+// @Success 200 {object} map[string]interface{} "List of ISO files and VM disks"
 // @Failure 500 {object} map[string]interface{} "Internal server error"
 // @Security BearerAuth
 // @Router /vms/isos [get]
@@ -2009,10 +2080,49 @@ func (h *Handler) HandleListISOs(w http.ResponseWriter, r *http.Request, cfg *co
 		return
 	}
 
+	// Get all VM virtual disks
+	var vms []models.VM
+	if err := h.DB.Select("uuid", "name", "disk_path").Find(&vms).Error; err != nil {
+		logger.Log.Warn("Failed to list VM disks", zap.Error(err))
+	}
+
+	vmDisks := []map[string]interface{}{}
+	for _, vm := range vms {
+		diskPath := vm.DiskPath
+		if diskPath == "" && vm.UUID != "" {
+			// Fallback: construct path from UUID if not in DB
+			diskPath = filepath.Join(h.VMService.GetVMDir(), vm.UUID+".qcow2")
+		}
+		
+		// Check if disk file exists
+		diskExists := false
+		var diskSize int64 = 0
+		if diskPath != "" {
+			if info, err := os.Stat(diskPath); err == nil {
+				diskExists = true
+				diskSize = info.Size()
+			}
+		}
+
+		if diskExists {
+			vmDisks = append(vmDisks, map[string]interface{}{
+				"path":     diskPath,
+				"name":     filepath.Base(diskPath),
+				"vm_name":  vm.Name,
+				"vm_uuid":  vm.UUID,
+				"size":     diskSize,
+				"size_gb":  float64(diskSize) / (1024 * 1024 * 1024),
+				"type":     "qcow2",
+			})
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"isos":  isos,
-		"count": len(isos),
+		"isos":       isos,
+		"vm_disks":   vmDisks,
+		"count":      len(isos),
+		"disk_count": len(vmDisks),
 	})
 }
 
@@ -2046,7 +2156,16 @@ func (h *Handler) HandleVMBootOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bootOrder := models.BootOrder(req.BootOrder)
+	// Normalize boot order (handle various frontend formats)
+	bootOrderStr := strings.ToLower(req.BootOrder)
+	// Remove "-only" suffix (e.g., "cdrom-only" -> "cdrom", "hdd-only" -> "hdd")
+	bootOrderStr = strings.TrimSuffix(bootOrderStr, "-only")
+	// Normalize hdd to hd
+	bootOrderStr = strings.ReplaceAll(bootOrderStr, "hdd", "hd")
+	// Convert hyphens to underscores (e.g., "cdrom-hdd" -> "cdrom_hd")
+	bootOrderStr = strings.ReplaceAll(bootOrderStr, "-", "_")
+	
+	bootOrder := models.BootOrder(bootOrderStr)
 	if !bootOrder.IsValid() {
 		errors.WriteBadRequest(w, fmt.Sprintf("Invalid boot order: %s. Valid options: cdrom_hd, hd, cdrom, hd_cdrom", req.BootOrder), nil)
 		return
@@ -2070,6 +2189,14 @@ func (h *Handler) HandleVMBootOrder(w http.ResponseWriter, r *http.Request) {
 
 	// Update boot order in libvirt
 	if err := h.VMService.SetBootOrder(vmRec.Name, bootOrder); err != nil {
+		// Check if error is "VM not found in libvirt"
+		if strings.Contains(err.Error(), "VM not found in libvirt") || strings.Contains(err.Error(), "Domain not found") {
+			logger.Log.Warn("VM not found in libvirt", 
+				zap.String("vm_name", vmRec.Name), 
+				zap.Error(err))
+			errors.WriteError(w, http.StatusNotFound, "VM not found in libvirt. The VM may have been deleted or not created properly.", err)
+			return
+		}
 		logger.Log.Error("Failed to set boot order", zap.Error(err), zap.String("vm_name", vmRec.Name))
 		errors.WriteInternalError(w, err, h.Config.Env == "development")
 		return
@@ -2125,5 +2252,68 @@ func (h *Handler) HandleGetVMBootOrder(w http.ResponseWriter, r *http.Request) {
 		"vm_uuid":   uuidStr,
 		"boot_order": vmRec.BootOrder,
 		"boot_devices": vmRec.BootOrder.GetBootDevices(),
+	})
+}
+
+// HandleFinalizeInstall finalizes VM installation by removing CDROM and switching to disk-only boot
+// @Summary Finalize VM installation
+// @Description Remove CDROM device and switch boot to disk-only (equivalent to "Eject ISO / Boot from Hard Disk")
+// @Tags vms
+// @Accept json
+// @Produce json
+// @Param uuid path string true "VM UUID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} errors.ErrorResponse
+// @Failure 404 {object} errors.ErrorResponse
+// @Failure 500 {object} errors.ErrorResponse
+// @Router /vms/{uuid}/finalize-install [post]
+func (h *Handler) HandleFinalizeInstall(w http.ResponseWriter, r *http.Request) {
+	uuidStr := chi.URLParam(r, "uuid")
+	if uuidStr == "" {
+		errors.WriteBadRequest(w, "VM UUID is required", nil)
+		return
+	}
+
+	// Get user from context
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		errors.WriteUnauthorized(w, "User not authenticated")
+		return
+	}
+
+	// Get VM from database
+	var vmRec models.VM
+	if err := h.DB.Where("uuid = ?", uuidStr).First(&vmRec).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			errors.WriteNotFound(w, "VM not found")
+			return
+		}
+		logger.Log.Error("Failed to get VM from database", zap.Error(err), zap.String("vm_uuid", uuidStr))
+		errors.WriteInternalError(w, err, h.Config.Env == "development")
+		return
+	}
+
+	// Check if VM service is available
+	if h.VMService == nil {
+		errors.WriteInternalError(w, fmt.Errorf("VM service is not available"), h.Config.Env == "development")
+		return
+	}
+
+	// Finalize installation
+	if err := h.VMService.FinalizeInstall(vmRec.Name); err != nil {
+		logger.Log.Error("Failed to finalize VM installation", zap.Error(err), zap.String("vm_name", vmRec.Name))
+		errors.WriteInternalError(w, err, h.Config.Env == "development")
+		return
+	}
+
+	logger.Log.Info("VM installation finalized", zap.String("vm_name", vmRec.Name), zap.Uint("user_id", userID))
+	// Note: Audit logging can be added here if needed
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":             "VM installation finalized successfully. CDROM removed, boot set to disk only.",
+		"vm_uuid":             uuidStr,
+		"boot_order":          "hd",
+		"installation_status": "Installed",
 	})
 }

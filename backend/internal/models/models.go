@@ -42,13 +42,17 @@ type VM struct {
 	Name      string         `gorm:"unique;not null;index" json:"name"`                      // Indexed for faster lookups
 	CPU       int            `gorm:"not null" json:"cpu"`                                    // Number of CPU cores
 	Memory    int            `gorm:"not null" json:"memory"`                                 // Memory in MB
-	Status    VMStatus       `gorm:"type:varchar(20);default:'Stopped';index;index:idx_vm_owner_status" json:"status"` // VM state - indexed for filtering and composite index
-	OSType    string         `gorm:"index" json:"os_type"`                                   // OS type identifier - indexed for filtering
-	OwnerID   uint           `gorm:"not null;index;index:idx_vm_owner_status" json:"owner_id"` // Foreign key to User - indexed for joins and composite index
-	Owner     User           `gorm:"foreignKey:OwnerID" json:"owner,omitempty"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"` // Soft delete
+	Status            VMStatus         `gorm:"type:varchar(20);default:'Stopped';index;index:idx_vm_owner_status" json:"status"` // VM state - indexed for filtering and composite index
+	OSType            string           `gorm:"index" json:"os_type"`                                   // OS type identifier - indexed for filtering
+	InstallationStatus InstallationStatus `gorm:"type:varchar(20);default:'NotInstalled'" json:"installation_status"` // Installation status
+	BootOrder         BootOrder        `gorm:"type:varchar(20);default:'cdrom_hd'" json:"boot_order"` // Boot order configuration
+	DiskPath          string           `gorm:"type:varchar(512)" json:"disk_path"`                    // Virtual disk path
+	DiskSize          int              `gorm:"default:20" json:"disk_size"`                           // Disk size in GB
+	OwnerID           uint             `gorm:"not null;index;index:idx_vm_owner_status" json:"owner_id"` // Foreign key to User - indexed for joins and composite index
+	Owner             User             `gorm:"foreignKey:OwnerID" json:"owner,omitempty"`
+	CreatedAt         time.Time        `json:"created_at"`
+	UpdatedAt         time.Time        `json:"updated_at"`
+	DeletedAt         gorm.DeletedAt   `gorm:"index" json:"-"` // Soft delete
 }
 
 // BeforeCreate hook to generate UUID before creating a VM

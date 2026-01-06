@@ -147,6 +147,9 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *chi.Mux {
 	api.Get("/vms/{uuid}/stats", h.HandleVMStats)
 	api.Get("/vms/{uuid}/media", h.HandleVMMedia)
 	api.Post("/vms/{uuid}/media", h.HandleVMMedia)
+	api.Get("/vms/{uuid}/boot-order", h.HandleGetVMBootOrder)
+	api.Post("/vms/{uuid}/boot-order", h.HandleVMBootOrder)
+	api.Post("/vms/{uuid}/finalize-install", h.HandleFinalizeInstall)
 	api.Get("/vms/isos", func(w http.ResponseWriter, r *http.Request) {
 		h.HandleListISOs(w, r, cfg)
 	})

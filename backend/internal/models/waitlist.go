@@ -26,3 +26,4 @@ func (Waitlist) TableName() string {
 
 
 
+

@@ -1,3 +1,24 @@
+## 2026-01-06 20:40:00 - operations
+
+**파일**: `backend/internal/handlers/api.go,backend/internal/vm/service.go,frontend/hooks/useVMs.ts,scripts/fix-wsl2-routing-auto.sh`
+
+**변경 내용**:
+VM start/stop 액션 DB 저장 누락 수정, 프론트엔드 상태 동기화 개선, WSL2 라우팅 문제 해결, libvirt 동기화 에러 처리 개선
+
+**상세**:
+- VM stop 액션에서 모든 경로에서 DB 저장 보장
+- 프론트엔드 start/stop 액션 후 1초 지연하여 invalidateQueries 호출
+- WSL2 미러 모드 라우팅 문제 자동 수정 스크립트 추가 (백엔드 IP 10.0.0.100 보호)
+- libvirt에 VM이 없을 때 명확한 에러 메시지 반환 (404)
+- 모든 VM 삭제 작업 완료 (DB: 4개, console_sessions: 32개)
+
+**관련 문서**:
+- `RAG/04-operations/vm-start-stop-fix-2026-01-06.md`
+- `RAG/04-operations/wsl2-routing-fix-2026-01-06.md`
+- `RAG/04-operations/vm-cleanup-2026-01-06.md`
+
+---
+
 ## 2026-01-03 12:41:43 - frontend
 
 **파일**: `frontend/hooks/useVMs.ts,frontend/hooks/useAgentMetrics.ts,frontend/hooks/useAdminUsers.ts,frontend/next.config.js`

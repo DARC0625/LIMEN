@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,6 +25,11 @@ type VMService struct {
 	db     *gorm.DB
 	isoDir string
 	vmDir  string
+}
+
+// GetVMDir returns the VM directory path
+func (s *VMService) GetVMDir() string {
+	return s.vmDir
 }
 
 func NewVMService(db *gorm.DB, libvirtURI, isoDir, vmDir string) (*VMService, error) {
@@ -322,7 +328,15 @@ func (s *VMService) DeleteVM(name string) error {
 	// First, get VM from DB to retrieve UUID for disk file cleanup
 	var vmRec models.VM
 	if err := s.db.Where("name = ?", name).First(&vmRec).Error; err != nil {
-		logger.Log.Warn("VM not found in DB, proceeding with libvirt cleanup only", zap.String("vm_name", name), zap.Error(err))
+		if err == gorm.ErrRecordNotFound {
+			logger.Log.Warn("VM not found in DB, proceeding with libvirt cleanup only", zap.String("vm_name", name))
+			// Still try to cleanup libvirt and disk files even if not in DB
+		} else {
+			logger.Log.Error("Failed to query VM from DB", zap.String("vm_name", name), zap.Error(err))
+			// Continue with cleanup anyway - might be a transient DB issue
+		}
+		// Set empty struct to avoid nil pointer issues
+		vmRec = models.VM{}
 	}
 
 	// 1. Try to cleanup Libvirt Domain
@@ -390,9 +404,59 @@ func (s *VMService) DeleteVM(name string) error {
 		}
 	}
 
-	// 3. Remove from DB (Hard delete)
-	if err := s.db.Unscoped().Where("name = ?", name).Delete(&models.VM{}).Error; err != nil {
-		logger.Log.Error("Failed to delete VM from DB", zap.String("vm_name", name), zap.Error(err))
+	// 3. Remove related console_sessions first (foreign key constraint)
+	// CRITICAL: Must delete console_sessions before deleting VM to avoid foreign key constraint violation
+	// Only proceed with DB deletion if VM was found in DB
+	if vmRec.ID > 0 {
+		logger.Log.Info("Starting console_sessions deletion", zap.String("vm_name", name), zap.Uint("vm_id", vmRec.ID), zap.String("vm_uuid", vmRec.UUID))
+		
+		// Use transaction to ensure atomic deletion
+		err := s.db.Transaction(func(tx *gorm.DB) error {
+			// Delete console_sessions by vm_id (most reliable)
+			result := tx.Where("vm_id = ?", vmRec.ID).Delete(&models.ConsoleSession{})
+			if result.Error != nil {
+				logger.Log.Error("Failed to delete console sessions for VM by ID", zap.String("vm_name", name), zap.Uint("vm_id", vmRec.ID), zap.Error(result.Error))
+				return fmt.Errorf("failed to delete console sessions: %w", result.Error)
+			}
+			if result.RowsAffected > 0 {
+				logger.Log.Info("Console sessions deleted for VM by ID", zap.String("vm_name", name), zap.Uint("vm_id", vmRec.ID), zap.Int64("deleted_count", result.RowsAffected))
+			} else {
+				logger.Log.Debug("No console sessions found for VM by ID", zap.String("vm_name", name), zap.Uint("vm_id", vmRec.ID))
+			}
+			
+			// Also try to delete by UUID as a safety measure
+			if vmRec.UUID != "" {
+				result := tx.Where("vm_uuid = ? AND vm_id != ?", vmRec.UUID, vmRec.ID).Delete(&models.ConsoleSession{})
+				if result.Error != nil {
+					logger.Log.Warn("Failed to delete console sessions for VM by UUID", zap.String("vm_name", name), zap.String("vm_uuid", vmRec.UUID), zap.Error(result.Error))
+					// Don't return error - this is just a safety check
+				} else if result.RowsAffected > 0 {
+					logger.Log.Info("Additional console sessions deleted for VM by UUID", zap.String("vm_name", name), zap.String("vm_uuid", vmRec.UUID), zap.Int64("deleted_count", result.RowsAffected))
+				}
+			}
+			
+			// Delete VM from DB (within same transaction)
+			result = tx.Where("id = ?", vmRec.ID).Delete(&models.VM{})
+			if result.Error != nil {
+				logger.Log.Error("Failed to delete VM from DB", zap.String("vm_name", name), zap.Uint("vm_id", vmRec.ID), zap.Error(result.Error))
+				return fmt.Errorf("failed to delete VM from DB: %w", result.Error)
+			}
+			if result.RowsAffected == 0 {
+				logger.Log.Warn("No VM record found in DB to delete", zap.String("vm_name", name), zap.Uint("vm_id", vmRec.ID))
+			} else {
+				logger.Log.Info("VM successfully deleted from DB", zap.String("vm_name", name), zap.Uint("vm_id", vmRec.ID), zap.Int64("rows_affected", result.RowsAffected))
+			}
+			
+			return nil
+		})
+		
+		if err != nil {
+			logger.Log.Error("Transaction failed during VM deletion", zap.String("vm_name", name), zap.Error(err))
+			return fmt.Errorf("failed to delete VM and related data: %w", err)
+		}
+	} else {
+		// VM not found in DB - skip DB deletion but log it
+		logger.Log.Info("VM not found in DB, skipping DB deletion", zap.String("vm_name", name))
 	}
 
 	return nil
@@ -581,7 +645,14 @@ func (s *VMService) SetBootOrder(name string, bootOrder models.BootOrder) error 
 
 	dom, err := s.conn.LookupDomainByName(name)
 	if err != nil {
-		return fmt.Errorf("VM not found: %w", err)
+		// Check if error is "Domain not found"
+		if strings.Contains(err.Error(), "Domain not found") || strings.Contains(err.Error(), "no domain with matching name") {
+			// VM exists in DB but not in libvirt - this is a sync issue
+			// We can't update libvirt config, but we can still update DB
+			// Return a specific error that the handler can handle
+			return fmt.Errorf("VM not found in libvirt: %w", err)
+		}
+		return fmt.Errorf("failed to lookup domain: %w", err)
 	}
 	defer dom.Free()
 
@@ -621,6 +692,119 @@ func (s *VMService) SetBootOrder(name string, bootOrder models.BootOrder) error 
 	defer newDom.Free()
 
 	logger.Log.Info("Boot order updated", zap.String("vm_name", name), zap.String("boot_order", string(bootOrder)))
+	return nil
+}
+
+// FinalizeInstall removes CDROM device and switches boot to disk-only
+// This is the standard way to transition from installation mode to normal operation
+// (equivalent to "Eject ISO / Boot from Hard Disk" in VMware/VirtualBox)
+func (s *VMService) FinalizeInstall(name string) error {
+	dom, err := s.conn.LookupDomainByName(name)
+	if err != nil {
+		return fmt.Errorf("VM not found: %w", err)
+	}
+	defer dom.Free()
+
+	// 1. Check VM state - should be shutoff for safe transition
+	state, _, err := dom.GetState()
+	if err != nil {
+		return fmt.Errorf("failed to get VM state: %w", err)
+	}
+
+	// If VM is running, attempt graceful shutdown
+	if state == libvirt.DOMAIN_RUNNING {
+		logger.Log.Warn("VM is running during finalize install, attempting graceful shutdown",
+			zap.String("vm_name", name))
+		if err := dom.Shutdown(); err != nil {
+			logger.Log.Warn("Failed to shutdown VM, continuing anyway",
+				zap.String("vm_name", name),
+				zap.Error(err))
+		} else {
+			// Wait up to 30 seconds for shutdown
+			for i := 0; i < 30; i++ {
+				time.Sleep(1 * time.Second)
+				state, _, _ := dom.GetState()
+				if state == libvirt.DOMAIN_SHUTOFF {
+					break
+				}
+			}
+		}
+	}
+
+	// 2. Get current XML
+	xmlDesc, err := dom.GetXMLDesc(0)
+	if err != nil {
+		return fmt.Errorf("failed to get VM XML: %w", err)
+	}
+
+	// 3. Remove CDROM from boot order in <os> section
+	osStartPattern := `<os>`
+	osEndPattern := `</os>`
+	osStartIdx := strings.Index(xmlDesc, osStartPattern)
+	if osStartIdx == -1 {
+		return fmt.Errorf("could not find <os> section in XML")
+	}
+
+	osEndIdx := strings.Index(xmlDesc[osStartIdx:], osEndPattern)
+	if osEndIdx == -1 {
+		return fmt.Errorf("could not find </os> closing tag")
+	}
+	osEndIdx += osStartIdx + len(osEndPattern)
+
+	osSection := xmlDesc[osStartIdx:osEndIdx]
+
+	// Remove <boot dev='cdrom'/> tags
+	bootCDROMPattern := `\s*<boot dev='cdrom'/>\s*`
+	bootCDROMRegex := regexp.MustCompile(bootCDROMPattern)
+	osSectionCleaned := bootCDROMRegex.ReplaceAllString(osSection, "")
+
+	// Ensure at least one <boot dev='hd'/> exists
+	if !strings.Contains(osSectionCleaned, `<boot dev='hd'/>`) {
+		// Find <type> tag and add boot after it
+		typePattern := `<type[^>]*>.*?</type>`
+		typeRegex := regexp.MustCompile(typePattern)
+		typeMatch := typeRegex.FindString(osSectionCleaned)
+		if typeMatch != "" {
+			typeEndIdx := strings.Index(osSectionCleaned, typeMatch) + len(typeMatch)
+			osSectionCleaned = osSectionCleaned[:typeEndIdx] + "\n    <boot dev='hd'/>" + osSectionCleaned[typeEndIdx:]
+		}
+	}
+
+	// Rebuild XML with updated OS section
+	updatedXML := xmlDesc[:osStartIdx] + osSectionCleaned + xmlDesc[osEndIdx:]
+
+	// 4. Remove CDROM disk from devices section
+	// Find and remove CDROM disk block (multiline pattern)
+	cdromDiskPattern := `(?s)<disk type='file' device='cdrom'>.*?</disk>`
+	cdromDiskRegex := regexp.MustCompile(cdromDiskPattern)
+	updatedXML = cdromDiskRegex.ReplaceAllString(updatedXML, "")
+
+	// 5. Update domain definition
+	_, err = s.conn.DomainDefineXML(updatedXML)
+	if err != nil {
+		return fmt.Errorf("failed to update domain XML: %w", err)
+	}
+
+	// 6. Update database: set boot order to HD only and installation status to Installed
+	var vmRec models.VM
+	if err := s.db.Where("name = ?", name).First(&vmRec).Error; err == nil {
+		vmRec.BootOrder = models.BootOrderHD
+		vmRec.InstallationStatus = models.InstallationStatusInstalled
+		if err := s.db.Save(&vmRec).Error; err != nil {
+			logger.Log.Warn("Failed to update VM installation status in DB",
+				zap.String("vm_name", name),
+				zap.Error(err))
+		} else {
+			logger.Log.Info("VM installation finalized in database",
+				zap.String("vm_name", name),
+				zap.String("boot_order", string(vmRec.BootOrder)),
+				zap.String("installation_status", string(vmRec.InstallationStatus)))
+		}
+	}
+
+	logger.Log.Info("VM installation finalized - CDROM removed, boot set to disk only",
+		zap.String("vm_name", name))
+
 	return nil
 }
 
@@ -795,23 +979,43 @@ func (s *VMService) updateCDROMSource(xmlDesc string, newSource string) (string,
 		// Handle attach (newSource is not empty)
 		escapedNew := escapeXML(newSource)
 		if currentSource == "" {
-			// Empty source - look for <source/> or <source></source>
+			// Empty source - look for <source/> or <source></source> or <source index='...'/>
+			// Try <source/> first
 			oldPattern = `<source/>`
 			newPattern = fmt.Sprintf(`<source file='%s'/>`, escapedNew)
-			// Also try with closing tag
 			if !strings.Contains(xmlDesc, oldPattern) {
+				// Try <source></source>
 				oldPattern = `<source></source>`
 				newPattern = fmt.Sprintf(`<source file='%s'></source>`, escapedNew)
+				if !strings.Contains(xmlDesc, oldPattern) {
+					// Try <source index='1'/> (ejected state)
+					oldPattern = `<source index='1'/>`
+					newPattern = fmt.Sprintf(`<source file='%s'/>`, escapedNew)
+					if !strings.Contains(xmlDesc, oldPattern) {
+						// Try <source index='5'/> (another ejected state)
+						oldPattern = `<source index='5'/>`
+						newPattern = fmt.Sprintf(`<source file='%s'/>`, escapedNew)
+					}
+				}
 			}
 		} else {
 			// Replace existing source
 			escapedCurrent := escapeXML(currentSource)
-			// Try both single and double quotes
+			// Try both single and double quotes, with and without index attribute
 			oldPattern = fmt.Sprintf(`<source file='%s'/>`, escapedCurrent)
 			newPattern = fmt.Sprintf(`<source file='%s'/>`, escapedNew)
 			if !strings.Contains(xmlDesc, oldPattern) {
 				oldPattern = fmt.Sprintf(`<source file="%s"/>`, escapedCurrent)
 				newPattern = fmt.Sprintf(`<source file="%s"/>`, escapedNew)
+				if !strings.Contains(xmlDesc, oldPattern) {
+					// Try with index attribute
+					oldPattern = fmt.Sprintf(`<source file='%s' index='1'/>`, escapedCurrent)
+					newPattern = fmt.Sprintf(`<source file='%s'/>`, escapedNew)
+					if !strings.Contains(xmlDesc, oldPattern) {
+						oldPattern = fmt.Sprintf(`<source file="%s" index="1"/>`, escapedCurrent)
+						newPattern = fmt.Sprintf(`<source file="%s"/>`, escapedNew)
+					}
+				}
 			}
 		}
 	}
@@ -880,13 +1084,17 @@ func (s *VMService) DetachMedia(name string) error {
 
 // AttachMedia attaches ISO/CDROM media to a VM
 func (s *VMService) AttachMedia(name string, isoPath string) error {
-	// Verify ISO file exists before proceeding
+	// Verify media file exists before proceeding (supports both ISO and .qcow2 files)
 	if _, err := os.Stat(isoPath); os.IsNotExist(err) {
-		return fmt.Errorf("ISO file not found: %s", isoPath)
+		return fmt.Errorf("Media file not found: %s", isoPath)
 	}
 
 	dom, err := s.conn.LookupDomainByName(name)
 	if err != nil {
+		// Check if error is "Domain not found"
+		if strings.Contains(err.Error(), "Domain not found") || strings.Contains(err.Error(), "no domain with matching name") {
+			return fmt.Errorf("VM not found in libvirt: %w", err)
+		}
 		return fmt.Errorf("VM not found: %w", err)
 	}
 	defer dom.Free()
@@ -1222,7 +1430,14 @@ func (s *VMService) ensureVNCGraphics(name string) error {
 func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
 	dom, err := s.conn.LookupDomainByName(name)
 	if err != nil {
-		return err
+		// Check if error is "Domain not found"
+		if strings.Contains(err.Error(), "Domain not found") || strings.Contains(err.Error(), "no domain with matching name") {
+			// VM exists in DB but not in libvirt - this is a sync issue
+			// We can't update libvirt config, but we can still update DB
+			// Return a specific error that the handler can handle
+			return fmt.Errorf("VM not found in libvirt: %w", err)
+		}
+		return fmt.Errorf("failed to lookup domain: %w", err)
 	}
 	defer dom.Free()
 
@@ -1231,10 +1446,33 @@ func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
 		return fmt.Errorf("vm must be stopped to update resources")
 	}
 
-	// Get current max vCPU count
-	maxVcpu, err := dom.GetMaxVcpus()
+	// Get current max vCPU count from XML (works for stopped VMs)
+	xmlDesc, err := dom.GetXMLDesc(0)
 	if err != nil {
-		return fmt.Errorf("failed to get max vcpus: %w", err)
+		return fmt.Errorf("failed to get VM XML: %w", err)
+	}
+	
+	// Parse XML to get max vCPU
+	var domainXML struct {
+		VCPU struct {
+			Placement string `xml:"placement,attr"`
+			Text      string `xml:",chardata"`
+		} `xml:"vcpu"`
+	}
+	if err := xml.Unmarshal([]byte(xmlDesc), &domainXML); err != nil {
+		return fmt.Errorf("failed to parse VM XML: %w", err)
+	}
+	
+	maxVcpu := uint(0)
+	if domainXML.VCPU.Text != "" {
+		if parsed, err := strconv.ParseUint(domainXML.VCPU.Text, 10, 32); err == nil {
+			maxVcpu = uint(parsed)
+		}
+	}
+	
+	// Fallback: if XML parsing failed or returned 0, use the requested vCPU as max
+	if maxVcpu == 0 {
+		maxVcpu = uint(vcpu)
 	}
 
 	// If requested vCPU is greater than max, update max first
