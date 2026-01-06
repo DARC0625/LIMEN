@@ -35,7 +35,7 @@ export default function UserManagementPage() {
   
   // 인증 및 Admin 권한 확인 (hooks 호출 전에 먼저 확인)
   // React Error #310 해결: Admin 권한 확인을 먼저 수행하여 불필요한 API 호출 방지
-  // useEffect 내에서 상태 업데이트를 최소화하고, 리다이렉트는 별도 useEffect로 처리
+  // useEffect 내에서 상태 업데이트를 startTransition으로 감싸서 hydration mismatch 방지
   useEffect(() => {
     // 인증 상태 확인
     if (isAuthenticated === null) {
@@ -45,10 +45,12 @@ export default function UserManagementPage() {
     
     // 인증되지 않았으면 리다이렉트
     if (isAuthenticated === false) {
-      // React Error #310 해결: 상태 업데이트를 한 번에 처리
-      setIsCheckingAuth(false);
-      setIsUserAdmin(false);
-      setShouldRedirect(true);
+      // React Error #310 해결: 모든 상태 업데이트를 startTransition으로 감싸기
+      startTransition(() => {
+        setIsCheckingAuth(false);
+        setIsUserAdmin(false);
+        setShouldRedirect(true);
+      });
       return;
     }
     
@@ -56,22 +58,30 @@ export default function UserManagementPage() {
     let cancelled = false;
     isAdmin().then((admin) => {
       if (cancelled) return;
-      // React Error #310 해결: 상태 업데이트를 한 번에 처리
-      setIsUserAdmin(admin);
-      setIsCheckingAuth(false);
-      // Admin이 아니면 리다이렉트
+      // React Error #310 해결: 모든 상태 업데이트를 startTransition으로 감싸기
+      startTransition(() => {
+        setIsUserAdmin(admin);
+        setIsCheckingAuth(false);
+        // Admin이 아니면 리다이렉트
+        if (!admin) {
+          setShouldRedirect(true);
+        }
+      });
+      // toast는 startTransition 밖에서 호출 (사이드 이펙트)
       if (!admin) {
         toast.error('Admin 권한이 필요합니다.');
-        setShouldRedirect(true);
       }
     }).catch((error) => {
       if (cancelled) return;
       console.error('[UserManagement] Admin check failed:', error);
-      // React Error #310 해결: 상태 업데이트를 한 번에 처리
-      setIsUserAdmin(false);
-      setIsCheckingAuth(false);
+      // React Error #310 해결: 모든 상태 업데이트를 startTransition으로 감싸기
+      startTransition(() => {
+        setIsUserAdmin(false);
+        setIsCheckingAuth(false);
+        setShouldRedirect(true);
+      });
+      // toast는 startTransition 밖에서 호출 (사이드 이펙트)
       toast.error('Admin 권한 확인에 실패했습니다. 다시 시도해주세요.');
-      setShouldRedirect(true);
     });
     
     return () => {
