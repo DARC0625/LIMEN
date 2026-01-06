@@ -13,6 +13,7 @@ import { handleAuthError } from '../lib/utils/errorHelpers';
  * 사용자 목록 조회 훅 (Admin 전용)
  */
 export function useAdminUsers() {
+  // hooks는 항상 같은 순서로 호출되어야 함
   const { isAuthenticated } = useAuth();
   const mounted = useMounted();
   
@@ -20,6 +21,8 @@ export function useAdminUsers() {
   // 마운트 후에만 인증 상태 확인
   const enabled = mounted && isAuthenticated === true;
   
+  // useQuery는 항상 호출되어야 함 (조건부 호출 금지)
+  // React Error #310 해결: useQuery는 항상 같은 순서로 호출
   return useQuery({
     queryKey: ['admin', 'users'],
     queryFn: async () => {
@@ -42,9 +45,9 @@ export function useAdminUsers() {
     // 트리거 방식: Mutation 성공 시 invalidateQueries로 갱신
     // 최후의 수단으로만 폴링 (5분마다) - 백그라운드 동기화용
     refetchInterval: enabled ? 5 * 60 * 1000 : false, // 5분마다 (최후의 수단)
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    refetchOnMount: true,
+    refetchOnWindowFocus: enabled, // enabled일 때만 refetch
+    refetchOnReconnect: enabled, // enabled일 때만 refetch
+    refetchOnMount: enabled, // enabled일 때만 refetch
     throwOnError: false,
   });
 }

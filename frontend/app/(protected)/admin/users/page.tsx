@@ -20,6 +20,7 @@ import type { UpdateUserRequest } from '../../../../lib/types';
 import Loading from '../../../../components/Loading';
 
 export default function UserManagementPage() {
+  // 모든 hooks를 항상 같은 순서로 호출 (React Hooks 규칙 준수)
   const [expandedUser, setExpandedUser] = useState<number | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingUser, setEditingUser] = useState<number | null>(null);
@@ -29,7 +30,16 @@ export default function UserManagementPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   
-  // 인증 및 Admin 권한 확인 (hooks 호출 전에 처리)
+  // React Query hooks - 항상 호출 (조건부로만 사용)
+  // 중요: 모든 hooks는 조건부 return 전에 호출되어야 함
+  const { data: users = [], isLoading, error } = useAdminUsers();
+  const { data: expandedUserData } = useAdminUser(expandedUser);
+  const createUserMutation = useCreateUser();
+  const updateUserMutation = useUpdateUser();
+  const deleteUserMutation = useDeleteUser();
+  const approveUserMutation = useApproveUser();
+  
+  // 인증 및 Admin 권한 확인 (hooks 호출 후에 처리)
   useEffect(() => {
     // 인증 확인 중이면 대기
     if (isAuthenticated === null) {
@@ -61,14 +71,6 @@ export default function UserManagementPage() {
       router.push('/dashboard');
     });
   }, [isAuthenticated, toast, router]);
-  
-  // React Query hooks - 항상 호출 (조건부로만 사용)
-  const { data: users = [], isLoading, error } = useAdminUsers();
-  const { data: expandedUserData } = useAdminUser(expandedUser);
-  const createUserMutation = useCreateUser();
-  const updateUserMutation = useUpdateUser();
-  const deleteUserMutation = useDeleteUser();
-  const approveUserMutation = useApproveUser();
   
   // 인증 확인 중이거나 Admin 권한 확인 중이면 로딩 표시
   if (isCheckingAuth || isAuthenticated === null || isUserAdmin === null) {

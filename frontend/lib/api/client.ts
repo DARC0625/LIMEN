@@ -90,6 +90,15 @@ export async function apiRequest<T>(
     ? performance.now()
     : 0;
 
+  // 강제 로깅 - 항상 출력 (콘솔 필터링 우회)
+  window.console.log('[API Request] ====== START ======');
+  window.console.log('[API Request] URL:', url);
+  window.console.log('[API Request] Method:', method);
+  window.console.log('[API Request] Endpoint:', endpoint);
+  window.console.log('[API Request] Has Auth:', !!accessToken);
+  window.console.log('[API Request] Has CSRF:', !!csrfToken);
+  window.console.log('[API Request] Full URL:', `${apiUrl}${endpoint}`);
+  
   // 디버그 로그 (개발 환경만)
   logger.log('[API Request]', {
     url,
@@ -132,12 +141,31 @@ export async function apiRequest<T>(
         endpoint,
       });
       
+      // 강제 로깅 - fetch 호출 전
+      window.console.log('[executeRequest] About to fetch:', {
+        url,
+        method,
+        headers: Object.keys(headers),
+        hasBody: !!requestBody,
+        bodyPreview: requestBody ? requestBody.substring(0, 200) : 'none',
+      });
+      
+      const fetchStartTime = Date.now();
       const response = await fetch(url, {
         ...fetchOptions,
         body: requestBody,
         headers,
         credentials: 'include', // 쿠키 포함 (Refresh Token)
         signal: controller?.signal,
+      });
+      
+      const fetchDuration = Date.now() - fetchStartTime;
+      window.console.log('[executeRequest] Fetch completed:', {
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        duration: `${fetchDuration}ms`,
+        ok: response.ok,
       });
 
       if (timeoutId) {

@@ -3,11 +3,12 @@
 import { useState, useEffect, startTransition } from 'react';
 import dynamicImport from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { removeToken, isAdmin } from '../../../lib/api';
+import { removeToken, isAdmin, vmAPI } from '../../../lib/api';
 import { isUserApproved } from '../../../lib/auth';
 import { useToast } from '../../../components/ToastContainer';
 import { useCreateVM, useVMAction } from '../../../hooks/useVMs';
 import { useAuth } from '../../../components/AuthGuard';
+import { useQueryClient } from '@tanstack/react-query';
 import RevolverPicker from '../../../components/RevolverPicker';
 import BootOrderSelector from '../../../components/BootOrderSelector';
 import type { VM, BootOrder } from '../../../lib/types';
@@ -155,37 +156,69 @@ export default function Home() {
     );
   };
 
+  const queryClient = useQueryClient();
+
+  // 부팅 순서 변경 핸들러
+  const handleBootOrderChange = async (uuid: string, bootOrder: BootOrder) => {
+    console.log('[handleBootOrderChange] Called:', { uuid, bootOrder });
+    try {
+      console.log('[handleBootOrderChange] Calling API...');
+      const updatedVM = await vmAPI.setBootOrder(uuid, bootOrder);
+      console.log('[handleBootOrderChange] API success:', updatedVM);
+      toast.success('부팅 순서가 변경되었습니다.');
+      // React Query 자동 갱신
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ['vms'] });
+        // VM 데이터 직접 업데이트
+        queryClient.setQueryData<VM[]>(['vms'], (old) => {
+          if (!old) return [];
+          return old.map(v => v.uuid === uuid ? { ...v, boot_order: bootOrder } : v);
+        });
+      });
+    } catch (error) {
+      console.error('[handleBootOrderChange] API error:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(`부팅 순서 변경 실패: ${errorMessage}`);
+    }
+  };
+
   const handleAction = async (uuid: string, action: 'start' | 'stop' | 'delete') => {
-    console.log('[handleAction] Called:', { uuid, action, isPending: vmActionMutation.isPending, processingId });
+    // 강제 로깅 - 가장 먼저 실행
+    window.console.log('[handleAction] ====== HANDLE ACTION CALLED ======');
+    window.console.log('[handleAction] Called:', { uuid, action, isPending: vmActionMutation.isPending, processingId });
+    window.console.log('[handleAction] vmActionMutation:', vmActionMutation);
     
     // 중복 요청 방지: 이미 처리 중이면 무시
     if (vmActionMutation.isPending || processingId === uuid) {
-      console.log('[handleAction] Request already in progress, ignoring');
+      window.console.log('[handleAction] Request already in progress, ignoring');
       return;
     }
     
     if (action === 'delete' && !confirm('Are you sure you want to delete this VM?')) return;
     
-    console.log('[handleAction] Setting processingId and calling mutation');
+    window.console.log('[handleAction] Setting processingId and calling mutation');
     setProcessingId(uuid);
+    
+    window.console.log('[handleAction] About to call mutate with:', { uuid, action });
     vmActionMutation.mutate(
       { uuid, action },
       {
         onSuccess: () => {
-          console.log('[handleAction] Mutation success');
+          window.console.log('[handleAction] Mutation success');
           // React Error #321 fix: Wrap state updates with startTransition
           startTransition(() => {
             setProcessingId(null);
           });
         },
         onError: (error) => {
-          console.error('[handleAction] Mutation error:', error);
+          window.console.error('[handleAction] Mutation error:', error);
           startTransition(() => {
             setProcessingId(null);
           });
         },
       }
     );
+    window.console.log('[handleAction] mutate called');
   };
 
 
@@ -429,19 +462,18 @@ export default function Home() {
                     <p className="text-xs text-gray-500">Selected: {Math.round(editingVM.memory / 1024)} GB ({editingVM.memory} MB)</p>
                   </div>
                 </div>
-                
-                {/* Boot Order Selector */}
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <div>
                   <BootOrderSelector
-                    vm={editingVM}
-                    onBootOrderChange={(uuid, bootOrder) => {
-                      // Update local state
-                      setEditingVM({ ...editingVM, boot_order: bootOrder });
+                    value={editingVM.boot_order}
+                    onChange={(bootOrder) => {
+                      if (editingVM) {
+                        handleBootOrderChange(editingVM.uuid, bootOrder);
+                        setEditingVM({ ...editingVM, boot_order: bootOrder });
+                      }
                     }}
                     disabled={vmActionMutation.isPending || processingId === editingVM.uuid}
                   />
                 </div>
-                
                 <div className="flex gap-3 justify-end pt-4">
                   <button
                     type="button"

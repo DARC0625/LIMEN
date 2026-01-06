@@ -9,6 +9,7 @@ import type {
   VMStats,
   VMMedia,
   ISOList,
+  BootOrder,
 } from '../types';
 
 export const vmAPI = {
@@ -83,6 +84,8 @@ export const vmAPI = {
       vnc_enabled?: boolean;
     }
   ): Promise<VM> => {
+    const logger = (await import('../utils/logger')).logger;
+    
     interface VMActionBody {
       action: string;
       cpu?: number;
@@ -124,10 +127,29 @@ export const vmAPI = {
       }
     }
     
-    return apiRequest<VM>(`/vms/${uuid}/action`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
+    logger.log('[vmAPI.action] Calling API:', { uuid, action, body });
+    
+    try {
+      const result = await apiRequest<VM>(`/vms/${uuid}/action`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      
+      logger.log('[vmAPI.action] API success:', {
+        uuid,
+        action,
+        responseStatus: result.status,
+        responseVM: result,
+      });
+      
+      return result;
+    } catch (error) {
+      const errorContext = error instanceof Error 
+        ? { message: error.message, stack: error.stack, name: error.name }
+        : { error: String(error) };
+      logger.error('[vmAPI.action] API error:', { uuid, action, ...errorContext });
+      throw error;
+    }
   },
 
   /**
@@ -180,6 +202,35 @@ export const vmAPI = {
    */
   getStats: async (uuid: string): Promise<VMStats> => {
     return apiRequest<VMStats>(`/vms/${uuid}/stats`);
+  },
+
+  /**
+   * 부팅 순서 설정
+   */
+  setBootOrder: async (uuid: string, bootOrder: BootOrder): Promise<VM> => {
+    const logger = (await import('../utils/logger')).logger;
+    logger.log('[vmAPI.setBootOrder] Calling API:', { uuid, bootOrder });
+    try {
+      const result = await apiRequest<VM>(`/vms/${uuid}/boot-order`, {
+        method: 'POST',
+        body: JSON.stringify({ boot_order: bootOrder }),
+      });
+      logger.log('[vmAPI.setBootOrder] API success:', result);
+      return result;
+    } catch (error) {
+      const errorContext = error instanceof Error 
+        ? { message: error.message, stack: error.stack, name: error.name }
+        : { error: String(error) };
+      logger.error('[vmAPI.setBootOrder] API error:', errorContext);
+      throw error;
+    }
+  },
+
+  /**
+   * 부팅 순서 조회
+   */
+  getBootOrder: async (uuid: string): Promise<{ boot_order: BootOrder }> => {
+    return apiRequest<{ boot_order: BootOrder }>(`/vms/${uuid}/boot-order`);
   },
 };
 

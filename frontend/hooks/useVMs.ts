@@ -42,7 +42,31 @@ export function useVMs() {
           return [];
         }
         
-        return data;
+        // 보호된 VM 상태가 있으면 서버 응답 상태를 우선
+        const protectedData = data.map(vm => {
+          const protectedState = protectedVMStates.get(vm.uuid);
+          if (protectedState && (Date.now() - protectedState.timestamp) < 30000) {
+            // 보호 기간 내이고, 서버 응답 상태가 보호된 상태와 다르면 보호된 상태를 우선
+            if (vm.status !== protectedState.status) {
+              logger.log('[useVMs] Preserving protected VM state:', {
+                uuid: vm.uuid,
+                protectedStatus: protectedState.status,
+                serverStatus: vm.status,
+                timeSinceProtection: Date.now() - protectedState.timestamp
+              });
+              return { ...vm, status: protectedState.status };
+            }
+          }
+          return vm;
+        });
+        
+        logger.log('[useVMs] Fetched VM list:', {
+          count: protectedData.length,
+          protectedCount: Array.from(protectedVMStates.keys()).length,
+          vms: protectedData.map(v => ({ uuid: v.uuid, status: v.status }))
+        });
+        
+        return protectedData;
       } catch (error: unknown) {
         // 401/403 에러 처리
         handleAuthError(error);
@@ -232,6 +256,9 @@ export function useCreateVM() {
 // 중복 요청 방지를 위한 Map (UUID + action 조합)
 const pendingActions = new Map<string, boolean>();
 
+// 서버 응답 상태 보호: start/stop 액션 후 서버 응답 상태를 일정 시간 보호
+const protectedVMStates = new Map<string, { status: string; timestamp: number }>();
+
 export function useVMAction() {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -410,19 +437,26 @@ export function useVMAction() {
             return; // 조기 반환하여 성공 토스트 방지
           }
           
-          // 정상적인 경우: 서버 응답으로 업데이트 (무조건 서버 상태로 덮어쓰기)
+          // 정상적인 경우: 서버 응답으로 즉시 업데이트
           logger.log('[useVMAction] Updating VM with server response:', {
             uuid: variables.uuid,
             action: variables.action,
             newStatus: updatedVM.status,
+            fullVMResponse: updatedVM,
+          });
+          
+          // 서버 응답 상태를 즉시 보호 설정 (refetch가 덮어쓰기 전에)
+          protectedVMStates.set(variables.uuid, {
+            status: updatedVM.status,
+            timestamp: Date.now()
           });
           
           // 서버 응답으로 업데이트 (서버가 최종 상태를 결정)
           queryClient.setQueryData<VM[]>(['vms'], (old) => {
             if (!old) return [];
-            return old.map(v => {
+            const updated = old.map(v => {
               if (v.uuid === variables.uuid) {
-                logger.log('[useVMAction] VM status update:', {
+                logger.log('[useVMAction] VM status update in cache:', {
                   uuid: v.uuid,
                   oldStatus: v.status,
                   newStatus: updatedVM.status,
@@ -432,24 +466,32 @@ export function useVMAction() {
               }
               return v;
             });
+            
+            logger.log('[useVMAction] Updated VM list in cache:', {
+              count: updated.length,
+              updatedVM: updated.find(v => v.uuid === variables.uuid)
+            });
+            
+            return updated;
           });
           
           // 리소스 쿼타 무효화 (VM start/stop 시 리소스 사용량 변경)
-          // start: 리소스 사용량 증가, stop: 리소스 사용량 감소
           queryClient.invalidateQueries({ queryKey: ['quota'] });
           
-          // start/stop 액션은 즉시 리페치하여 최신 상태 확보
-          if (variables.action === 'start' || variables.action === 'stop' || variables.action === 'restart') {
-            // 약간의 지연 후 리페치 (상태 업데이트 완료 대기)
-            setTimeout(() => {
-              queryClient.refetchQueries({ queryKey: ['vms'] });
-            }, 200);
-          }
+          // 30초 후 보호 해제 (백그라운드 폴링이 정상 상태를 가져올 때까지)
+          setTimeout(() => {
+            logger.log('[useVMAction] Removing protection for VM:', { uuid: variables.uuid });
+            protectedVMStates.delete(variables.uuid);
+          }, 30000);
           
-          // CPU/Memory 변경 시 할당량 무효화
-          if (variables.action === 'update') {
-            queryClient.invalidateQueries({ queryKey: ['quota'] });
-          }
+          // 성공 메시지 표시
+          queueMicrotask(() => {
+            if (variables.action === 'start') {
+              toast.success('VM started successfully');
+            } else if (variables.action === 'stop') {
+              toast.success('VM stopped successfully');
+            }
+          });
         } else if (variables.action === 'update') {
           // 업데이트: 서버 응답으로 업데이트
           queryClient.setQueryData<VM[]>(['vms'], (old) => {
@@ -528,6 +570,13 @@ export function useVMAction() {
               });
             });
           }, 500);
+        } else if (variables.action === 'start' || variables.action === 'stop') {
+          // start/stop 액션: 서버 응답을 신뢰하므로 invalidateQueries를 호출하지 않음
+          // 서버가 start/stop 액션에 대해 반환한 상태(Running/Stopped)를 우선함
+          // invalidateQueries를 호출하면 서버에서 최신 상태를 가져오는데,
+          // VM 시작/중지는 비동기 작업이므로 서버가 아직 상태를 업데이트하지 않았을 수 있음
+          // 따라서 서버 응답을 신뢰하고, 백그라운드 폴링(5분마다)만 사용하여 동기화
+          // 이렇게 하면 서버 응답(Running)이 invalidateQueries로 인해 덮어쓰이지 않음
         } else if (variables.action === 'update') {
           // 업데이트: 즉시 무효화
           startTransition(() => {
@@ -535,7 +584,6 @@ export function useVMAction() {
             queryClient.invalidateQueries({ queryKey: ['quota'] });
           });
         }
-        // start/stop 액션은 onSuccess에서 이미 처리했으므로 여기서는 무효화하지 않음
       });
     },
   });

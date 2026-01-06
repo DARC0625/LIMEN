@@ -615,31 +615,121 @@ export default function VMListSection({
                       </div>
 
                       {/* Action Buttons (shown on hover/touch for active card only) */}
-                      <div className={`absolute inset-0 transition-opacity duration-200 flex items-center justify-center bg-white/95 backdrop-blur-sm rounded-lg ${
-                        isActive && isTouched
-                          ? 'opacity-100 pointer-events-auto'
-                          : isActive
-                            ? 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto'
-                            : 'opacity-0 pointer-events-none'
-                      }`}>
+                      <div 
+                        className={`absolute inset-0 transition-opacity duration-200 flex items-center justify-center bg-white/95 backdrop-blur-sm rounded-lg ${
+                          isActive && isTouched
+                            ? 'opacity-100 pointer-events-auto'
+                            : isActive
+                              ? 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto'
+                              : 'opacity-0 pointer-events-none'
+                        }`}
+                        style={{ 
+                          pointerEvents: isActive ? 'auto' : 'none',
+                          zIndex: 40, // 높은 z-index로 버튼이 클릭 가능하도록
+                          display: isActive ? 'flex' : 'none' // isActive일 때만 표시
+                        }}
+                        onClick={(e) => {
+                          // 디버깅: 컨테이너 클릭 확인
+                          console.log('[VMListSection] Action buttons container clicked:', { 
+                            isActive, 
+                            isTouched, 
+                            onAction: !!onAction,
+                            uuid: vm.uuid,
+                            status: vm.status
+                          });
+                          e.stopPropagation(); // Prevent card click event from firing
+                        }}
+                        onMouseDown={(e) => {
+                          // 디버깅: 마우스 다운 이벤트 확인
+                          console.log('[VMListSection] Action buttons container mousedown:', { 
+                            isActive, 
+                            isTouched, 
+                            onAction: !!onAction,
+                            uuid: vm.uuid
+                          });
+                          e.stopPropagation();
+                        }}
+                        onMouseEnter={() => {
+                          console.log('[VMListSection] Action buttons container mouseEnter:', { 
+                            isActive, 
+                            isTouched, 
+                            uuid: vm.uuid
+                          });
+                        }}
+                      >
                         <div className="grid grid-cols-3 grid-rows-2 gap-3 max-w-[240px] mx-auto px-2">
                           {/* Row 1: Start, Stop, VNC */}
                           {onAction && (
                             <button 
+                              type="button"
                               onClick={(e) => {
+                                // 강제 로깅 - 가장 먼저 실행
+                                window.console.log('[VMListSection] ====== START BUTTON CLICKED ======');
+                                window.console.log('[VMListSection] Event:', e);
+                                window.console.log('[VMListSection] VM:', vm);
+                                window.console.log('[VMListSection] onAction exists:', !!onAction);
+                                window.console.log('[VMListSection] onAction type:', typeof onAction);
+                                
                                 e.stopPropagation();
-                                onAction(vm.uuid, 'start');
-                                setTouchedVM(null);
+                                e.preventDefault();
+                                
+                                window.console.log('[VMListSection] Start button clicked:', { 
+                                  uuid: vm.uuid, 
+                                  status: vm.status, 
+                                  processingId,
+                                  isDisabled: processingId === vm.uuid || vm.status === 'Running',
+                                  onAction: typeof onAction,
+                                  onActionExists: !!onAction,
+                                  isActive,
+                                  isTouched
+                                });
+                                
+                                // 조건 체크
+                                if (vm.status === 'Running') {
+                                  window.console.warn('[VMListSection] Start ignored: VM already running');
+                                  return;
+                                }
+                                if (processingId === vm.uuid) {
+                                  window.console.warn('[VMListSection] Start ignored: Already processing');
+                                  return;
+                                }
+                                
+                                window.console.log('[VMListSection] Calling onAction with start');
+                                try {
+                                  if (onAction) {
+                                    window.console.log('[VMListSection] About to call onAction:', vm.uuid, 'start');
+                                    onAction(vm.uuid, 'start');
+                                    window.console.log('[VMListSection] onAction called successfully');
+                                    setTouchedVM(null);
+                                  } else {
+                                    window.console.error('[VMListSection] onAction is not defined!');
+                                  }
+                                } catch (error) {
+                                  window.console.error('[VMListSection] Error calling onAction:', error);
+                                }
+                              }}
+                              onMouseDown={(e) => {
+                                console.log('[VMListSection] Start button mousedown:', { uuid: vm.uuid });
+                                e.stopPropagation();
                               }}
                               onTouchEnd={(e) => {
                                 e.stopPropagation();
                                 e.preventDefault();
+                                console.log('[VMListSection] Start button touchEnd:', { uuid: vm.uuid, status: vm.status, processingId });
                                 if (!processingId && vm.status !== 'Running') {
-                                  onAction(vm.uuid, 'start');
-                                  setTouchedVM(null);
+                                  if (onAction) {
+                                    onAction(vm.uuid, 'start');
+                                    setTouchedVM(null);
+                                  }
+                                } else {
+                                  console.warn('[VMListSection] Start button touchEnd ignored:', { status: vm.status, processingId });
                                 }
                               }}
                               disabled={processingId === vm.uuid || vm.status === 'Running'}
+                              style={{ 
+                                pointerEvents: 'auto',
+                                cursor: (processingId === vm.uuid || vm.status === 'Running') ? 'not-allowed' : 'pointer'
+                              }}
                               aria-label={`Start virtual machine ${vm.name}`}
                               className="w-12 h-12 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 hover:shadow-md rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
                             >
@@ -651,28 +741,74 @@ export default function VMListSection({
                           )}
                           {onAction && (
                             <button 
+                              type="button"
                               onClick={(e) => {
+                                // 강제 로깅 - 가장 먼저 실행
+                                window.console.log('[VMListSection] ====== STOP BUTTON CLICKED ======');
+                                window.console.log('[VMListSection] Event:', e);
+                                window.console.log('[VMListSection] VM:', vm);
+                                window.console.log('[VMListSection] onAction exists:', !!onAction);
+                                
                                 e.stopPropagation();
-                                console.log('[VMListSection] Stop button clicked:', { uuid: vm.uuid, status: vm.status, processingId });
-                                if (vm.status === 'Running' && processingId !== vm.uuid) {
-                                  onAction(vm.uuid, 'stop');
-                                  setTouchedVM(null);
-                                } else {
-                                  console.warn('[VMListSection] Stop button click ignored:', { status: vm.status, processingId });
+                                e.preventDefault(); // Prevent default behavior
+                                
+                                window.console.log('[VMListSection] Stop button clicked:', {
+                                  uuid: vm.uuid,
+                                  status: vm.status,
+                                  processingId,
+                                  isDisabled: processingId === vm.uuid || vm.status !== 'Running',
+                                  onAction: typeof onAction,
+                                  onActionExists: !!onAction,
+                                  isActive,
+                                  isTouched
+                                });
+                                
+                                // 조건 체크
+                                if (vm.status !== 'Running') {
+                                  window.console.warn('[VMListSection] Stop ignored: VM not running');
+                                  return;
                                 }
+                                if (processingId === vm.uuid) {
+                                  window.console.warn('[VMListSection] Stop ignored: Already processing');
+                                  return;
+                                }
+                                
+                                window.console.log('[VMListSection] Calling onAction with stop');
+                                try {
+                                  if (onAction) {
+                                    window.console.log('[VMListSection] About to call onAction:', vm.uuid, 'stop');
+                                    onAction(vm.uuid, 'stop');
+                                    window.console.log('[VMListSection] onAction called successfully');
+                                    setTouchedVM(null);
+                                  } else {
+                                    window.console.error('[VMListSection] onAction is not defined!');
+                                  }
+                                } catch (error) {
+                                  window.console.error('[VMListSection] Error calling onAction:', error);
+                                }
+                              }}
+                              onMouseDown={(e) => {
+                                console.log('[VMListSection] Stop button mousedown:', { uuid: vm.uuid });
+                                e.stopPropagation();
                               }}
                               onTouchEnd={(e) => {
                                 e.stopPropagation();
                                 e.preventDefault();
                                 console.log('[VMListSection] Stop button touchEnd:', { uuid: vm.uuid, status: vm.status, processingId });
-                                if (!processingId && vm.status === 'Running') {
-                                  onAction(vm.uuid, 'stop');
-                                  setTouchedVM(null);
+                                if (vm.status === 'Running' && processingId !== vm.uuid) {
+                                  if (onAction) {
+                                    onAction(vm.uuid, 'stop');
+                                    setTouchedVM(null);
+                                  }
                                 } else {
                                   console.warn('[VMListSection] Stop button touchEnd ignored:', { status: vm.status, processingId });
                                 }
                               }}
                               disabled={processingId === vm.uuid || vm.status !== 'Running'}
+                              style={{ 
+                                pointerEvents: 'auto',
+                                cursor: (processingId === vm.uuid || vm.status !== 'Running') ? 'not-allowed' : 'pointer'
+                              }}
                               aria-label={`Stop virtual machine ${vm.name}`}
                               className="w-12 h-12 flex items-center justify-center text-amber-600 hover:bg-amber-50 hover:shadow-md rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2"
                             >

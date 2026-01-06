@@ -96,9 +96,6 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
   // Available ISO files
   const [availableISOs, setAvailableISOs] = useState<Array<{ name: string; path: string; size: number; modified: string }>>([]);
   const [isLoadingISOs, setIsLoadingISOs] = useState(false);
-  
-  // VM info for boot order
-  const [vmInfo, setVmInfo] = useState<{ boot_order?: string } | null>(null);
 
   // Load current media and available ISOs - React Error #321 해결: useCallback 제거
   const loadMountedMedia = async () => {
@@ -229,71 +226,14 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
     }
   };
 
-  // Load VM info for boot order
-  const loadVMInfo = async () => {
-    try {
-      const vms = await vmAPI.list();
-      const vm = vms.find(v => v.uuid === uuid);
-      if (vm) {
-        setVmInfo({ boot_order: vm.boot_order || 'cdrom_hd' });
-      }
-    } catch (error) {
-      logger.warn(`[VNCViewer] Failed to load VM info: ${getErrorMessage(error)}`);
-    }
-  };
-
-  // Change boot order
-  const handleBootOrderChange = async (newBootOrder: string) => {
-    if (isProcessing) return;
-    
-    setIsProcessing(true);
-    setStatus('부팅 순서 변경 중...');
-    try {
-      const response = await fetch(`/api/vms/${uuid}/boot-order`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ boot_order: newBootOrder }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || '부팅 순서 변경 실패');
-      }
-
-      const updatedVM = await response.json();
-      setVmInfo({ boot_order: updatedVM.boot_order });
-      setStatus(`부팅 순서가 "${getBootOrderLabel(newBootOrder)}"로 변경되었습니다. VM을 재시작하면 적용됩니다.`);
-    } catch (error) {
-      handleError(error, { component: 'VNCViewer', action: 'change_boot_order' });
-      setStatus(`오류: ${getErrorMessage(error)}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const getBootOrderLabel = (bootOrder: string) => {
-    const labels: Record<string, string> = {
-      'cdrom_hd': 'CDROM → HDD',
-      'hd': 'HDD만 (디스크 부팅)',
-      'cdrom': 'CDROM만',
-      'hd_cdrom': 'HDD → CDROM',
-    };
-    return labels[bootOrder] || bootOrder;
-  };
-
   // Load media and ISO list on mount - React Error #321 해결: 의존성 배열에서 함수 제거
   useEffect(() => {
     loadMountedMedia();
     loadAvailableISOs();
-    loadVMInfo();
     
     // Refresh media list periodically
     const interval = setInterval(() => {
       loadMountedMedia();
-      loadVMInfo();
     }, 30000); // Every 30 seconds
     
     return () => clearInterval(interval);
@@ -451,7 +391,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
       wsUrl = `${protocol}://${window.location.host}/vnc/${uuid}`;
       urlSource = 'production-relative-path-vnc-uuid';
       
-      // 프로덕션에서 환경 변수가 설정되어 있으면 개발 환경에서만 경고 (프로덕션에서는 무시)
+      // 프로덕션에서 환경 변수가 설정되어 있으면 개발 환경에서만 로그로 표시
       if (process.env.NEXT_PUBLIC_BACKEND_URL && process.env.NODE_ENV === 'development') {
         logger.log('[VNCViewer] NEXT_PUBLIC_BACKEND_URL is set but will be ignored in production. Using relative path for Envoy proxy.');
       }
@@ -1208,48 +1148,9 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
               
               {/* Media Management Menu */}
               {showMediaMenu && (
-                <div className="absolute top-full right-0 mt-2 w-96 bg-gray-800 dark:bg-gray-800 border border-gray-700 dark:border-gray-700 rounded-lg shadow-xl z-30 media-menu-container">
-                  <div className="p-3 border-b border-gray-700 dark:border-gray-700">
-                    <h3 className="text-sm font-semibold text-gray-200 dark:text-gray-200">Media Management</h3>
-                  </div>
-                  
-                  {/* Boot Order Section */}
-                  <div className="p-3 border-b border-gray-700 dark:border-gray-700 bg-gray-750 dark:bg-gray-750">
-                    <div className="mb-2">
-                      <label className="block text-xs font-medium text-gray-300 dark:text-gray-300 mb-2">
-                        부팅 순서 (Boot Order)
-                      </label>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {[
-                          { value: 'cdrom_hd', label: 'CDROM→HDD', desc: '설치용' },
-                          { value: 'hd', label: 'HDD만', desc: '디스크 부팅' },
-                          { value: 'cdrom', label: 'CDROM만', desc: 'ISO만' },
-                          { value: 'hd_cdrom', label: 'HDD→CDROM', desc: '복구용' },
-                        ].map((option) => (
-                          <button
-                            key={option.value}
-                            onClick={() => handleBootOrderChange(option.value)}
-                            disabled={isProcessing || vmInfo?.boot_order === option.value}
-                            className={`
-                              px-2 py-1.5 text-xs rounded border transition-all
-                              ${
-                                vmInfo?.boot_order === option.value
-                                  ? 'border-blue-500 bg-blue-600/20 text-blue-300 font-medium'
-                                  : 'border-gray-600 dark:border-gray-600 bg-gray-700 dark:bg-gray-700 text-gray-300 hover:border-gray-500'
-                              }
-                              ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                            `}
-                            title={option.desc}
-                          >
-                            <div className="font-medium">{option.label}</div>
-                            <div className="text-[10px] text-gray-400">{option.desc}</div>
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-2">
-                        💡 디스크로 부팅하려면 "HDD만"을 선택하고 VM을 재시작하세요
-                      </p>
-                    </div>
+                <div className="absolute top-full right-0 mt-2 w-80 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-30 media-menu-container">
+                  <div className="p-3 border-b border-gray-700">
+                    <h3 className="text-sm font-semibold text-gray-200">Media Management</h3>
                   </div>
                   
                   {/* Mounted Media List */}
@@ -1457,50 +1358,10 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
               </svg>
             </button>
             {showMediaMenu && (
-              <div className="absolute top-full right-0 mt-2 w-96 bg-gray-800 dark:bg-gray-800 border border-gray-700 dark:border-gray-700 rounded-lg shadow-xl z-30 media-menu-container">
-                <div className="p-3 border-b border-gray-700 dark:border-gray-700">
-                  <h3 className="text-sm font-semibold text-gray-200 dark:text-gray-200">Media Management</h3>
+              <div className="absolute top-full right-0 mt-2 w-80 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-30 media-menu-container">
+                <div className="p-3 border-b border-gray-700">
+                  <h3 className="text-sm font-semibold text-gray-200">Media Management</h3>
                 </div>
-                
-                {/* Boot Order Section */}
-                <div className="p-3 border-b border-gray-700 dark:border-gray-700 bg-gray-750 dark:bg-gray-750">
-                  <div className="mb-2">
-                    <label className="block text-xs font-medium text-gray-300 dark:text-gray-300 mb-2">
-                      부팅 순서 (Boot Order)
-                    </label>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {[
-                        { value: 'cdrom_hd', label: 'CDROM→HDD', desc: '설치용' },
-                        { value: 'hd', label: 'HDD만', desc: '디스크 부팅' },
-                        { value: 'cdrom', label: 'CDROM만', desc: 'ISO만' },
-                        { value: 'hd_cdrom', label: 'HDD→CDROM', desc: '복구용' },
-                      ].map((option) => (
-                        <button
-                          key={option.value}
-                          onClick={() => handleBootOrderChange(option.value)}
-                          disabled={isProcessing || vmInfo?.boot_order === option.value}
-                          className={`
-                            px-2 py-1.5 text-xs rounded border transition-all
-                            ${
-                              vmInfo?.boot_order === option.value
-                                ? 'border-blue-500 bg-blue-600/20 text-blue-300 font-medium'
-                                : 'border-gray-600 dark:border-gray-600 bg-gray-700 dark:bg-gray-700 text-gray-300 hover:border-gray-500'
-                            }
-                            ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                          `}
-                          title={option.desc}
-                        >
-                          <div className="font-medium">{option.label}</div>
-                          <div className="text-[10px] text-gray-400">{option.desc}</div>
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-2">
-                      💡 디스크로 부팅하려면 "HDD만"을 선택하고 VM을 재시작하세요
-                    </p>
-                  </div>
-                </div>
-                
                 <div className="max-h-64 overflow-y-auto">
                   {mountedMedia.length > 0 ? (
                     <div className="p-2">
