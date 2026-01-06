@@ -73,8 +73,9 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
   const MAX_RECONNECT_DELAY = 30000; // 최대 30초
 
 
-  // Available ISO files
+  // Available ISO files and VM disks
   const [availableISOs, setAvailableISOs] = useState<Array<{ name: string; path: string; size: number; modified: string }>>([]);
+  const [availableVMDisks, setAvailableVMDisks] = useState<Array<{ path: string; name: string; vm_name: string; vm_uuid: string; size: number; size_gb: number; type: string }>>([]);
   const [isLoadingISOs, setIsLoadingISOs] = useState(false);
 
   // Load current media and available ISOs - React Error #321 해결: useCallback 제거
@@ -90,6 +91,13 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
       } else {
         setMountedMedia([]);
       }
+      // available_media.vm_disk 정보가 있으면 VM 디스크 정보도 업데이트
+      if (result.available_media?.vm_disk) {
+        // VM 디스크 정보는 이미 getISOs에서 로드되므로 여기서는 로그만 남김
+        if (process.env.NODE_ENV === 'development') {
+          logger.log('[VNCViewer] VM disk info available:', result.available_media.vm_disk);
+        }
+      }
     } catch (error: unknown) {
       // If 404 or error, assume no media attached
       const apiError = error as { status?: number; message?: string };
@@ -103,16 +111,23 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
     }
   };
 
-  // Load available ISO files - React Error #321 해결: useCallback 제거
+  // Load available ISO files and VM disks - React Error #321 해결: useCallback 제거
   const loadAvailableISOs = async () => {
     setIsLoadingISOs(true);
     try {
       const result = await vmAPI.getISOs();
       setAvailableISOs(result.isos || []);
+      // VM 디스크 목록도 함께 로드
+      if (result.vm_disks && Array.isArray(result.vm_disks)) {
+        setAvailableVMDisks(result.vm_disks);
+      } else {
+        setAvailableVMDisks([]);
+      }
     } catch (error: unknown) {
       const errorObj = error instanceof Error ? error : new Error(getErrorMessage(error));
       logger.error(errorObj, { component: 'VNCViewer', action: 'load_iso_list' });
       setAvailableISOs([]);
+      setAvailableVMDisks([]);
     } finally {
       setIsLoadingISOs(false);
     }

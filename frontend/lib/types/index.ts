@@ -108,10 +108,28 @@ export interface VMStats {
   timestamp: number;
 }
 
+export interface VMDisk {
+  path: string;
+  name: string;
+  vm_name: string;
+  vm_uuid: string;
+  size: number;
+  size_gb: number;
+  type: string; // "qcow2"
+}
+
 export interface VMMedia {
   vm_uuid: string;
   media_path: string | null;
   attached: boolean;
+  available_media?: {
+    isos?: ISO[];
+    vm_disk?: {
+      path: string;
+      exists: boolean;
+      name: string;
+    };
+  };
 }
 
 export interface ISO {
@@ -124,6 +142,7 @@ export interface ISO {
 export interface ISOList {
   isos: ISO[];
   count: number;
+  vm_disks?: VMDisk[];
 }
 
 // ============================================================================
