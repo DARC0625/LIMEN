@@ -301,7 +301,9 @@ export default function RootLayout({
                           lastReloadTime = now;
                           console.warn('[Script Load] 동일 파일 반복 실패 감지, 즉시 새로고침:', src);
                           // 캐시 무시하고 하드 리로드
-                          window.location.href = window.location.href.split('?')[0] + '?t=' + String(Date.now());
+                          const currentUrl = window.location.href.split('?')[0];
+                          const timestamp = String(Date.now());
+                          window.location.href = currentUrl + '?t=' + timestamp;
                           return;
                         }
                       }
@@ -331,7 +333,9 @@ export default function RootLayout({
                           lastReloadTime = now;
                           console.warn('[Script Load] 손상된 콘텐츠 감지, 페이지 새로고침 시도...');
                           // 캐시 무시하고 하드 리로드
-                          window.location.href = window.location.href.split('?')[0] + '?t=' + String(Date.now());
+                          const currentUrl = window.location.href.split('?')[0];
+                          const timestamp = String(Date.now());
+                          window.location.href = currentUrl + '?t=' + timestamp;
                           return;
                         }
                       }
@@ -361,7 +365,9 @@ export default function RootLayout({
                         if (now - lastReloadTime > RELOAD_COOLDOWN) {
                           lastReloadTime = now;
                           console.warn('[Script Load] 스크립트 로드 실패, 페이지 새로고침 시도...');
-                          window.location.href = window.location.href.split('?')[0] + '?t=' + String(Date.now());
+                          const currentUrl = window.location.href.split('?')[0];
+                          const timestamp = String(Date.now());
+                          window.location.href = currentUrl + '?t=' + timestamp;
                         }
                       }
                     });
