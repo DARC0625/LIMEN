@@ -209,11 +209,21 @@ export default function Home() {
       if (error instanceof Error) {
         errorMessage = error.message;
         
-        // 백엔드에서 제공한 상세 에러 정보 확인
-        if (apiError.details) {
-          const details = apiError.details;
-          if (details.error || details.message) {
-            errorMessage = `${error.message}\n${details.error || details.message}`;
+        // 404 오류인 경우 특별 처리
+        if (apiError.status === 404) {
+          errorMessage = '부팅 순서 API 엔드포인트를 찾을 수 없습니다. 백엔드 서버를 확인해주세요.';
+          window.console.error('[handleBootOrderChange] 404 Not Found - API endpoint not found:', {
+            uuid,
+            bootOrder,
+            endpoint: `/api/vms/${uuid}/boot-order`
+          });
+        } else {
+          // 백엔드에서 제공한 상세 에러 정보 확인
+          if (apiError.details) {
+            const details = apiError.details;
+            if (details.error || details.message) {
+              errorMessage = `${error.message}\n${details.error || details.message}`;
+            }
           }
         }
       } else {
