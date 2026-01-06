@@ -552,7 +552,8 @@ export default function Home() {
                     {vmActionMutation.isPending && processingId === editingVM.uuid ? 'Updating...' : 'Update'}
                   </button>
                 </div>
-              </form>
+                </form>
+              </div>
             </div>
           </div>
         )}
