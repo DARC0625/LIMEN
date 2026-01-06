@@ -70,6 +70,9 @@ export interface UpdateUserRequest {
 // VM 관련 타입
 // ============================================================================
 
+export type BootOrder = 'cdrom_hd' | 'hd' | 'cdrom' | 'hd_cdrom';
+export type InstallationStatus = 'NotInstalled' | 'Installing' | 'Installed' | 'InstallationFailed';
+
 export interface VM {
   id: number;
   uuid: string;
@@ -81,6 +84,11 @@ export interface VM {
   owner_id: number;
   created_at: string;
   updated_at: string;
+  // Installation and boot configuration
+  installation_status?: InstallationStatus;
+  boot_order?: BootOrder;
+  disk_path?: string;
+  disk_size?: number;
 }
 
 export interface VMSnapshot {

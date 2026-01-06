@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -190,6 +191,14 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
 		logger.Log.Info("No graphics configured for VM", zap.String("vm_name", name), zap.String("graphics_type", graphicsTypeToUse))
 	}
 
+	// Build boot order XML (default: cdrom_hd for new VMs)
+	bootOrder := models.BootOrderCDROMHD
+	bootDevices := bootOrder.GetBootDevices()
+	bootXML := ""
+	for _, device := range bootDevices {
+		bootXML += fmt.Sprintf("    <boot dev='%s'/>\n", device)
+	}
+
 	vmXML := fmt.Sprintf(`
 <domain type='kvm'>
   <name>%s</name>
@@ -197,9 +206,7 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
   <vcpu placement='static'>%d</vcpu>
   <os>
     <type arch='x86_64' machine='pc-q35-7.2'>hvm</type>
-    <boot dev='cdrom'/>
-    <boot dev='hd'/>
-  </os>
+%s  </os>
   <features>
     <acpi/>
     <apic/>
@@ -292,7 +299,7 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
     </memballoon>
   </devices>
 </domain>
-`, name, memoryMB*1024, vcpu, vmDiskPath, isoPath, graphicsXML)
+`, name, memoryMB*1024, vcpu, bootXML, vmDiskPath, isoPath, graphicsXML)
 
 	dom, err := s.conn.DomainDefineXML(vmXML)
 	if err != nil {
@@ -422,6 +429,26 @@ func (s *VMService) StartVM(name string) error {
 		return nil
 	}
 
+	// Get BootOrder from database and apply it before starting
+	var vmRec models.VM
+	if err := s.db.Where("name = ?", name).First(&vmRec).Error; err == nil {
+		if vmRec.BootOrder != "" && vmRec.BootOrder.IsValid() {
+			if err := s.SetBootOrder(name, vmRec.BootOrder); err != nil {
+				logger.Log.Warn("Failed to set boot order before starting VM", 
+					zap.String("vm_name", name), 
+					zap.String("boot_order", string(vmRec.BootOrder)),
+					zap.Error(err))
+				// Continue anyway - VM might start with default boot order
+			} else {
+				logger.Log.Info("Boot order applied before VM start", 
+					zap.String("vm_name", name), 
+					zap.String("boot_order", string(vmRec.BootOrder)))
+			}
+		}
+	} else {
+		logger.Log.Warn("Failed to get VM from database for boot order", zap.String("vm_name", name), zap.Error(err))
+	}
+
 	// Ensure VNC graphics is configured before starting
 	// Note: This must be done before starting the VM, as DomainDefineXML cannot modify running VMs
 	if err := s.ensureVNCGraphics(name); err != nil {
@@ -493,7 +520,23 @@ func (s *VMService) StartVM(name string) error {
 			}
 			if active {
 				vmStarted = true
-				break
+				// Double-check: Wait a bit more to ensure VM doesn't immediately crash
+				time.Sleep(1 * time.Second)
+				activeAgain, err := dom.IsActive()
+				if err == nil && activeAgain {
+					break
+				} else {
+					// VM started but immediately stopped - get state for better error
+					state, reason, stateErr := dom.GetState()
+					if stateErr == nil {
+						logger.Log.Error("VM started but immediately stopped", 
+							zap.String("vm_name", name),
+							zap.Int("state", int(state)),
+							zap.Int("reason", int(reason)))
+						return fmt.Errorf("VM started but immediately stopped (state: %d, reason: %d). Check boot configuration (disk, ISO, boot order)", state, reason)
+					}
+					return fmt.Errorf("VM started but immediately stopped: %w", err)
+				}
 			}
 		}
 		if vmStarted {
@@ -512,6 +555,118 @@ func (s *VMService) StartVM(name string) error {
 
 	logger.Log.Info("VM successfully started and verified", zap.String("vm_name", name))
 	return nil
+}
+
+// SetBootOrder sets the boot order for a VM
+func (s *VMService) SetBootOrder(name string, bootOrder models.BootOrder) error {
+	if !bootOrder.IsValid() {
+		return fmt.Errorf("invalid boot order: %s", bootOrder)
+	}
+
+	dom, err := s.conn.LookupDomainByName(name)
+	if err != nil {
+		return fmt.Errorf("VM not found: %w", err)
+	}
+	defer dom.Free()
+
+	// Get current XML
+	xmlDesc, err := dom.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
+	if err != nil {
+		// If VM is running, try to get active XML
+		xmlDesc, err = dom.GetXMLDesc(libvirt.DOMAIN_XML_SECURE)
+		if err != nil {
+			return fmt.Errorf("failed to get VM XML: %w", err)
+		}
+	}
+
+	// Parse and update boot order
+	updatedXML, err := s.updateBootOrder(xmlDesc, bootOrder)
+	if err != nil {
+		return fmt.Errorf("failed to update boot order: %w", err)
+	}
+
+	// Check if VM is running
+	active, err := dom.IsActive()
+	if err != nil {
+		return fmt.Errorf("failed to check VM status: %w", err)
+	}
+
+	if active {
+		// VM is running - need to undefine and redefine
+		// Save current state
+		dom.UndefineFlags(libvirt.DOMAIN_UNDEFINE_KEEP_NVRAM)
+	}
+
+	// Define updated domain
+	newDom, err := s.conn.DomainDefineXML(updatedXML)
+	if err != nil {
+		return fmt.Errorf("failed to redefine domain with new boot order: %w", err)
+	}
+	defer newDom.Free()
+
+	logger.Log.Info("Boot order updated", zap.String("vm_name", name), zap.String("boot_order", string(bootOrder)))
+	return nil
+}
+
+// updateBootOrder updates the boot order in libvirt XML
+func (s *VMService) updateBootOrder(xmlDesc string, bootOrder models.BootOrder) (string, error) {
+	// Get boot devices from boot order
+	bootDevices := bootOrder.GetBootDevices()
+
+	// Build boot XML
+	bootXML := ""
+	for _, device := range bootDevices {
+		bootXML += fmt.Sprintf("    <boot dev='%s'/>\n", device)
+	}
+
+	// Find and replace <os> section
+	// Pattern: <os>...</os> with boot tags inside
+	osStartPattern := `<os>`
+	osEndPattern := `</os>`
+
+	osStartIdx := strings.Index(xmlDesc, osStartPattern)
+	if osStartIdx == -1 {
+		return "", fmt.Errorf("could not find <os> section in XML")
+	}
+
+	osEndIdx := strings.Index(xmlDesc[osStartIdx:], osEndPattern)
+	if osEndIdx == -1 {
+		return "", fmt.Errorf("could not find </os> closing tag")
+	}
+	osEndIdx += osStartIdx + len(osEndPattern)
+
+	// Extract the <os> section
+	osSection := xmlDesc[osStartIdx:osEndIdx]
+
+	// Find <type> tag to preserve it
+	typePattern := `<type[^>]*>.*?</type>`
+	typeRegex := regexp.MustCompile(typePattern)
+	typeMatch := typeRegex.FindString(osSection)
+
+	if typeMatch == "" {
+		return "", fmt.Errorf("could not find <type> tag in <os> section")
+	}
+
+	// Remove existing boot tags from osSection
+	bootTagPattern := `\s*<boot[^>]*/>\s*`
+	bootRegex := regexp.MustCompile(bootTagPattern)
+	osSectionWithoutBoot := bootRegex.ReplaceAllString(osSection, "")
+
+	// Find <type> position in cleaned section
+	typeMatchInCleaned := typeRegex.FindString(osSectionWithoutBoot)
+	if typeMatchInCleaned == "" {
+		return "", fmt.Errorf("could not find <type> tag after cleaning")
+	}
+
+	// Build new <os> section with type and new boot order
+	// Find where to insert boot tags (after type tag)
+	typeEndIdx := strings.Index(osSectionWithoutBoot, typeMatchInCleaned) + len(typeMatchInCleaned)
+	newOSSection := osSectionWithoutBoot[:typeEndIdx] + "\n" + bootXML + osSectionWithoutBoot[typeEndIdx:]
+
+	// Replace in original XML
+	result := xmlDesc[:osStartIdx] + newOSSection + xmlDesc[osEndIdx:]
+
+	return result, nil
 }
 
 // parseDomainXML parses VM XML and extracts disk information

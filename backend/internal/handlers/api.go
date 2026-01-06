@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -381,12 +382,15 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 		// Optimized: Use transaction to ensure atomicity between DB and libvirt operations
 		// Create VM record first to get UUID
 		newVM := models.VM{
-			Name:    req.Name,
-			CPU:     req.CPU,
-			Memory:  req.Memory,
-			OSType:  req.OSType,
-			Status:  models.VMStatusStopped, // Will be updated after libvirt creation
-			OwnerID: userID,
+			Name:               req.Name,
+			CPU:                req.CPU,
+			Memory:             req.Memory,
+			OSType:             req.OSType,
+			Status:             models.VMStatusStopped, // Will be updated after libvirt creation
+			OwnerID:            userID,
+			InstallationStatus: models.InstallationStatusNotInstalled,
+			BootOrder:          models.BootOrderCDROMHD, // Default: CDROM 우선, HDD 다음
+			DiskSize:           20,                       // Default 20GB
 		}
 
 		// Use transaction to ensure atomicity
@@ -403,6 +407,9 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 			errors.WriteInternalError(w, fmt.Errorf("VM created but failed to save to DB"), h.Config.Env == "development")
 			return
 		}
+
+		// Set disk path before creating VM
+		newVM.DiskPath = filepath.Join(cfg.VMDir, newVM.UUID+".qcow2")
 
 		// Create VM in libvirt using UUID for disk path
 		if h.VMService == nil {
@@ -638,6 +645,20 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 
 	switch action {
 	case models.VMActionStart:
+		// Check boot order and ISO mount status (optional validation)
+		if vmRec.BootOrder == models.BootOrderCDROM || vmRec.BootOrder == models.BootOrderCDROMHD {
+			// Check if ISO is mounted
+			if h.VMService != nil {
+				currentMedia, err := h.VMService.GetCurrentMedia(vmRec.Name)
+				if err != nil || currentMedia == "" {
+					logger.Log.Warn("Boot order requires CDROM but no ISO is mounted",
+						zap.String("vm_name", vmRec.Name),
+						zap.String("boot_order", string(vmRec.BootOrder)))
+					// Continue anyway - user might want to mount ISO later
+				}
+			}
+		}
+		
 		if err := h.VMService.StartVM(vmRec.Name); err != nil {
 			logger.Log.Error("Failed to start VM", zap.Error(err), zap.String("vm_name", vmRec.Name))
 			audit.LogVMStart(r.Context(), userID, vmRec.UUID, false)
@@ -662,6 +683,11 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 		actionSuccess = true
 		logger.Log.Info("VM started", zap.String("vm_name", vmRec.Name), zap.String("status", string(vmRec.Status)))
 		audit.LogVMStart(r.Context(), userID, vmRec.UUID, vmRec.Status == models.VMStatusRunning)
+		// Save VM status to DB before broadcasting
+		if err := h.DB.Save(&vmRec).Error; err != nil {
+			logger.Log.Error("Failed to save VM status after start", zap.Error(err), zap.String("vm_name", vmRec.Name))
+			// Continue anyway - status update is more important than DB save failure
+		}
 		// Broadcast VM update via WebSocket
 		h.VMStatusBroadcaster.BroadcastVMUpdate(vmRec)
 	case models.VMActionStop:
@@ -1956,5 +1982,117 @@ func (h *Handler) HandleListISOs(w http.ResponseWriter, r *http.Request, cfg *co
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"isos":  isos,
 		"count": len(isos),
+	})
+}
+
+// HandleVMBootOrder handles boot order changes for a VM
+// @Summary Change VM boot order
+// @Description Change the boot order for a VM (cdrom_hd, hd, cdrom, hd_cdrom)
+// @Tags vms
+// @Accept json
+// @Produce json
+// @Param uuid path string true "VM UUID" format(uuid)
+// @Param request body map[string]string true "Boot order request" example({"boot_order":"hd"})
+// @Success 200 {object} models.VM "Boot order updated successfully"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 404 {object} map[string]interface{} "VM not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Security BearerAuth
+// @Router /vms/{uuid}/boot-order [post]
+func (h *Handler) HandleVMBootOrder(w http.ResponseWriter, r *http.Request) {
+	uuidStr := chi.URLParam(r, "uuid")
+	if uuidStr == "" {
+		errors.WriteBadRequest(w, "VM UUID is required", nil)
+		return
+	}
+
+	var req struct {
+		BootOrder string `json:"boot_order" example:"hd"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		errors.WriteBadRequest(w, "Invalid request body", err)
+		return
+	}
+
+	bootOrder := models.BootOrder(req.BootOrder)
+	if !bootOrder.IsValid() {
+		errors.WriteBadRequest(w, fmt.Sprintf("Invalid boot order: %s. Valid options: cdrom_hd, hd, cdrom, hd_cdrom", req.BootOrder), nil)
+		return
+	}
+
+	var vmRec models.VM
+	if err := h.DB.Where("uuid = ?", uuidStr).First(&vmRec).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			errors.WriteNotFound(w, "VM")
+		} else {
+			logger.Log.Error("Failed to find VM", zap.Error(err), zap.String("vm_uuid", uuidStr))
+			errors.WriteInternalError(w, err, h.Config.Env == "development")
+		}
+		return
+	}
+
+	if h.VMService == nil {
+		errors.WriteInternalError(w, fmt.Errorf("VM service is not available"), h.Config.Env == "development")
+		return
+	}
+
+	// Update boot order in libvirt
+	if err := h.VMService.SetBootOrder(vmRec.Name, bootOrder); err != nil {
+		logger.Log.Error("Failed to set boot order", zap.Error(err), zap.String("vm_name", vmRec.Name))
+		errors.WriteInternalError(w, err, h.Config.Env == "development")
+		return
+	}
+
+	// Update boot order in database
+	vmRec.BootOrder = bootOrder
+	if err := h.DB.Save(&vmRec).Error; err != nil {
+		logger.Log.Error("Failed to save boot order", zap.Error(err), zap.String("vm_name", vmRec.Name))
+		errors.WriteInternalError(w, err, h.Config.Env == "development")
+		return
+	}
+
+	logger.Log.Info("Boot order updated", zap.String("vm_name", vmRec.Name), zap.String("boot_order", string(bootOrder)))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(vmRec); err != nil {
+		logger.Log.Error("Failed to encode VM response", zap.Error(err))
+	}
+}
+
+// HandleGetVMBootOrder handles boot order retrieval for a VM
+// @Summary Get VM boot order
+// @Description Get the current boot order for a VM
+// @Tags vms
+// @Produce json
+// @Param uuid path string true "VM UUID" format(uuid)
+// @Success 200 {object} map[string]interface{} "Boot order information"
+// @Failure 404 {object} map[string]interface{} "VM not found"
+// @Security BearerAuth
+// @Router /vms/{uuid}/boot-order [get]
+func (h *Handler) HandleGetVMBootOrder(w http.ResponseWriter, r *http.Request) {
+	uuidStr := chi.URLParam(r, "uuid")
+	if uuidStr == "" {
+		errors.WriteBadRequest(w, "VM UUID is required", nil)
+		return
+	}
+
+	var vmRec models.VM
+	if err := h.DB.Where("uuid = ?", uuidStr).First(&vmRec).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			errors.WriteNotFound(w, "VM")
+		} else {
+			logger.Log.Error("Failed to find VM", zap.Error(err), zap.String("vm_uuid", uuidStr))
+			errors.WriteInternalError(w, err, h.Config.Env == "development")
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"vm_uuid":   uuidStr,
+		"boot_order": vmRec.BootOrder,
+		"boot_devices": vmRec.BootOrder.GetBootDevices(),
 	})
 }

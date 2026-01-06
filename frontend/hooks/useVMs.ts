@@ -456,6 +456,14 @@ export function useVMAction() {
             });
           });
           
+          // start/stop 액션은 즉시 리페치하여 최신 상태 확보
+          if (variables.action === 'start' || variables.action === 'stop' || variables.action === 'restart') {
+            // 약간의 지연 후 리페치 (상태 업데이트 완료 대기)
+            setTimeout(() => {
+              queryClient.refetchQueries({ queryKey: ['vms'] });
+            }, 200);
+          }
+          
           // CPU/Memory 변경 시 할당량 무효화
           if (variables.action === 'update') {
             queryClient.invalidateQueries({ queryKey: ['quota'] });
@@ -524,7 +532,7 @@ export function useVMAction() {
             });
           }, 500);
         } else {
-          // 다른 액션은 즉시 무효화
+          // 모든 액션은 즉시 무효화 (start/stop은 onSuccess에서 이미 처리됨)
           startTransition(() => {
             queryClient.invalidateQueries({ queryKey: ['vms'] });
             if (variables.action === 'update') {

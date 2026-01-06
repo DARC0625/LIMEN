@@ -9,7 +9,8 @@ import { useToast } from '../../../components/ToastContainer';
 import { useCreateVM, useVMAction } from '../../../hooks/useVMs';
 import { useAuth } from '../../../components/AuthGuard';
 import RevolverPicker from '../../../components/RevolverPicker';
-import type { VM } from '../../../lib/types';
+import BootOrderSelector from '../../../components/BootOrderSelector';
+import type { VM, BootOrder } from '../../../lib/types';
 
 // Dynamic import: Client-side only rendering for authenticated components (prevents hydration mismatch)
 const QuotaDisplay = dynamicImport(() => import('../../../components/QuotaDisplay').then(mod => mod.default), { ssr: false });
@@ -421,6 +422,19 @@ export default function Home() {
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">Selected: {Math.round(editingVM.memory / 1024)} GB ({editingVM.memory} MB)</p>
                   </div>
                 </div>
+                
+                {/* Boot Order Selector */}
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <BootOrderSelector
+                    vm={editingVM}
+                    onBootOrderChange={(uuid, bootOrder) => {
+                      // Update local state
+                      setEditingVM({ ...editingVM, boot_order: bootOrder });
+                    }}
+                    disabled={vmActionMutation.isPending || processingId === editingVM.uuid}
+                  />
+                </div>
+                
                 <div className="flex gap-3 justify-end pt-4">
                   <button
                     type="button"

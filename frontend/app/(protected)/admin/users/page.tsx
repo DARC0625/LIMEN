@@ -49,15 +49,16 @@ export default function UserManagementPage() {
 
   // 외부 클릭 시 Create User 팝업 닫기
   useEffect(() => {
+    if (!showCreateModal) return; // showCreateModal이 false면 아무것도 하지 않음
+    
     const handleClickOutside = (event: MouseEvent) => {
-      if (showCreateModal && !(event.target as Element).closest('.create-user-popup-container')) {
+      if (!(event.target as Element).closest('.create-user-popup-container')) {
         setShowCreateModal(false);
       }
     };
-    if (showCreateModal) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showCreateModal]);
 
   const handleToggleExpand = (userId: number) => {
