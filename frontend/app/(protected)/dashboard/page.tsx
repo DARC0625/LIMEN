@@ -503,7 +503,7 @@ export default function Home() {
                   <option value="ubuntu-desktop">Ubuntu Desktop (GUI Installer)</option>
                   <option value="ubuntu-server">Ubuntu Server (CLI Installer)</option>
                   <option value="kali">Kali Linux (GUI Installer)</option>
-                  <option value="windows11">Windows 11 (GUI Installer)</option>
+                  <option value="windows10">Windows 10 (GUI Installer)</option>
                 </select>
                 <p id="os-type-help" className="text-xs text-gray-500 mt-1">
                   * First boot will start OS installer via VNC Console.

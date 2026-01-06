@@ -82,8 +82,8 @@ export const vmAPI = {
       vnc_enabled?: boolean;
     }
     
-    // 백엔드 호환성: windows11을 windows로 변환
-    const backendOsType = vm.os_type === 'windows11' ? 'windows' : vm.os_type;
+    // 백엔드 호환성: windows10을 windows로 변환
+    const backendOsType = vm.os_type === 'windows10' ? 'windows' : vm.os_type;
     
     const vmData: VMCreateData = {
       name: vm.name,
@@ -100,7 +100,7 @@ export const vmAPI = {
       vmData.vnc_enabled = vm.vnc_enabled;
     } else {
       // Default: Enable VNC for GUI OS
-      const guiOS = ['ubuntu-desktop', 'kali', 'windows11'];
+      const guiOS = ['ubuntu-desktop', 'kali', 'windows10'];
       if (vm.os_type && guiOS.includes(vm.os_type)) {
         vmData.vnc_enabled = true;
         vmData.graphics_type = 'vnc';
@@ -153,8 +153,8 @@ export const vmAPI = {
         body.name = options.name.trim();
       }
       if (options.os_type !== undefined && options.os_type !== null) {
-        // 백엔드 호환성: windows11을 windows로 변환
-        body.os_type = options.os_type === 'windows11' ? 'windows' : options.os_type;
+        // 백엔드 호환성: windows10을 windows로 변환
+        body.os_type = options.os_type === 'windows10' ? 'windows' : options.os_type;
       }
       // Add VNC graphics configuration
       if (options.graphics_type !== undefined) {
@@ -164,7 +164,7 @@ export const vmAPI = {
         body.vnc_enabled = options.vnc_enabled;
       } else if (options.os_type) {
         // If OS type is changed, enable VNC for GUI OS
-        const guiOS = ['ubuntu-desktop', 'kali', 'windows11'];
+        const guiOS = ['ubuntu-desktop', 'kali', 'windows10'];
         if (guiOS.includes(options.os_type)) {
           body.vnc_enabled = true;
           body.graphics_type = 'vnc';

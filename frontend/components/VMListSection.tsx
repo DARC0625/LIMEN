@@ -406,7 +406,7 @@ export default function VMListSection({
                       }}
                     />
                   );
-                } else if (os === 'windows' || os.includes('windows') || os === 'windows11') {
+                } else if (os === 'windows' || os.includes('windows') || os === 'windows10') {
                   return (
                     <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none">
                       <path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z" fill="#0078D4"/>
