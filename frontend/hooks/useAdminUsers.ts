@@ -21,10 +21,12 @@ export function useAdminUsers() {
   // 마운트 후에만 인증 상태 확인
   // Admin 권한 확인은 페이지 컴포넌트에서 처리하고, 여기서는 인증 상태만 확인
   // 중요: 인증되지 않았거나 마운트되지 않았으면 API 호출하지 않음
+  // React Error #310 해결: enabled 조건을 더 엄격하게 설정하여 불필요한 API 호출 방지
   const enabled = mounted && isAuthenticated === true;
   
   // useQuery는 항상 호출되어야 함 (조건부 호출 금지)
   // React Error #310 해결: useQuery는 항상 같은 순서로 호출
+  // enabled가 false일 때는 queryFn이 실행되지 않으므로 안전
   return useQuery({
     queryKey: ['admin', 'users'],
     queryFn: async () => {

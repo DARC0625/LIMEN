@@ -30,8 +30,12 @@ export default function UserManagementPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   
+  // 리다이렉트 상태 관리
+  const [shouldRedirect, setShouldRedirect] = useState(false);
+  
   // 인증 및 Admin 권한 확인 (hooks 호출 전에 먼저 확인)
   // React Error #310 해결: Admin 권한 확인을 먼저 수행하여 불필요한 API 호출 방지
+  // useEffect 내에서 상태 업데이트를 최소화하고, 리다이렉트는 별도 useEffect로 처리
   useEffect(() => {
     // 인증 상태 확인
     if (isAuthenticated === null) {
@@ -41,14 +45,10 @@ export default function UserManagementPage() {
     
     // 인증되지 않았으면 리다이렉트
     if (isAuthenticated === false) {
-      startTransition(() => {
-        setIsCheckingAuth(false);
-        setIsUserAdmin(false);
-      });
-      // router.push는 startTransition 밖에서 호출 (리다이렉트는 즉시 필요)
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 100);
+      // React Error #310 해결: 상태 업데이트를 한 번에 처리
+      setIsCheckingAuth(false);
+      setIsUserAdmin(false);
+      setShouldRedirect(true);
       return;
     }
     
@@ -56,39 +56,40 @@ export default function UserManagementPage() {
     let cancelled = false;
     isAdmin().then((admin) => {
       if (cancelled) return;
-      startTransition(() => {
-        setIsUserAdmin(admin);
-        setIsCheckingAuth(false);
-      });
+      // React Error #310 해결: 상태 업데이트를 한 번에 처리
+      setIsUserAdmin(admin);
+      setIsCheckingAuth(false);
+      // Admin이 아니면 리다이렉트
       if (!admin) {
         toast.error('Admin 권한이 필요합니다.');
-        // router.push는 startTransition 밖에서 호출
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 100);
+        setShouldRedirect(true);
       }
     }).catch((error) => {
       if (cancelled) return;
       console.error('[UserManagement] Admin check failed:', error);
-      startTransition(() => {
-        setIsUserAdmin(false);
-        setIsCheckingAuth(false);
-      });
+      // React Error #310 해결: 상태 업데이트를 한 번에 처리
+      setIsUserAdmin(false);
+      setIsCheckingAuth(false);
       toast.error('Admin 권한 확인에 실패했습니다. 다시 시도해주세요.');
-      // router.push는 startTransition 밖에서 호출
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 100);
+      setShouldRedirect(true);
     });
     
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, router, toast]);
+  }, [isAuthenticated, toast]);
+  
+  // 리다이렉트 처리 (별도 useEffect로 분리)
+  useEffect(() => {
+    if (shouldRedirect) {
+      router.push('/dashboard');
+    }
+  }, [shouldRedirect, router]);
   
   // React Query hooks - 항상 호출 (조건부로만 사용)
   // 중요: 모든 hooks는 조건부 return 전에 호출되어야 함
   // Admin 권한이 확인된 후에만 데이터를 가져오도록 enabled 조건 추가
+  // React Error #310 해결: useAdminUsers는 항상 호출하되, 내부에서 enabled 조건으로 제어
   const { data: users = [], isLoading, error } = useAdminUsers();
   const { data: expandedUserData } = useAdminUser(expandedUser);
   const createUserMutation = useCreateUser();
@@ -107,8 +108,8 @@ export default function UserManagementPage() {
     );
   }
   
-  // Admin이 아니면 리다이렉트 중 (위 useEffect에서 처리)
-  if (isUserAdmin === false) {
+  // Admin이 아니면 리다이렉트 중 (조건부 렌더링으로 처리)
+  if (isAuthenticated === false || isUserAdmin === false || shouldRedirect) {
     return (
       <div className="min-h-screen p-8 bg-gray-50 text-gray-900 font-sans transition-colors">
         <main className="max-w-6xl mx-auto flex flex-col gap-8">
