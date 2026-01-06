@@ -3,7 +3,7 @@
 // 동적 렌더링 강제
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useEffect, startTransition } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAdmin } from '../../../../lib/api';
 import { useToast } from '../../../../components/ToastContainer';
