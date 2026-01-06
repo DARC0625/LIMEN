@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { handleError } from '../lib/utils/error';
 import { vmAPI } from '../lib/api/index';
 import { logger } from '../lib/utils/logger';
@@ -50,6 +51,7 @@ interface VNCEvent {
 
 export default function VNCViewer({ uuid }: { uuid: string }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const rfbRef = useRef<RFBInstance | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -530,11 +532,16 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
       try {
         setStatus(retryCount > 0 ? `Checking VM status... (retry ${retryCount}/${MAX_VM_STATUS_CHECK_ATTEMPTS})` : 'Checking VM status...');
         
+        // 캐시 무시: React Query 캐시를 무효화하고 최신 데이터 가져오기
+        await queryClient.invalidateQueries({ queryKey: ['vms'] });
+        logger.log('[VNCViewer] Invalidated VM cache before status check');
+        
         // 타임아웃 설정 (10초)
         const timeoutId = setTimeout(() => {
           abortController.abort();
         }, 10000);
         
+        // 최신 VM 목록 가져오기 (캐시 무시)
         const vms = await vmAPI.list();
         clearTimeout(timeoutId);
         
@@ -917,11 +924,16 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
               abortControllerRef.current = abortController;
               
               try {
+                // 캐시 무시: React Query 캐시를 무효화하고 최신 데이터 가져오기
+                await queryClient.invalidateQueries({ queryKey: ['vms'] });
+                logger.log('[VNCViewer] Invalidated VM cache before reconnect status check');
+                
                 // 타임아웃 설정 (10초)
                 const timeoutId = setTimeout(() => {
                   abortController.abort();
                 }, 10000);
                 
+                // 최신 VM 목록 가져오기 (캐시 무시)
                 const vms = await vmAPI.list();
                 clearTimeout(timeoutId);
                 
