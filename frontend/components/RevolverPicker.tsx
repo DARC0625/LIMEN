@@ -130,6 +130,10 @@ export default function RevolverPicker({
 
   // 드래그 시작
   const handleMouseDown = (e: React.MouseEvent) => {
+    // 텍스트 선택 방지
+    e.preventDefault();
+    e.stopPropagation();
+    
     setIsDragging(true);
     setStartY(e.clientY);
     setLastY(e.clientY);
@@ -150,6 +154,9 @@ export default function RevolverPicker({
   // 드래그 중 (부드러운 움직임)
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging || !scrollContainerRef.current) return;
+    
+    // 텍스트 선택 방지
+    e.preventDefault();
     
     const now = Date.now();
     const deltaTime = now - lastTime;
@@ -199,6 +206,10 @@ export default function RevolverPicker({
 
   // 터치 이벤트
   const handleTouchStart = (e: React.TouchEvent) => {
+    // 텍스트 선택 방지
+    e.preventDefault();
+    e.stopPropagation();
+    
     setIsDragging(true);
     const touch = e.touches[0];
     setStartY(touch.clientY);
@@ -308,16 +319,22 @@ export default function RevolverPicker({
       {/* 스크롤 컨테이너 - 부드러운 스크롤 */}
       <div
         ref={scrollContainerRef}
-        className="overflow-y-scroll scrollbar-hide"
+        className="overflow-y-scroll scrollbar-hide select-none"
         style={{
           height: containerHeight,
           scrollSnapType: 'y mandatory',
           scrollBehavior: isDragging ? 'auto' : 'smooth',
           WebkitOverflowScrolling: 'touch',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          MozUserSelect: 'none',
+          msUserSelect: 'none',
+          cursor: isDragging ? 'grabbing' : 'grab',
         }}
         onScroll={handleScroll}
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
+        onDragStart={(e) => e.preventDefault()} // 드래그 시작 방지
       >
         {/* 패딩 (상단) */}
         <div style={{ height: itemHeight * centerIndex }} />
@@ -348,7 +365,7 @@ export default function RevolverPicker({
                 }}
               >
                 <div
-                  className={`transition-all duration-150 ease-out ${
+                  className={`transition-all duration-150 ease-out select-none ${
                     isSelected 
                       ? 'text-gray-900 font-semibold' 
                       : 'text-gray-400 font-normal'
@@ -357,6 +374,11 @@ export default function RevolverPicker({
                     fontSize: fontSize,
                     transform: `scale(${scale})`,
                     opacity: opacity,
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    MozUserSelect: 'none',
+                    msUserSelect: 'none',
+                    pointerEvents: 'none', // 텍스트 클릭 방지
                   }}
                 >
                   {formatLabel(item)}
