@@ -433,12 +433,33 @@ export function useVMAction() {
           // 목록에서 직접 제거
           queryClient.setQueryData<VM[]>(['vms'], (old) => {
             if (!old) return [];
-            const filtered = old.filter(v => v.uuid !== variables.uuid);
+            
+            // 디버깅: 실제 UUID 비교
+            window.console.log('[useVMAction] Delete: Before filter:', {
+              oldVMs: old.map(v => ({ uuid: v.uuid, name: v.name })),
+              deletedUUID: variables.uuid,
+              uuidType: typeof variables.uuid,
+            });
+            
+            const filtered = old.filter(v => {
+              const matches = v.uuid === variables.uuid;
+              if (matches) {
+                window.console.log('[useVMAction] Delete: Found matching VM:', {
+                  vmUUID: v.uuid,
+                  deletedUUID: variables.uuid,
+                  match: matches,
+                });
+              }
+              return !matches;
+            });
+            
             window.console.log('[useVMAction] Delete: VM list updated:', {
               beforeCount: old.length,
               afterCount: filtered.length,
               deletedUUID: variables.uuid,
+              filteredVMs: filtered.map(v => ({ uuid: v.uuid, name: v.name })),
             });
+            
             return filtered;
           });
           queryClient.invalidateQueries({ queryKey: ['quota'] });
