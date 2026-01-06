@@ -199,13 +199,14 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
     }
   };
 
-  // Attach Media
+  // Attach Media (ISO 파일 또는 VM 디스크)
   const handleAttachMedia = async () => {
     if (isProcessing || !isoPath.trim()) return;
 
     setIsProcessing(true);
     setStatus('Mounting media...');
     try {
+      // media_path 파라미터 사용 (ISO 및 VM 디스크 지원)
       const result = await vmAPI.media(uuid, 'attach', isoPath.trim());
       setStatus(result.message || `Media mounted: ${isoPath}`);
       setIsoPath('');
