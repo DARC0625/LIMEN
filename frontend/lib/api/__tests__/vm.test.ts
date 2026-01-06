@@ -331,35 +331,36 @@ describe('vmAPI', () => {
     expect(result).toEqual(mockResponse)
   })
 
-  it('attaches media with trimmed iso_path', async () => {
+  it('attaches media with trimmed media_path', async () => {
     const mockResponse = { message: 'Media attached' }
     const uuid = 'test-uuid'
-    const isoPath = '  /path/to/iso.iso  '
+    const mediaPath = '  /path/to/iso.iso  '
 
     mockApiRequest.mockResolvedValue(mockResponse)
 
-    await vmAPI.media(uuid, 'attach', isoPath)
+    await vmAPI.media(uuid, 'attach', mediaPath)
 
     const callBody = JSON.parse(mockApiRequest.mock.calls[0][1].body)
-    expect(callBody.iso_path).toBe('/path/to/iso.iso')
+    expect(callBody.media_path).toBe('/path/to/iso.iso')
+    expect(callBody.iso_path).toBe('/path/to/iso.iso') // 하위 호환성
   })
 
-  it('throws error when attaching media without iso_path', async () => {
+  it('throws error when attaching media without media_path', async () => {
     const uuid = 'test-uuid'
 
-    await expect(vmAPI.media(uuid, 'attach')).rejects.toThrow('ISO path is required')
+    await expect(vmAPI.media(uuid, 'attach')).rejects.toThrow('Media path is required')
   })
 
-  it('throws error when attaching media with empty iso_path', async () => {
+  it('throws error when attaching media with empty media_path', async () => {
     const uuid = 'test-uuid'
 
-    await expect(vmAPI.media(uuid, 'attach', '')).rejects.toThrow('ISO path is required')
+    await expect(vmAPI.media(uuid, 'attach', '')).rejects.toThrow('Media path is required')
   })
 
-  it('throws error when attaching media with whitespace-only iso_path', async () => {
+  it('throws error when attaching media with whitespace-only media_path', async () => {
     const uuid = 'test-uuid'
 
-    await expect(vmAPI.media(uuid, 'attach', '   ')).rejects.toThrow('ISO path is required')
+    await expect(vmAPI.media(uuid, 'attach', '   ')).rejects.toThrow('Media path is required')
   })
 
   it('detaches media', async () => {
