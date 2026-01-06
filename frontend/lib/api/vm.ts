@@ -130,6 +130,25 @@ export const vmAPI = {
     logger.log('[vmAPI.action] Calling API:', { uuid, action, body });
     
     try {
+      // delete 액션의 경우 백엔드가 다른 형식의 응답을 반환함
+      if (action === 'delete') {
+        const result = await apiRequest<{ message: string; vm_uuid: string }>(`/vms/${uuid}/action`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        
+        logger.log('[vmAPI.action] Delete API success:', {
+          uuid,
+          action,
+          response: result,
+        });
+        
+        // delete 액션은 VM 객체를 반환하지 않으므로, 기존 VM 정보를 기반으로 빈 객체 반환
+        // 실제로는 useVMAction의 onSuccess에서 목록에서 제거하므로 이 값은 사용되지 않음
+        return {} as VM;
+      }
+      
+      // start, stop, update 액션은 VM 객체를 반환
       const result = await apiRequest<VM>(`/vms/${uuid}/action`, {
         method: 'POST',
         body: JSON.stringify(body),

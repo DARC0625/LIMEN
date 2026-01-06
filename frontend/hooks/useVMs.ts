@@ -85,12 +85,12 @@ export function useVMs() {
     // 최후의 수단으로만 폴링 (백그라운드 동기화)
     refetchInterval: enabled ? FALLBACK_POLLING_INTERVAL : false,
     staleTime: 2 * 60 * 1000, // 2분간 캐시 유지 (Mutation 트리거 우선)
-    // 창 포커스 시 재요청 (조건부: 탭이 비활성화된 시간이 1분 이상이면만)
-    // Mutation 트리거가 우선이므로, 창 포커스는 보조적 역할만
+    // 창 포커스 시 재요청 (보호된 상태가 있으면 서버 응답을 덮어쓰지 않도록 주의)
     refetchOnWindowFocus: true,
     // 네트워크 재연결 시 재요청
     refetchOnReconnect: true,
-    // 마운트 시 재요청
+    // 마운트 시 재요청 (보호된 상태가 있으면 서버 응답을 덮어쓰지 않도록 주의)
+    // 중요: protectedVMStates가 있으면 서버 응답을 덮어쓰지 않음
     refetchOnMount: true,
     retry: QUERY_CONSTANTS.RETRY,
     retryDelay: QUERY_CONSTANTS.RETRY_DELAY,
@@ -266,6 +266,33 @@ const pendingActions = new Map<string, boolean>();
 // 서버 응답 상태 보호: start/stop 액션 후 서버 응답 상태를 일정 시간 보호
 const protectedVMStates = new Map<string, { status: string; timestamp: number }>();
 
+// localStorage에서 보호된 상태 복원 (새로고침 후에도 유지)
+if (typeof window !== 'undefined') {
+  try {
+    const stored = localStorage.getItem('protectedVMStates');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      const now = Date.now();
+      Object.entries(parsed).forEach(([uuid, state]: [string, any]) => {
+        // 30초 이내의 보호 상태만 복원
+        if (state && state.timestamp && (now - state.timestamp) < 30000) {
+          protectedVMStates.set(uuid, { status: state.status, timestamp: state.timestamp });
+        }
+      });
+      // 만료된 항목 제거
+      const validStates: Record<string, any> = {};
+      Object.entries(parsed).forEach(([uuid, state]: [string, any]) => {
+        if (state && state.timestamp && (now - state.timestamp) < 30000) {
+          validStates[uuid] = state;
+        }
+      });
+      localStorage.setItem('protectedVMStates', JSON.stringify(validStates));
+    }
+  } catch (e) {
+    // localStorage 복원 실패는 무시
+  }
+}
+
 export function useVMAction() {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -390,30 +417,42 @@ export function useVMAction() {
       window.console.log('[useVMAction] ====== ON SUCCESS CALLED ======');
       window.console.log('[useVMAction] Action:', variables.action);
       window.console.log('[useVMAction] UUID:', variables.uuid);
-      window.console.log('[useVMAction] Server response VM status:', updatedVM.status);
-      window.console.log('[useVMAction] Full server response:', updatedVM);
+      window.console.log('[useVMAction] Server response:', updatedVM);
       
       logger.log('[useVMAction] onSuccess called:', {
         action: variables.action,
         uuid: variables.uuid,
-        updatedVMStatus: updatedVM.status,
         updatedVM: updatedVM,
       });
       
       queueMicrotask(() => {
         startTransition(() => {
         if (variables.action === 'delete') {
-          // 삭제 성공: 목록에서 제거 확인 및 할당량 무효화
+          // 삭제 성공: 목록에서 제거 및 할당량 무효화
+          // 백엔드는 delete 액션에 대해 VM 객체가 아닌 메시지만 반환하므로
+          // 목록에서 직접 제거
           queryClient.setQueryData<VM[]>(['vms'], (old) => {
             if (!old) return [];
-            return old.filter(v => v.uuid !== variables.uuid);
+            const filtered = old.filter(v => v.uuid !== variables.uuid);
+            window.console.log('[useVMAction] Delete: VM list updated:', {
+              beforeCount: old.length,
+              afterCount: filtered.length,
+              deletedUUID: variables.uuid,
+            });
+            return filtered;
           });
           queryClient.invalidateQueries({ queryKey: ['quota'] });
+          
+          // 성공 토스트 표시
+          queueMicrotask(() => {
+            toast.success('VM deleted successfully');
+          });
+          return; // delete 액션은 여기서 종료
         } else if (variables.action === 'start' || variables.action === 'stop') {
           // start/stop 액션: 서버 응답 상태를 신뢰하여 업데이트
           // 서버가 반환한 상태가 예상과 다르면 실패로 간주
           const expectedStatus = variables.action === 'start' ? 'Running' : 'Stopped';
-          const actualStatus = updatedVM.status;
+          const actualStatus = updatedVM?.status;
           
           // 강제 로깅
           window.console.log('[useVMAction] ====== ACTION RESULT CHECK ======');
@@ -468,11 +507,24 @@ export function useVMAction() {
           });
           
           // 서버 응답 상태를 즉시 보호 설정 (refetch가 덮어쓰기 전에)
+          // localStorage에도 저장하여 새로고침 후에도 보호 상태 유지
           const protectionTimestamp = Date.now();
           protectedVMStates.set(variables.uuid, {
             status: updatedVM.status,
             timestamp: protectionTimestamp
           });
+          
+          // localStorage에 저장 (새로고침 후에도 보호 상태 유지)
+          try {
+            const protectedStates = JSON.parse(localStorage.getItem('protectedVMStates') || '{}');
+            protectedStates[variables.uuid] = {
+              status: updatedVM.status,
+              timestamp: protectionTimestamp
+            };
+            localStorage.setItem('protectedVMStates', JSON.stringify(protectedStates));
+          } catch (e) {
+            // localStorage 저장 실패는 무시
+          }
           
           window.console.log('[useVMAction] Protected VM state set:', {
             uuid: variables.uuid,
@@ -512,6 +564,14 @@ export function useVMAction() {
           setTimeout(() => {
             logger.log('[useVMAction] Removing protection for VM:', { uuid: variables.uuid });
             protectedVMStates.delete(variables.uuid);
+            // localStorage에서도 제거
+            try {
+              const protectedStates = JSON.parse(localStorage.getItem('protectedVMStates') || '{}');
+              delete protectedStates[variables.uuid];
+              localStorage.setItem('protectedVMStates', JSON.stringify(protectedStates));
+            } catch (e) {
+              // localStorage 제거 실패는 무시
+            }
           }, 30000);
           
           // 성공 메시지 표시
