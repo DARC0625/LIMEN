@@ -30,17 +30,8 @@ export default function UserManagementPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   
-  // React Query hooks - 항상 호출 (조건부로만 사용)
-  // 중요: 모든 hooks는 조건부 return 전에 호출되어야 함
-  const { data: users = [], isLoading, error } = useAdminUsers();
-  const { data: expandedUserData } = useAdminUser(expandedUser);
-  const createUserMutation = useCreateUser();
-  const updateUserMutation = useUpdateUser();
-  const deleteUserMutation = useDeleteUser();
-  const approveUserMutation = useApproveUser();
-  
-  // 인증 및 Admin 권한 확인 (hooks 호출 후에 처리)
-  // React Error #310 해결: 단일 useEffect로 통합하고, 상태 업데이트를 최소화
+  // 인증 및 Admin 권한 확인 (hooks 호출 전에 먼저 확인)
+  // React Error #310 해결: Admin 권한 확인을 먼저 수행하여 불필요한 API 호출 방지
   useEffect(() => {
     // 인증 상태 확인
     if (isAuthenticated === null) {
@@ -57,21 +48,21 @@ export default function UserManagementPage() {
     }
     
     // 인증되었으면 Admin 권한 확인
-    setIsCheckingAuth(false);
-    
     let cancelled = false;
     isAdmin().then((admin) => {
       if (cancelled) return;
       setIsUserAdmin(admin);
+      setIsCheckingAuth(false);
       if (!admin) {
-        toast.error('Admin access required');
+        toast.error('Admin 권한이 필요합니다.');
         router.push('/dashboard');
       }
     }).catch((error) => {
       if (cancelled) return;
       console.error('[UserManagement] Admin check failed:', error);
       setIsUserAdmin(false);
-      toast.error('Admin access required');
+      setIsCheckingAuth(false);
+      toast.error('Admin 권한 확인에 실패했습니다. 다시 시도해주세요.');
       router.push('/dashboard');
     });
     
@@ -79,6 +70,16 @@ export default function UserManagementPage() {
       cancelled = true;
     };
   }, [isAuthenticated, router, toast]);
+  
+  // React Query hooks - 항상 호출 (조건부로만 사용)
+  // 중요: 모든 hooks는 조건부 return 전에 호출되어야 함
+  // Admin 권한이 확인된 후에만 데이터를 가져오도록 enabled 조건 추가
+  const { data: users = [], isLoading, error } = useAdminUsers();
+  const { data: expandedUserData } = useAdminUser(expandedUser);
+  const createUserMutation = useCreateUser();
+  const updateUserMutation = useUpdateUser();
+  const deleteUserMutation = useDeleteUser();
+  const approveUserMutation = useApproveUser();
   
   // 인증 확인 중이거나 Admin 권한 확인 중이면 로딩 표시
   if (isCheckingAuth || isAuthenticated === null || isUserAdmin === null) {
@@ -216,18 +217,36 @@ export default function UserManagementPage() {
 
   // 에러 처리: 401/403 에러 시 대시보드로 리다이렉트
   useEffect(() => {
-    if (error) {
+    if (error && isUserAdmin === true) {
+      // Admin 권한이 확인된 후에만 에러 처리 (권한 확인 중 에러는 무시)
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('401') || errorMessage.includes('Authentication required') || 
           errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
         // React Error #310 해결: 상태 업데이트를 startTransition으로 감싸기
         startTransition(() => {
-          toast.error('Admin access required');
+          toast.error('인증이 만료되었습니다. 다시 로그인해주세요.');
           router.push('/dashboard');
         });
+      } else {
+        // 기타 에러는 사용자에게 표시
+        const friendlyMessage = errorMessage.includes('Network') || errorMessage.includes('fetch')
+          ? '네트워크 오류가 발생했습니다. 연결을 확인하고 다시 시도해주세요.'
+          : `오류가 발생했습니다: ${errorMessage}`;
+        toast.error(friendlyMessage);
       }
     }
-  }, [error, toast, router]);
+  }, [error, isUserAdmin, toast, router]);
+
+  // Admin 권한이 확인되지 않았으면 로딩 표시 (리다이렉트 중)
+  if (isUserAdmin !== true) {
+    return (
+      <div className="min-h-screen p-8 bg-gray-50 text-gray-900 font-sans transition-colors">
+        <main className="max-w-6xl mx-auto flex flex-col gap-8">
+          <Loading message="Checking permissions..." size="md" />
+        </main>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
