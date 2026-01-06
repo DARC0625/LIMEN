@@ -1170,7 +1170,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
     >
       {!isFullscreen && (
         <div 
-          className="bg-gray-900 border-b border-gray-700 flex justify-between items-center shrink-0 z-10 transition-colors px-4 py-2" 
+          className="bg-white border-b border-gray-300 flex justify-between items-center shrink-0 z-10 transition-colors px-4 py-2" 
           style={{ 
             minHeight: '56px',
             position: 'relative',
@@ -1180,13 +1180,13 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/dashboard')}
-              className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-md hover:bg-gray-700 text-gray-200 transition-colors text-sm font-medium cursor-pointer"
+              className="px-3 py-1.5 bg-black border border-gray-800 rounded-md hover:bg-gray-900 text-white transition-colors text-sm font-medium cursor-pointer"
             >
               ← Back
             </button>
-            <span className="text-gray-400 text-sm font-mono">Status: {status}</span>
+            <span className="text-gray-700 text-sm font-mono">Status: {status}</span>
             {/* 세션 제한 안내 */}
-            <div className="hidden md:flex items-center gap-2 text-xs text-gray-500">
+            <div className="hidden md:flex items-center gap-2 text-xs text-gray-600">
               <span>💡 유휴 시 자동 종료 (10분) | 최대 사용 시간 제한</span>
             </div>
           </div>
@@ -1196,7 +1196,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
               <button
                 onClick={() => setShowMediaMenu(!showMediaMenu)}
                 disabled={isProcessing}
-                className="p-2 bg-gray-800 border border-gray-700 rounded-md hover:bg-gray-700 text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 bg-black border border-gray-800 rounded-md hover:bg-gray-900 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Media Management"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1265,7 +1265,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
                         loadAvailableISOs();
                       }}
                       disabled={isProcessing}
-                      className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="flex-1 px-3 py-2 bg-black hover:bg-gray-900 text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1278,7 +1278,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
                         loadAvailableISOs();
                       }}
                       disabled={isProcessing || isLoadingISOs}
-                      className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-md text-sm transition-colors disabled:opacity-50"
+                      className="px-3 py-2 bg-black hover:bg-gray-900 text-white rounded-md text-sm transition-colors disabled:opacity-50"
                       title="Refresh"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1290,10 +1290,10 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
               )}
             </div>
             
-            <span className="text-gray-500 shrink-0 font-mono text-xs px-2">{uuid.substring(0, 8)}...</span>
+            <span className="text-gray-700 shrink-0 font-mono text-xs px-2">{uuid.substring(0, 8)}...</span>
             <button
               onClick={toggleFullscreen}
-              className="p-2 bg-gray-800 border border-gray-700 rounded-md hover:bg-gray-700 text-gray-300 transition-colors"
+              className="p-2 bg-black border border-gray-800 rounded-md hover:bg-gray-900 text-white transition-colors"
               title="Fullscreen (F11)"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1379,14 +1379,14 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
                         setShowMountDialog(false);
                         setIsoPath('');
                       }}
-                      className="px-4 py-2 text-gray-300 bg-gray-700 rounded-md hover:bg-gray-600 transition-colors"
+                      className="px-4 py-2 text-white bg-black rounded-md hover:bg-gray-900 transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleAttachMedia}
                       disabled={isProcessing || !isoPath.trim()}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                      className="px-4 py-2 bg-black text-white rounded-md hover:bg-gray-900 disabled:opacity-50 transition-colors"
                     >
                       {isProcessing ? 'Attaching...' : 'Attach'}
                     </button>
@@ -1411,7 +1411,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
             <button
               onClick={() => setShowMediaMenu(!showMediaMenu)}
               disabled={isProcessing}
-              className="p-2 bg-gray-900/80 backdrop-blur-sm border border-gray-700 rounded-md hover:bg-gray-800 text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 bg-black/80 backdrop-blur-sm border border-gray-800 rounded-md hover:bg-gray-900 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Media Management"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1473,7 +1473,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
                       setShowMediaMenu(false);
                     }}
                     disabled={isProcessing}
-                    className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="flex-1 px-3 py-2 bg-black hover:bg-gray-900 text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1486,7 +1486,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
                       loadAvailableISOs();
                     }}
                     disabled={isProcessing || isLoadingISOs}
-                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-md text-sm transition-colors disabled:opacity-50"
+                    className="px-3 py-2 bg-black hover:bg-gray-900 text-white rounded-md text-sm transition-colors disabled:opacity-50"
                     title="Refresh"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1499,7 +1499,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
           </div>
           <button
             onClick={toggleFullscreen}
-            className="p-2 bg-gray-900/80 backdrop-blur-sm border border-gray-700 rounded-md hover:bg-gray-800 text-gray-300 transition-colors"
+            className="p-2 bg-black/80 backdrop-blur-sm border border-gray-800 rounded-md hover:bg-gray-900 text-white transition-colors"
             title="Exit Fullscreen (ESC)"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
