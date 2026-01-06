@@ -187,7 +187,7 @@ export default function Home() {
           const delay = (retryCount + 1) * 5000; // 5초, 10초, 15초, 20초, 25초
           window.console.log(`[handleBootOrderChange] Retrying in ${delay / 1000} seconds...`);
           
-          toast.info(`대기 중... (${retryCount + 1}/5)`, { duration: delay });
+          toast.info(`대기 중... (${retryCount + 1}/5)`);
           
           setTimeout(() => {
             handleBootOrderChange(uuid, bootOrder, retryCount + 1);
@@ -290,7 +290,7 @@ export default function Home() {
           const delay = (retryCount + 1) * 5000; // 5초, 10초, 15초, 20초, 25초
           window.console.log(`[handleFinalizeInstall] Retrying in ${delay / 1000} seconds...`);
           
-          toast.info(`대기 중... (${retryCount + 1}/5)`, { duration: delay });
+          toast.info(`대기 중... (${retryCount + 1}/5)`);
           
           setTimeout(() => {
             handleFinalizeInstall(uuid, retryCount + 1);
