@@ -460,7 +460,6 @@ export default function Home() {
                     type="text"
                     required
                     maxLength={100}
-                    pattern="[a-zA-Z0-9_-]+"
                     className="w-full p-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                     value={editingVM.name || ''}
                     onChange={(e) => {
@@ -474,6 +473,14 @@ export default function Home() {
                       }
                       
                       setEditingVM({ ...editingVM, name: sanitized });
+                    }}
+                    onInvalid={(e) => {
+                      const target = e.target as HTMLInputElement;
+                      if (!/^[a-zA-Z0-9_-]+$/.test(target.value)) {
+                        target.setCustomValidity('Only letters, numbers, hyphens (-), and underscores (_) are allowed.');
+                      } else {
+                        target.setCustomValidity('');
+                      }
                     }}
                   />
                   <p className="text-xs text-gray-500">
