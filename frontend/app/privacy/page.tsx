@@ -81,7 +81,7 @@ export default function PrivacyPage() {
             </p>
             <div className="bg-gray-50 p-4 rounded-lg mt-2">
               <p className="font-semibold">개인정보 보호책임자</p>
-              <p>이메일: support@limen.example.com</p>
+              <p>이메일: darc0625@proton.me</p>
             </div>
           </section>
 
@@ -103,6 +103,7 @@ export default function PrivacyPage() {
     </div>
   );
 }
+
 
 
 

@@ -91,12 +91,12 @@ export default function SnapshotManager({ vmUuid, vmName }: SnapshotManagerProps
   };
 
   return (
-    <section className="mt-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors" aria-label={`Snapshot management for ${vmName}`}>
+    <section className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 transition-colors" aria-label={`Snapshot management for ${vmName}`}>
       <div className="flex justify-between items-center mb-3">
-        <h3 className="font-semibold text-gray-900 dark:text-gray-100">Snapshots for {vmName}</h3>
+        <h3 className="font-semibold text-gray-900">Snapshots for {vmName}</h3>
         <button
           onClick={() => setShowCreate(!showCreate)}
-          className="px-3 py-1 text-sm bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           aria-expanded={showCreate}
           aria-label={showCreate ? 'Cancel creating snapshot' : 'Create new snapshot'}
         >
@@ -105,7 +105,7 @@ export default function SnapshotManager({ vmUuid, vmName }: SnapshotManagerProps
       </div>
 
       {showCreate && (
-        <form onSubmit={handleCreate} className="mb-4 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 transition-colors" aria-label="Create snapshot form">
+        <form onSubmit={handleCreate} className="mb-4 p-3 bg-white rounded border border-gray-200 transition-colors" aria-label="Create snapshot form">
           <div className="space-y-2">
             <label htmlFor={`snapshot-name-${vmUuid}`} className="sr-only">Snapshot name</label>
             <input
@@ -115,7 +115,7 @@ export default function SnapshotManager({ vmUuid, vmName }: SnapshotManagerProps
               value={snapshotName}
               onChange={(e) => setSnapshotName(e.target.value)}
               required
-              className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+              className="w-full p-2 border border-gray-300 rounded text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               aria-label="Snapshot name"
             />
             <label htmlFor={`snapshot-desc-${vmUuid}`} className="sr-only">Snapshot description (optional)</label>
@@ -124,14 +124,14 @@ export default function SnapshotManager({ vmUuid, vmName }: SnapshotManagerProps
               placeholder="Description (optional)"
               value={snapshotDesc}
               onChange={(e) => setSnapshotDesc(e.target.value)}
-              className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+              className="w-full p-2 border border-gray-300 rounded text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               rows={2}
               aria-label="Snapshot description (optional)"
             />
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-green-500 dark:bg-green-600 text-white rounded hover:bg-green-600 dark:hover:bg-green-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
               aria-busy={loading}
               aria-label={loading ? 'Creating snapshot, please wait' : 'Create snapshot'}
             >
@@ -142,20 +142,20 @@ export default function SnapshotManager({ vmUuid, vmName }: SnapshotManagerProps
       )}
 
       {snapshots.length === 0 ? (
-        <p className="text-sm text-gray-500 dark:text-gray-400" role="status">No snapshots found.</p>
+        <p className="text-sm text-gray-500" role="status">No snapshots found.</p>
       ) : (
         <ul className="space-y-2" role="list" aria-label={`${snapshots.length} snapshot${snapshots.length !== 1 ? 's' : ''} available`}>
           {snapshots.map((snapshot) => (
             <li
               key={snapshot.id}
-              className="p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 flex justify-between items-center transition-colors"
+              className="p-3 bg-white rounded border border-gray-200 flex justify-between items-center transition-colors"
             >
               <div>
-                <div className="font-medium text-gray-900 dark:text-gray-100">{snapshot.name}</div>
+                <div className="font-medium text-gray-900">{snapshot.name}</div>
                 {snapshot.description && (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">{snapshot.description}</div>
+                  <div className="text-sm text-gray-500">{snapshot.description}</div>
                 )}
-                <div className="text-xs text-gray-400 dark:text-gray-500">
+                <div className="text-xs text-gray-400">
                   <span className="sr-only">Created on </span>
                   {new Date(snapshot.created_at).toLocaleString()}
                 </div>
@@ -164,7 +164,7 @@ export default function SnapshotManager({ vmUuid, vmName }: SnapshotManagerProps
                 <button
                   onClick={() => handleRestore(snapshot.id)}
                   disabled={loading}
-                  className="px-2 py-1 text-xs bg-yellow-500 dark:bg-yellow-600 text-white rounded hover:bg-yellow-600 dark:hover:bg-yellow-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                  className="px-2 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
                   aria-label={`Restore snapshot ${snapshot.name}`}
                   aria-disabled={loading}
                 >
@@ -173,7 +173,7 @@ export default function SnapshotManager({ vmUuid, vmName }: SnapshotManagerProps
                 <button
                   onClick={() => handleDelete(snapshot.id)}
                   disabled={loading}
-                  className="px-2 py-1 text-xs bg-red-500 dark:bg-red-600 text-white rounded hover:bg-red-600 dark:hover:bg-red-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                   aria-label={`Delete snapshot ${snapshot.name}`}
                   aria-disabled={loading}
                 >

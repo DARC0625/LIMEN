@@ -5,26 +5,47 @@ import { adminAPI } from '../lib/api';
 import type { UserWithStats, User, VM, CreateUserRequest, UpdateUserRequest } from '../lib/types';
 import { useToast } from '../components/ToastContainer';
 import { getErrorMessage } from '../lib/types/errors';
+import { useAuth } from '../components/AuthGuard';
+import { useMounted } from './useMounted';
+import { handleAuthError } from '../lib/utils/errorHelpers';
 
 /**
  * 사용자 목록 조회 훅 (Admin 전용)
  */
 export function useAdminUsers() {
+  const { isAuthenticated } = useAuth();
+  const mounted = useMounted();
+  
+  // 서버와 클라이언트 초기 렌더링에서 동일한 값 반환 (false)
+  // 마운트 후에만 인증 상태 확인
+  const enabled = mounted && isAuthenticated === true;
+  
   return useQuery({
     queryKey: ['admin', 'users'],
     queryFn: async () => {
-      const data = await adminAPI.listUsers();
-      // 역할별 정렬: admin 먼저, 그 다음 username 순
-      return [...data].sort((a, b) => {
-        if (a.role === 'admin' && b.role !== 'admin') return -1;
-        if (a.role !== 'admin' && b.role === 'admin') return 1;
-        return a.username.localeCompare(b.username);
-      });
+      try {
+        const data = await adminAPI.listUsers();
+        // 역할별 정렬: admin 먼저, 그 다음 username 순
+        return [...data].sort((a, b) => {
+          if (a.role === 'admin' && b.role !== 'admin') return -1;
+          if (a.role !== 'admin' && b.role === 'admin') return 1;
+          return a.username.localeCompare(b.username);
+        });
+      } catch (error: unknown) {
+        // 401/403 에러 처리
+        handleAuthError(error);
+        throw error;
+      }
     },
+    enabled: enabled,
     staleTime: 2 * 60 * 1000, // 2분간 캐시 유지
     // 트리거 방식: Mutation 성공 시 invalidateQueries로 갱신
     // 최후의 수단으로만 폴링 (5분마다) - 백그라운드 동기화용
-    refetchInterval: 5 * 60 * 1000, // 5분마다 (최후의 수단)
+    refetchInterval: enabled ? 5 * 60 * 1000 : false, // 5분마다 (최후의 수단)
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchOnMount: true,
+    throwOnError: false,
   });
 }
 

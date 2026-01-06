@@ -7,6 +7,7 @@ import React, { useState, useEffect, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAdmin } from '../../../../lib/api';
 import { useToast } from '../../../../components/ToastContainer';
+import { useAuth } from '../../../../components/AuthGuard';
 import { 
   useAdminUsers, 
   useAdminUser, 
@@ -22,30 +23,74 @@ export default function UserManagementPage() {
   const [expandedUser, setExpandedUser] = useState<number | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingUser, setEditingUser] = useState<number | null>(null);
+  const [isUserAdmin, setIsUserAdmin] = useState<boolean | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const toast = useToast();
   const router = useRouter();
+  const { isAuthenticated } = useAuth();
   
-  // React Query hooks
+  // 인증 및 Admin 권한 확인 (hooks 호출 전에 처리)
+  useEffect(() => {
+    // 인증 확인 중이면 대기
+    if (isAuthenticated === null) {
+      setIsCheckingAuth(true);
+      setIsUserAdmin(null);
+      return;
+    }
+    
+    // 인증되지 않았으면 대시보드로 리다이렉트
+    if (isAuthenticated === false) {
+      setIsCheckingAuth(false);
+      setIsUserAdmin(false);
+      router.push('/dashboard');
+      return;
+    }
+    
+    // 인증되었으면 Admin 권한 확인
+    setIsCheckingAuth(false);
+    isAdmin().then((admin) => {
+      setIsUserAdmin(admin);
+      if (!admin) {
+        toast.error('Admin access required');
+        router.push('/dashboard');
+      }
+    }).catch((error) => {
+      console.error('[UserManagement] Admin check failed:', error);
+      setIsUserAdmin(false);
+      toast.error('Admin access required');
+      router.push('/dashboard');
+    });
+  }, [isAuthenticated, toast, router]);
+  
+  // React Query hooks - 항상 호출 (조건부로만 사용)
   const { data: users = [], isLoading, error } = useAdminUsers();
   const { data: expandedUserData } = useAdminUser(expandedUser);
   const createUserMutation = useCreateUser();
   const updateUserMutation = useUpdateUser();
   const deleteUserMutation = useDeleteUser();
   const approveUserMutation = useApproveUser();
-
-  // Phase 4: isAdmin()이 비동기로 변경되어 useEffect에서 처리
-  useEffect(() => {
-    // Check if user is admin
-    isAdmin().then((admin) => {
-      if (!admin) {
-        toast.error('Admin access required');
-        router.push('/dashboard');
-      }
-    }).catch(() => {
-      toast.error('Admin access required');
-      router.push('/dashboard');
-    });
-  }, [toast, router]);
+  
+  // 인증 확인 중이거나 Admin 권한 확인 중이면 로딩 표시
+  if (isCheckingAuth || isAuthenticated === null || isUserAdmin === null) {
+    return (
+      <div className="min-h-screen p-8 bg-gray-50 text-gray-900 font-sans transition-colors">
+        <main className="max-w-6xl mx-auto flex flex-col gap-8">
+          <Loading message="Checking permissions..." size="md" />
+        </main>
+      </div>
+    );
+  }
+  
+  // Admin이 아니면 리다이렉트 중 (위 useEffect에서 처리)
+  if (isUserAdmin === false) {
+    return (
+      <div className="min-h-screen p-8 bg-gray-50 text-gray-900 font-sans transition-colors">
+        <main className="max-w-6xl mx-auto flex flex-col gap-8">
+          <Loading message="Redirecting..." size="md" />
+        </main>
+      </div>
+    );
+  }
 
   // 외부 클릭 시 Create User 팝업 닫기
   useEffect(() => {
@@ -158,16 +203,21 @@ export default function UserManagementPage() {
     }
   };
 
-  if (error) {
-    if (error instanceof Error && (error.message?.includes('403') || error.message?.includes('Forbidden'))) {
-      toast.error('Admin access required');
-      router.push('/dashboard');
+  // 에러 처리: 401/403 에러 시 대시보드로 리다이렉트
+  useEffect(() => {
+    if (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('401') || errorMessage.includes('Authentication required') || 
+          errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+        toast.error('Admin access required');
+        router.push('/dashboard');
+      }
     }
-  }
+  }, [error, toast, router]);
 
   if (isLoading) {
     return (
-      <div className="min-h-screen p-8 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans transition-colors">
+      <div className="min-h-screen p-8 bg-gray-50 text-gray-900 font-sans transition-colors">
         <main className="max-w-6xl mx-auto flex flex-col gap-8">
           <Loading message="Loading users..." size="md" />
         </main>
@@ -176,60 +226,58 @@ export default function UserManagementPage() {
   }
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 md:p-8 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans transition-colors">
+    <div className="min-h-screen p-4 sm:p-6 md:p-8 bg-gray-50 text-gray-900 font-sans transition-colors">
       <main className="max-w-7xl mx-auto flex flex-col gap-4 sm:gap-6 md:gap-8">
-        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-200 dark:border-gray-700 pb-4">
+        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-200 pb-4">
+          <h1 className="text-2xl sm:text-3xl font-bold">User Management</h1>
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/dashboard')}
-              className="px-3 py-1 text-sm bg-gray-500 dark:bg-gray-600 text-white rounded hover:bg-gray-600 dark:hover:bg-gray-700 transition-colors"
+              className="px-4 py-2 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
             >
               ← Back to Dashboard
             </button>
-            <h1 className="text-2xl sm:text-3xl font-bold">User Management</h1>
-          </div>
-          <div className="flex items-center gap-4">
             <div className="relative create-user-popup-container">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowCreateModal(!showCreateModal);
                 }}
-                className="px-3 py-1 text-sm bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+                className="px-4 py-2 text-sm bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 hover:shadow-md transition-all duration-200 font-medium"
               >
                 + New User
               </button>
               {/* Create User Popup */}
               {showCreateModal && (
                 <div 
-                  className="absolute right-0 top-full mt-2 z-50 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 w-80 transition-colors"
+                  className="absolute right-0 top-full mt-2 z-50 bg-white p-6 rounded-xl shadow-lg border border-gray-200 w-80 transition-all"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100">Create New User</h3>
+                  <h3 className="text-lg font-bold mb-4 text-gray-900">Create New User</h3>
                   <form onSubmit={handleCreateUser} className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
                       <input
                         type="text"
                         name="username"
                         required
                         minLength={3}
-                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 transition-colors"
+                        className="w-full p-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
                       <input
                         type="password"
                         name="password"
                         required
                         minLength={6}
-                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 transition-colors"
+                        className="w-full p-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
-                      <select name="role" className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 transition-colors" defaultValue="user">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                      <select name="role" className="w-full p-2 border border-gray-300 rounded text-gray-900 bg-white transition-colors" defaultValue="user">
                         <option value="user">User</option>
                         <option value="admin">Admin</option>
                       </select>
@@ -238,13 +286,13 @@ export default function UserManagementPage() {
                       <button
                         type="button"
                         onClick={() => setShowCreateModal(false)}
-                        className="flex-1 px-4 py-2 text-sm bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                        className="flex-1 px-4 py-2 text-sm bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 hover:shadow-md transition-all duration-200 font-medium"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="flex-1 px-4 py-2 text-sm bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+                        className="flex-1 px-4 py-2 text-sm bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 hover:shadow-md transition-all duration-200 font-medium"
                       >
                         Create
                       </button>
@@ -257,28 +305,28 @@ export default function UserManagementPage() {
         </header>
 
         {/* 데스크톱: 테이블 뷰 */}
-        <div className="hidden md:block bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors">
+        <div className="hidden md:block bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden transition-all">
           <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-700">
+            <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">User</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">Role</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">VMs</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">Resources</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">Created</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">User</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Role</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">VMs</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Resources</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Created</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="divide-y divide-gray-200">
               {users.map((user) => (
                 <React.Fragment key={user.id}>
-                  <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  <tr className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900 dark:text-gray-100">{user.username}</div>
+                      <div className="font-medium text-gray-900">{user.username}</div>
                       <button
                         onClick={() => copyToClipboard(user.uuid || '', 'User UUID')}
-                        className="text-sm text-gray-500 dark:text-gray-400 font-mono hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors"
+                        className="text-sm text-gray-500 font-mono hover:text-blue-600 hover:underline cursor-pointer transition-colors"
                         title="Click to copy full UUID"
                       >
                         {formatUUID(user.uuid || '')}
@@ -288,8 +336,8 @@ export default function UserManagementPage() {
                       <div className="flex justify-center">
                         <span className={`inline-block px-3 py-1 text-xs rounded text-center min-w-[60px] ${
                           user.role === 'admin' 
-                            ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200' 
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                            ? 'bg-purple-100 text-purple-800' 
+                            : 'bg-gray-100 text-gray-800'
                         }`}>
                           {user.role}
                         </span>
@@ -297,18 +345,18 @@ export default function UserManagementPage() {
                     </td>
                     <td className="px-6 py-4">
                       {user.approved ? (
-                        <span className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded">Approved</span>
+                        <span className="px-2 py-1 text-xs bg-emerald-100 text-emerald-800 rounded-lg">Approved</span>
                       ) : (
-                        <span className="px-2 py-1 text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded">Pending</span>
+                        <span className="px-2 py-1 text-xs bg-amber-100 text-amber-800 rounded-lg">Pending</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-gray-900 dark:text-gray-100">{user.vm_count}</td>
+                    <td className="px-6 py-4 text-gray-900">{user.vm_count}</td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900 dark:text-gray-100">
+                      <div className="text-sm text-gray-900">
                         CPU: {user.total_cpu} | Memory: {formatBytes(user.total_memory)}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                    <td className="px-6 py-4 text-sm text-gray-700">
                       {new Date(user.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4">
@@ -316,26 +364,26 @@ export default function UserManagementPage() {
                         {!user.approved && (
                           <button
                             onClick={() => handleApproveUser(user.id)}
-                          className="px-3 py-1 text-sm bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 rounded hover:bg-green-200 dark:hover:bg-green-800 transition-colors"
+                          className="px-3 py-1 text-sm bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 hover:shadow-md transition-all duration-200"
                         >
                           Approve
                         </button>
                         )}
                         <button
                           onClick={() => handleToggleExpand(user.id)}
-                          className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors whitespace-nowrap"
+                          className="px-3 py-1 text-sm bg-cyan-100 text-cyan-700 rounded-lg hover:bg-cyan-200 hover:shadow-md transition-all duration-200 whitespace-nowrap"
                         >
                           {expandedUser === user.id ? 'Hide' : 'Details'}
                         </button>
                         <button
                           onClick={() => setEditingUser(user.id)}
-                          className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors whitespace-nowrap"
+                          className="px-3 py-1 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 hover:shadow-md transition-all duration-200 whitespace-nowrap"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleDeleteUser(user.id, user.username)}
-                          className="px-3 py-1 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded hover:bg-red-200 dark:hover:bg-red-800 transition-colors whitespace-nowrap"
+                          className="px-3 py-1 text-sm bg-rose-100 text-rose-700 rounded-lg hover:bg-rose-200 hover:shadow-md transition-all duration-200 whitespace-nowrap"
                         >
                           Delete
                         </button>
@@ -344,46 +392,46 @@ export default function UserManagementPage() {
                   </tr>
                   {expandedUser === user.id && (
                     <tr>
-                      <td colSpan={7} className="px-6 py-4 bg-gray-50 dark:bg-gray-700/50">
+                      <td colSpan={7} className="px-6 py-4 bg-gray-50">
                         <div className="space-y-4">
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <strong className="text-gray-700 dark:text-gray-300">UUID:</strong>
+                              <strong className="text-gray-700">UUID:</strong>
                               <button
                                 onClick={() => copyToClipboard(user.uuid || '', 'User UUID')}
-                                className="text-sm text-gray-600 dark:text-gray-400 font-mono mt-1 hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors text-left"
+                                className="text-sm text-gray-600 font-mono mt-1 hover:text-blue-600 hover:underline cursor-pointer transition-colors text-left"
                                 title="Click to copy full UUID"
                               >
                                 {user.uuid || 'N/A'}
                               </button>
                             </div>
                             <div>
-                              <strong className="text-gray-700 dark:text-gray-300">Role:</strong>
-                              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{user.role}</div>
+                              <strong className="text-gray-700">Role:</strong>
+                              <div className="text-sm text-gray-600 mt-1">{user.role}</div>
                             </div>
                             <div>
-                              <strong className="text-gray-700 dark:text-gray-300">Total CPU:</strong>
-                              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{user.total_cpu} cores</div>
+                              <strong className="text-gray-700">Total CPU:</strong>
+                              <div className="text-sm text-gray-600 mt-1">{user.total_cpu} cores</div>
                             </div>
                             <div>
-                              <strong className="text-gray-700 dark:text-gray-300">Total Memory:</strong>
-                              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{formatBytes(user.total_memory)}</div>
+                              <strong className="text-gray-700">Total Memory:</strong>
+                              <div className="text-sm text-gray-600 mt-1">{formatBytes(user.total_memory)}</div>
                             </div>
                             <div>
-                              <strong className="text-gray-700 dark:text-gray-300">Created:</strong>
-                              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{new Date(user.created_at).toLocaleString()}</div>
+                              <strong className="text-gray-700">Created:</strong>
+                              <div className="text-sm text-gray-600 mt-1">{new Date(user.created_at).toLocaleString()}</div>
                             </div>
                             <div>
-                              <strong className="text-gray-700 dark:text-gray-300">Updated:</strong>
-                              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{new Date(user.updated_at).toLocaleString()}</div>
+                              <strong className="text-gray-700">Updated:</strong>
+                              <div className="text-sm text-gray-600 mt-1">{new Date(user.updated_at).toLocaleString()}</div>
                             </div>
                           </div>
                           {expandedUserData?.vms && expandedUserData.vms.length > 0 && (
                             <div>
-                              <strong className="text-gray-700 dark:text-gray-300">VMs ({expandedUserData.vms.length}):</strong>
+                              <strong className="text-gray-700">VMs ({expandedUserData.vms.length}):</strong>
                               <ul className="list-disc list-inside mt-2 space-y-1">
                                 {expandedUserData.vms.map((vm) => (
-                                  <li key={vm.uuid} className="text-sm text-gray-600 dark:text-gray-400">
+                                  <li key={vm.uuid} className="text-sm text-gray-600">
                                     {vm.name} ({vm.status}) - {vm.cpu} CPU, {formatBytes(vm.memory * 1024)}
                                   </li>
                                 ))}
@@ -396,30 +444,30 @@ export default function UserManagementPage() {
                   )}
                   {editingUser === user.id && (
                     <tr>
-                      <td colSpan={7} className="px-6 py-4 bg-blue-50 dark:bg-blue-900/20">
+                      <td colSpan={7} className="px-6 py-4 bg-blue-50">
                         <form onSubmit={handleUpdateUser} className="space-y-4">
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
                               <input
                                 type="text"
                                 name="username"
                                 defaultValue={user.username}
-                                className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 transition-colors"
+                                className="w-full p-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                               />
                             </div>
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password (leave empty to keep current)</label>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">New Password (leave empty to keep current)</label>
                               <input
                                 type="password"
                                 name="password"
-                                className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
+                                className="w-full p-2 border border-gray-300 rounded text-gray-900 bg-white placeholder-gray-400 transition-colors"
                                 placeholder="Leave empty to keep current"
                               />
                             </div>
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
-                              <select name="role" className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 transition-colors" defaultValue={user.role}>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                              <select name="role" className="w-full p-2 border border-gray-300 rounded text-gray-900 bg-white transition-colors" defaultValue={user.role}>
                                 <option value="user">User</option>
                                 <option value="admin">Admin</option>
                               </select>
@@ -429,13 +477,13 @@ export default function UserManagementPage() {
                             <button
                               type="button"
                               onClick={() => setEditingUser(null)}
-                              className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                              className="px-4 py-2 text-sm bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
                             >
                               Cancel
                             </button>
                             <button
                               type="submit"
-                              className="px-4 py-2 text-sm bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+                              className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
                             >
                               Save
                             </button>
@@ -453,120 +501,120 @@ export default function UserManagementPage() {
         {/* 모바일: 카드 뷰 */}
         <div className="md:hidden space-y-4">
           {users.map((user) => (
-            <div key={user.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 transition-colors">
+            <div key={user.id} className="bg-white rounded-xl shadow-lg border border-gray-200 p-4 transition-all">
               <div className="flex justify-between items-start mb-3">
                 <div className="flex-1">
-                  <div className="font-semibold text-lg text-gray-900 dark:text-gray-100 mb-1">{user.username}</div>
+                  <div className="font-semibold text-lg text-gray-900 mb-1">{user.username}</div>
                   <button
                     onClick={() => copyToClipboard(user.uuid || '', 'User UUID')}
-                    className="text-xs text-gray-500 dark:text-gray-400 font-mono hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors"
+                    className="text-xs text-gray-500 font-mono hover:text-blue-600 hover:underline cursor-pointer transition-colors"
                     title="Click to copy full UUID"
                   >
                     {formatUUID(user.uuid || '')}
                   </button>
                 </div>
                 <div className="flex flex-col gap-2 items-end">
-                  <span className={`inline-block px-3 py-1 text-xs rounded ${
-                    user.role === 'admin' 
-                      ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200' 
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                  }`}>
+                        <span className={`inline-block px-3 py-1 text-xs rounded-lg ${
+                          user.role === 'admin' 
+                            ? 'bg-violet-100 text-violet-800' 
+                            : 'bg-slate-100 text-slate-800'
+                        }`}>
                     {user.role}
                   </span>
                   {user.approved ? (
-                    <span className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded">Approved</span>
+                    <span className="px-2 py-1 text-xs bg-emerald-100 text-emerald-800 rounded-lg">Approved</span>
                   ) : (
-                    <span className="px-2 py-1 text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded">Pending</span>
+                    <span className="px-2 py-1 text-xs bg-amber-100 text-amber-800 rounded-lg">Pending</span>
                   )}
                 </div>
               </div>
               
               <div className="space-y-2 mb-4 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">VMs:</span>
-                  <span className="text-gray-900 dark:text-gray-100 font-medium">{user.vm_count}</span>
+                  <span className="text-gray-600">VMs:</span>
+                  <span className="text-gray-900 font-medium">{user.vm_count}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">CPU:</span>
-                  <span className="text-gray-900 dark:text-gray-100 font-medium">{user.total_cpu} cores</span>
+                  <span className="text-gray-600">CPU:</span>
+                  <span className="text-gray-900 font-medium">{user.total_cpu} cores</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Memory:</span>
-                  <span className="text-gray-900 dark:text-gray-100 font-medium">{formatBytes(user.total_memory)}</span>
+                  <span className="text-gray-600">Memory:</span>
+                  <span className="text-gray-900 font-medium">{formatBytes(user.total_memory)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Created:</span>
-                  <span className="text-gray-900 dark:text-gray-100 font-medium">{new Date(user.created_at).toLocaleDateString()}</span>
+                  <span className="text-gray-600">Created:</span>
+                  <span className="text-gray-900 font-medium">{new Date(user.created_at).toLocaleDateString()}</span>
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-200">
                 {!user.approved && (
                   <button
                     onClick={() => handleApproveUser(user.id)}
-                    className="flex-1 px-3 py-2 text-sm bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 rounded hover:bg-green-200 dark:hover:bg-green-800 transition-colors"
+                    className="flex-1 px-3 py-2 text-sm bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 hover:shadow-md transition-all duration-200"
                   >
                     Approve
                   </button>
                 )}
                 <button
                   onClick={() => handleToggleExpand(user.id)}
-                  className="flex-1 px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+                  className="flex-1 px-3 py-2 text-sm bg-cyan-100 text-cyan-700 rounded-lg hover:bg-cyan-200 hover:shadow-md transition-all duration-200"
                 >
                   {expandedUser === user.id ? 'Hide' : 'Details'}
                 </button>
                 <button
                   onClick={() => setEditingUser(user.id)}
-                  className="flex-1 px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  className="flex-1 px-3 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 hover:shadow-md transition-all duration-200"
                 >
                   Edit
                 </button>
                 <button
                   onClick={() => handleDeleteUser(user.id, user.username)}
-                  className="flex-1 px-3 py-2 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
+                  className="flex-1 px-3 py-2 text-sm bg-rose-100 text-rose-700 rounded-lg hover:bg-rose-200 hover:shadow-md transition-all duration-200"
                 >
                   Delete
                 </button>
               </div>
 
               {expandedUser === user.id && (
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <strong className="text-gray-700 dark:text-gray-300 block mb-1">UUID:</strong>
+                      <strong className="text-gray-700 block mb-1">UUID:</strong>
                       <button
                         onClick={() => copyToClipboard(user.uuid || '', 'User UUID')}
-                        className="text-xs text-gray-600 dark:text-gray-400 font-mono hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors text-left break-all"
+                        className="text-xs text-gray-600 font-mono hover:text-blue-600 hover:underline cursor-pointer transition-colors text-left break-all"
                         title="Click to copy full UUID"
                       >
                         {user.uuid || 'N/A'}
                       </button>
                     </div>
                     <div>
-                      <strong className="text-gray-700 dark:text-gray-300 block mb-1">Role:</strong>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">{user.role}</div>
+                      <strong className="text-gray-700 block mb-1">Role:</strong>
+                      <div className="text-sm text-gray-600">{user.role}</div>
                     </div>
                     <div>
-                      <strong className="text-gray-700 dark:text-gray-300 block mb-1">Total CPU:</strong>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">{user.total_cpu} cores</div>
+                      <strong className="text-gray-700 block mb-1">Total CPU:</strong>
+                      <div className="text-sm text-gray-600">{user.total_cpu} cores</div>
                     </div>
                     <div>
-                      <strong className="text-gray-700 dark:text-gray-300 block mb-1">Total Memory:</strong>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">{formatBytes(user.total_memory)}</div>
+                      <strong className="text-gray-700 block mb-1">Total Memory:</strong>
+                      <div className="text-sm text-gray-600">{formatBytes(user.total_memory)}</div>
                     </div>
                     <div>
-                      <strong className="text-gray-700 dark:text-gray-300 block mb-1">Created:</strong>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">{new Date(user.created_at).toLocaleString()}</div>
+                      <strong className="text-gray-700 block mb-1">Created:</strong>
+                      <div className="text-sm text-gray-600">{new Date(user.created_at).toLocaleString()}</div>
                     </div>
                     <div>
-                      <strong className="text-gray-700 dark:text-gray-300 block mb-1">Updated:</strong>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">{new Date(user.updated_at).toLocaleString()}</div>
+                      <strong className="text-gray-700 block mb-1">Updated:</strong>
+                      <div className="text-sm text-gray-600">{new Date(user.updated_at).toLocaleString()}</div>
                     </div>
                   </div>
                   {expandedUserData?.vms && expandedUserData.vms.length > 0 && (
                     <div>
-                      <strong className="text-gray-700 dark:text-gray-300 block mb-2">VMs ({expandedUserData.vms.length}):</strong>
-                      <ul className="list-disc list-inside space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                      <strong className="text-gray-700 block mb-2">VMs ({expandedUserData.vms.length}):</strong>
+                      <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
                         {expandedUserData.vms.map((vm) => (
                           <li key={vm.uuid}>
                             {vm.name} ({vm.status}) - {vm.cpu} CPU, {formatBytes(vm.memory * 1024)}
@@ -579,29 +627,29 @@ export default function UserManagementPage() {
               )}
 
               {editingUser === user.id && (
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="mt-4 pt-4 border-t border-gray-200">
                   <form onSubmit={handleUpdateUser} className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
                       <input
                         type="text"
                         name="username"
                         defaultValue={user.username}
-                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 transition-colors"
+                        className="w-full p-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password (leave empty to keep current)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">New Password (leave empty to keep current)</label>
                       <input
                         type="password"
                         name="password"
-                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
+                        className="w-full p-2 border border-gray-300 rounded text-gray-900 bg-white placeholder-gray-400 transition-colors"
                         placeholder="Leave empty to keep current"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
-                      <select name="role" className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 transition-colors" defaultValue={user.role}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                      <select name="role" className="w-full p-2 border border-gray-300 rounded text-gray-900 bg-white transition-colors" defaultValue={user.role}>
                         <option value="user">User</option>
                         <option value="admin">Admin</option>
                       </select>
@@ -610,13 +658,13 @@ export default function UserManagementPage() {
                       <button
                         type="button"
                         onClick={() => setEditingUser(null)}
-                        className="flex-1 px-4 py-2 text-sm bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                        className="flex-1 px-4 py-2 text-sm bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 hover:shadow-md transition-all duration-200 font-medium"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="flex-1 px-4 py-2 text-sm bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+                        className="flex-1 px-4 py-2 text-sm bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 hover:shadow-md transition-all duration-200 font-medium"
                       >
                         Save
                       </button>

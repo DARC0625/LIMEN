@@ -60,16 +60,16 @@ export default function RegisterForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 transition-colors">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 transition-colors">
+      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-md border border-gray-200 transition-colors">
         <header>
-          <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-gray-100">Create Account</h1>
-          <p className="mt-2 text-center text-gray-600 dark:text-gray-400">LIMEN VM Management Platform</p>
+          <h1 className="text-3xl font-bold text-center text-gray-900">Create Account</h1>
+          <p className="mt-2 text-center text-gray-600">LIMEN VM Management Platform</p>
         </header>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit} aria-label="Registration form">
           {error && (
             <div 
-              className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded transition-colors"
+              className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded transition-colors"
               role="alert"
               aria-live="assertive"
             >
@@ -78,7 +78,7 @@ export default function RegisterForm() {
           )}
           <div className="space-y-4">
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
                 Username
               </label>
               <input
@@ -90,17 +90,17 @@ export default function RegisterForm() {
                 autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 placeholder="At least 3 characters"
                 aria-describedby="username-help"
                 aria-invalid={!!error && error.includes('username')}
               />
-              <p id="username-help" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p id="username-help" className="mt-1 text-xs text-gray-500">
                 Username must be at least 3 characters long
               </p>
             </div>
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Password
               </label>
               <input
@@ -112,17 +112,17 @@ export default function RegisterForm() {
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 placeholder="At least 6 characters"
                 aria-describedby="password-help"
                 aria-invalid={!!error && error.includes('password')}
               />
-              <p id="password-help" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p id="password-help" className="mt-1 text-xs text-gray-500">
                 Password must be at least 6 characters long
               </p>
             </div>
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
                 Confirm Password
               </label>
               <input
@@ -133,11 +133,11 @@ export default function RegisterForm() {
                 autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 aria-describedby="confirm-password-help"
                 aria-invalid={!!error && error.includes('match')}
               />
-              <p id="confirm-password-help" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p id="confirm-password-help" className="mt-1 text-xs text-gray-500">
                 Re-enter your password to confirm
               </p>
             </div>
@@ -146,7 +146,7 @@ export default function RegisterForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
               aria-busy={loading}
               aria-label={loading ? 'Creating account, please wait' : 'Create new account'}
             >
@@ -155,7 +155,7 @@ export default function RegisterForm() {
             <button
               type="button"
               onClick={() => router.push('/login')}
-              className="w-full flex justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
               aria-label="Navigate back to login page"
             >
               Back to Login

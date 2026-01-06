@@ -18,8 +18,6 @@ const VMListSection = dynamicImport(() => import('../../../components/VMListSect
 const HealthStatus = dynamicImport(() => import('../../../components/HealthStatus').then(mod => mod.default), { ssr: false });
 const AgentMetricsCard = dynamicImport(() => import('../../../components/AgentMetricsCard').then(mod => mod.default), { ssr: false });
 
-// ThemeToggle is loaded immediately (dark mode toggle is important)
-import ThemeToggle from '../../../components/ThemeToggle';
 // Loading and Skeleton are small components, load immediately for better UX
 import Loading from '../../../components/Loading';
 import { VMCardSkeleton } from '../../../components/Skeleton';
@@ -54,11 +52,16 @@ export default function Home() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   const toast = useToast();
-  const createVMMutation = useCreateVM();
-  const vmActionMutation = useVMAction();
   
   // Phase 4: isAdmin()이 비동기로 변경되어 useState로 관리
   const [isUserAdmin, setIsUserAdmin] = useState(false);
+  const [newVM, setNewVM] = useState({ name: '', cpu: 1, memory: 1024, os_type: 'ubuntu-desktop' });
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [editingVM, setEditingVM] = useState<VM | null>(null);
+  
+  // 모든 hooks를 항상 호출 (조건부 early return 전에)
+  const createVMMutation = useCreateVM();
+  const vmActionMutation = useVMAction();
   
   // 승인 여부 확인
   useEffect(() => {
@@ -79,26 +82,20 @@ export default function Home() {
     checkApproval();
   }, [router]);
   
-  // Don't render if not authenticated (prevents hydration mismatch)
-  // AuthGuard already protects, but this is an additional safety measure
-  if (isAuthenticated !== true) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-gray-500 dark:text-gray-400">Authenticating...</div>
-      </div>
-    );
-  }
-  
   // Phase 4: isAdmin() 비동기 호출
   useEffect(() => {
     isAdmin().then(setIsUserAdmin).catch(() => setIsUserAdmin(false));
   }, []);
   
-  const [newVM, setNewVM] = useState({ name: '', cpu: 1, memory: 1024, os_type: 'ubuntu-desktop' });
-  const [processingId, setProcessingId] = useState<string | null>(null);
-  
-  // Edit VM State
-  const [editingVM, setEditingVM] = useState<VM | null>(null);
+  // Don't render if not authenticated (prevents hydration mismatch)
+  // AuthGuard already protects, but this is an additional safety measure
+  if (isAuthenticated !== true) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-gray-500">Authenticating...</div>
+      </div>
+    );
+  }
   const [selectedVMForSnapshot, setSelectedVMForSnapshot] = useState<string | null>(null);
 
   // React Error #321 fix: Remove inline callbacks, wrap with startTransition
@@ -158,26 +155,31 @@ export default function Home() {
     );
   };
 
-  const handleAction = async (uuid: string, action: 'start' | 'stop' | 'restart' | 'delete') => {
+  const handleAction = async (uuid: string, action: 'start' | 'stop' | 'delete') => {
+    console.log('[handleAction] Called:', { uuid, action, isPending: vmActionMutation.isPending, processingId });
+    
     // 중복 요청 방지: 이미 처리 중이면 무시
     if (vmActionMutation.isPending || processingId === uuid) {
+      console.log('[handleAction] Request already in progress, ignoring');
       return;
     }
     
     if (action === 'delete' && !confirm('Are you sure you want to delete this VM?')) return;
-    if (action === 'restart' && !confirm('Are you sure you want to restart this VM? The VM will be stopped and then started.')) return;
     
+    console.log('[handleAction] Setting processingId and calling mutation');
     setProcessingId(uuid);
     vmActionMutation.mutate(
       { uuid, action },
       {
         onSuccess: () => {
+          console.log('[handleAction] Mutation success');
           // React Error #321 fix: Wrap state updates with startTransition
           startTransition(() => {
             setProcessingId(null);
           });
         },
-        onError: () => {
+        onError: (error) => {
+          console.error('[handleAction] Mutation error:', error);
           startTransition(() => {
             setProcessingId(null);
           });
@@ -188,7 +190,7 @@ export default function Home() {
 
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 md:p-8 pb-12 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 text-gray-900 dark:text-gray-100 font-sans transition-colors overflow-x-hidden">
+    <div className="min-h-screen p-4 sm:p-6 md:p-8 pb-12 bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Skip link - Quick navigation for keyboard users (accessibility: hidden off-screen) */}
       <a 
         href="#main-content" 
@@ -199,14 +201,13 @@ export default function Home() {
       </a>
       
       <main id="main-content" className="max-w-7xl mx-auto flex flex-col gap-4 sm:gap-6 md:gap-8" role="main">
-        <header role="banner" className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-200 dark:border-gray-700 pb-4">
+        <header role="banner" className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-gray-200">
           <h1 className="text-2xl sm:text-3xl font-bold">LIMEN Dashboard</h1>
           <div className="flex items-center gap-4">
-            <ThemeToggle />
             {isUserAdmin && (
               <a
                 href="/admin/users"
-                className="px-3 py-1 text-sm bg-purple-600 dark:bg-purple-700 text-white rounded hover:bg-purple-700 dark:hover:bg-purple-800 transition-colors"
+                className="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
                 aria-label="Navigate to user management page"
               >
                 User Management
@@ -217,7 +218,7 @@ export default function Home() {
                 removeToken();
                 window.location.reload();
               }}
-              className="px-3 py-1 text-sm bg-gray-500 dark:bg-gray-600 text-white rounded hover:bg-gray-600 dark:hover:bg-gray-700 transition-colors"
+              className="px-4 py-2 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
               aria-label="Logout from LIMEN"
             >
               Logout
@@ -237,7 +238,7 @@ export default function Home() {
         </section>
 
         <section aria-label="VM Management" className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 items-stretch">
-          <div className="lg:col-span-1 p-4 sm:p-6 bg-white dark:bg-gray-800/90 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 transition-all backdrop-blur-sm flex flex-col" style={{ minHeight: '400px' }}>
+          <div className="lg:col-span-1 p-4 sm:p-6 bg-white rounded-xl shadow-lg border border-gray-200 transition-all" style={{ minHeight: '400px' }}>
             <h2 className="text-lg sm:text-xl font-semibold mb-4">Create New VM</h2>
             <form onSubmit={handleCreateVM} className="space-y-4" aria-label="Create new virtual machine form">
               <div>
@@ -250,8 +251,7 @@ export default function Home() {
                       type="text" 
                       required 
                       maxLength={100}
-                      pattern="[a-zA-Z0-9_-]+"
-                      className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                      className="w-full p-2 border border-gray-300 rounded-lg text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all" 
                       value={newVM.name} 
                       onChange={e => {
                         const originalValue = e.target.value;
@@ -270,7 +270,7 @@ export default function Home() {
                       aria-required="true"
                       aria-invalid={newVM.name.length > 0 && !/^[a-zA-Z0-9_-]+$/.test(newVM.name)}
                     />
-                <p id="vm-name-help" className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p id="vm-name-help" className="text-xs text-gray-500 mt-1">
                   Only letters, numbers, hyphens (-), and underscores (_) are allowed.
                 </p>
               </div>
@@ -282,7 +282,7 @@ export default function Home() {
                 </label>
                 <select 
                   id="os-type"
-                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full p-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                   value={newVM.os_type}
                   onChange={e => setNewVM({...newVM, os_type: e.target.value})}
                   aria-describedby="os-type-help"
@@ -293,7 +293,7 @@ export default function Home() {
                   <option value="kali">Kali Linux (GUI Installer)</option>
                   <option value="windows">Windows (Requires ISO file)</option>
                 </select>
-                <p id="os-type-help" className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p id="os-type-help" className="text-xs text-gray-500 mt-1">
                   * First boot will start OS installer via VNC Console.
                 </p>
               </div>
@@ -301,7 +301,7 @@ export default function Home() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">CPU Cores</label>
-                  <div className="border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900/50 overflow-hidden">
+                  <div className="border border-gray-300 rounded-lg bg-gray-50 overflow-hidden">
                     <RevolverPicker
                       items={Array.from({ length: 32 }, (_, i) => i + 1)}
                       value={newVM.cpu}
@@ -311,11 +311,11 @@ export default function Home() {
                       visibleItems={3}
                     />
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">Selected: {newVM.cpu} core{newVM.cpu !== 1 ? 's' : ''}</p>
+                  <p className="text-xs text-gray-500 mt-1 text-center">Selected: {newVM.cpu} core{newVM.cpu !== 1 ? 's' : ''}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-2">Memory</label>
-                  <div className="border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900/50 overflow-hidden">
+                  <div className="border border-gray-300 rounded-lg bg-gray-50 overflow-hidden">
                     <RevolverPicker
                       items={Array.from({ length: 160 }, (_, i) => i + 1)}
                       value={Math.round(newVM.memory / 1024)}
@@ -325,13 +325,13 @@ export default function Home() {
                       visibleItems={3}
                     />
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">Selected: {Math.round(newVM.memory / 1024)} GB ({newVM.memory} MB)</p>
+                  <p className="text-xs text-gray-500 mt-1 text-center">Selected: {Math.round(newVM.memory / 1024)} GB ({newVM.memory} MB)</p>
                 </div>
               </div>
               <button 
                 type="submit" 
                 disabled={createVMMutation.isPending} 
-                className="w-full py-2 px-4 bg-black dark:bg-gray-700 text-white rounded hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="w-full py-2 px-4 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 hover:shadow-md disabled:opacity-50 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 font-medium"
                 aria-busy={createVMMutation.isPending}
                 aria-label={createVMMutation.isPending ? 'Creating virtual machine...' : 'Create new virtual machine'}
               >
@@ -353,14 +353,14 @@ export default function Home() {
 
         {/* Edit VM Popup */}
         {editingVM && (
-          <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 edit-popup-container" onClick={(e) => {
+          <div className="fixed inset-0 bg-black/50" onClick={(e) => {
             if (e.target === e.currentTarget) setEditingVM(null);
           }}>
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4 border border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Edit VM: {editingVM.name}</h2>
+            <div className="bg-white">
+              <h2 className="text-xl font-bold mb-4 text-gray-900">Edit VM: {editingVM.name}</h2>
               <form onSubmit={handleUpdateVM} className="space-y-4">
                 <div>
-                  <label htmlFor="edit-vm-name" className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                  <label htmlFor="edit-vm-name" className="block text-sm font-medium mb-1 text-gray-700">
                     VM Name
                   </label>
                   <input
@@ -369,7 +369,7 @@ export default function Home() {
                     required
                     maxLength={100}
                     pattern="[a-zA-Z0-9_-]+"
-                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                     value={editingVM.name || ''}
                     onChange={(e) => {
                       const originalValue = e.target.value;
@@ -384,16 +384,16 @@ export default function Home() {
                       setEditingVM({ ...editingVM, name: sanitized });
                     }}
                   />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <p className="text-xs text-gray-500">
                     Only letters, numbers, hyphens (-), and underscores (_) are allowed.
                   </p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+                    <label className="block text-sm font-medium mb-2 text-gray-700">
                       CPU Cores
                     </label>
-                    <div className="border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900/50 overflow-hidden">
+                    <div className="border border-gray-300 rounded-lg bg-gray-50 overflow-hidden">
                       <RevolverPicker
                         items={Array.from({ length: 32 }, (_, i) => i + 1)}
                         value={editingVM.cpu}
@@ -403,23 +403,30 @@ export default function Home() {
                         visibleItems={3}
                       />
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">Selected: {editingVM.cpu} core{editingVM.cpu !== 1 ? 's' : ''}</p>
+                    <p className="text-xs text-gray-500">Selected: {editingVM.cpu} core{editingVM.cpu !== 1 ? 's' : ''}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+                    <label className="block text-sm font-medium mb-2 text-gray-700">
                       Memory
                     </label>
-                    <div className="border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900/50 overflow-hidden">
+                    <div className="border border-gray-300 rounded-lg bg-gray-50 overflow-hidden">
                       <RevolverPicker
-                        items={Array.from({ length: 160 }, (_, i) => i + 1)}
+                        items={Array.from({ length: 8 }, (_, i) => i + 1)}
                         value={Math.round(editingVM.memory / 1024)}
-                        onChange={(gb) => setEditingVM({ ...editingVM, memory: gb * 1024 })}
+                        onChange={(gb) => {
+                          const maxGB = 8; // 최대 8GB (8192 MB)
+                          const clampedGB = Math.min(gb, maxGB);
+                          setEditingVM({ ...editingVM, memory: clampedGB * 1024 });
+                          if (gb > maxGB) {
+                            toast.error(`Memory limit: Maximum ${maxGB} GB (8192 MB) per VM.`);
+                          }
+                        }}
                         formatLabel={(v) => `${v} GB`}
                         itemHeight={40}
                         visibleItems={3}
                       />
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">Selected: {Math.round(editingVM.memory / 1024)} GB ({editingVM.memory} MB)</p>
+                    <p className="text-xs text-gray-500">Selected: {Math.round(editingVM.memory / 1024)} GB ({editingVM.memory} MB)</p>
                   </div>
                 </div>
                 
@@ -439,14 +446,14 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setEditingVM(null)}
-                    className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                    className="px-4 py-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 hover:shadow-md transition-all duration-200 font-medium"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={vmActionMutation.isPending || processingId === editingVM.uuid}
-                    className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                    className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 hover:shadow-md transition-all duration-200 font-medium"
                   >
                     {vmActionMutation.isPending && processingId === editingVM.uuid ? 'Updating...' : 'Update'}
                   </button>

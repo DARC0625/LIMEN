@@ -118,7 +118,7 @@ export const ERROR_MESSAGES: Record<string, ErrorMessage> = {
     title: '오류 발생',
     message: '예기치 않은 오류가 발생했습니다. 문제가 지속되면 문의해주세요.',
     action: '문의하기',
-    actionUrl: 'mailto:support@limen.example.com',
+    actionUrl: 'mailto:darc0625@proton.me',
   },
 };
 
@@ -202,6 +202,7 @@ export interface ErrorDisplayProps {
   error: unknown;
   onAction?: () => void;
 }
+
 
 
 

@@ -274,7 +274,7 @@ export default function HealthStatus() {
         />
       </div>
       {health && !isOffline && (
-        <div className="text-xs text-gray-400 dark:text-gray-500 text-right mt-2" aria-live="polite" aria-atomic="true" suppressHydrationWarning>
+        <div className="text-xs text-gray-400 text-right mt-2" aria-live="polite" aria-atomic="true" suppressHydrationWarning>
           <span className="sr-only">Last update:</span>
           {formatDateKR(health.time)}
         </div>

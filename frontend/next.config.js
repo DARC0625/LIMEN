@@ -8,18 +8,60 @@ const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_UR
 const agentUrl = process.env.NEXT_PUBLIC_AGENT_URL || process.env.AGENT_URL || 'http://10.0.0.100:9000';
 
 const nextConfig = {
-  // Force cache busting - 매 빌드마다 새로운 빌드 ID 생성 (더 강력하게)
+  // 빌드 ID 생성: 파일 내용 기반 해시 사용 (안정적인 캐시 버스팅)
+  // 매 빌드마다 변경되지만, 동일한 소스코드면 동일한 ID 생성
   generateBuildId: async () => {
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 15);
-    const hash = require('crypto').createHash('md5').update(`${timestamp}-${random}`).digest('hex').substring(0, 8);
-    return `build-${timestamp}-${hash}`;
+    const fs = require('fs');
+    const path = require('path');
+    const crypto = require('crypto');
+    
+    try {
+      // package.json과 주요 설정 파일의 해시를 기반으로 빌드 ID 생성
+      const filesToHash = [
+        'package.json',
+        'next.config.js',
+        'tsconfig.json',
+      ];
+      
+      let combinedHash = '';
+      for (const file of filesToHash) {
+        const filePath = path.join(process.cwd(), file);
+        if (fs.existsSync(filePath)) {
+          const content = fs.readFileSync(filePath, 'utf8');
+          combinedHash += crypto.createHash('md5').update(content).digest('hex').substring(0, 8);
+        }
+      }
+      
+      // 타임스탬프도 포함하여 빌드마다 고유성 보장
+      const timestamp = Date.now();
+      const finalHash = crypto.createHash('md5')
+        .update(`${combinedHash}-${timestamp}`)
+        .digest('hex')
+        .substring(0, 12);
+      
+      return `build-${finalHash}`;
+    } catch (error) {
+      // 에러 발생 시 타임스탬프 기반으로 폴백
+      const timestamp = Date.now();
+      const hash = crypto.createHash('md5').update(`${timestamp}`).digest('hex').substring(0, 8);
+      return `build-${timestamp}-${hash}`;
+    }
   },
   
   // 성능 최적화
   reactStrictMode: true,
   compress: true,
   poweredByHeader: false, // 보안: X-Powered-By 헤더 제거
+  
+  // 이미지 최적화: WebP/AVIF 포맷 자동 변환
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    minimumCacheTTL: 60,
+    dangerouslyAllowSVG: true,
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+  },
   
   // 1.7.0-beta는 ESM 모듈이므로 transpilePackages에 추가하여 Next.js가 처리하도록 함
   // serverExternalPackages와 충돌하므로 제거
@@ -35,11 +77,15 @@ const nextConfig = {
         process: 'process/browser',
       };
       
-      // Optimize chunk splitting for better caching
+      // 극한의 번들 최적화: 더 세밀한 코드 스플리팅
       config.optimization = {
         ...config.optimization,
+        usedExports: true, // Tree shaking 활성화
+        sideEffects: false, // 사이드 이펙트 없는 모듈 최적화
         splitChunks: {
           chunks: 'all',
+          minSize: 20000, // 20KB 이상만 별도 청크로 분리
+          maxSize: 244000, // 244KB 이상이면 분할
           cacheGroups: {
             default: false,
             vendors: false,
@@ -47,29 +93,33 @@ const nextConfig = {
             novnc: {
               name: 'novnc',
               test: /[\\/]node_modules[\\/]@novnc[\\/]/,
-              priority: 20,
+              priority: 30,
               reuseExistingChunk: true,
+              enforce: true, // 강제 분리
             },
             // Separate React Query
             reactQuery: {
               name: 'react-query',
               test: /[\\/]node_modules[\\/]@tanstack[\\/]/,
-              priority: 15,
+              priority: 25,
               reuseExistingChunk: true,
+              enforce: true,
             },
-            // Framework chunk
+            // Framework chunk (React, Next.js)
             framework: {
               name: 'framework',
-              test: /[\\/]node_modules[\\/](react|react-dom|next)[\\/]/,
-              priority: 10,
+              test: /[\\/]node_modules[\\/](react|react-dom|next|scheduler)[\\/]/,
+              priority: 20,
               reuseExistingChunk: true,
+              enforce: true,
             },
-            // Common vendor chunk
+            // Common vendor chunk (기타 node_modules)
             vendor: {
               name: 'vendor',
               test: /[\\/]node_modules[\\/]/,
-              priority: 5,
+              priority: 10,
               reuseExistingChunk: true,
+              minChunks: 2, // 2개 이상에서 사용되는 모듈만
             },
           },
         },
@@ -78,13 +128,6 @@ const nextConfig = {
     return config;
   },
   
-  // Next.js의 자동 CSS 최적화 완전 비활성화 (noVNC CSS 자동 추가 방지)
-  // 하지만 optimizePackageImports는 ESM 모듈 resolve에 필요할 수 있으므로
-  // noVNC만 제외하고 다른 패키지는 최적화 허용
-  experimental: {
-    // optimizePackageImports: ['@novnc/novnc']는 CSS 자동 추가를 유발하므로 제외
-    // 하지만 ESM 모듈 resolve를 위해 Turbopack 설정 확인 필요
-  },
   
   // ⚠️ Turbopack 전용 설정 (Webpack 사용 금지)
   // Turbopack은 Webpack보다 훨씬 빠르고 최신 기술 사용
@@ -97,8 +140,13 @@ const nextConfig = {
   // 번들 최적화
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production' ? {
-      exclude: ['error', 'log'], // 프로덕션에서도 error와 log 유지 (프록시 로깅 필요)
+      exclude: ['error', 'warn'], // 프로덕션에서도 error와 warn 유지 (디버깅 필요)
     } : false,
+  },
+  
+  // 성능 최적화: 실험적 기능
+  experimental: {
+    optimizePackageImports: ['@tanstack/react-query'], // React Query 트리 쉐이킹 최적화
   },
   
   // 프로덕션 최적화

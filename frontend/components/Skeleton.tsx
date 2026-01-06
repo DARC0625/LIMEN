@@ -15,7 +15,7 @@ export default function Skeleton({
   height,
   lines = 1,
 }: SkeletonProps) {
-  const baseClasses = 'animate-pulse bg-gray-200 dark:bg-gray-700 rounded';
+  const baseClasses = 'animate-pulse bg-gray-200 rounded';
   
   if (variant === 'text' && lines > 1) {
     return (
@@ -57,7 +57,7 @@ export default function Skeleton({
 // VM 카드 스켈레톤
 export function VMCardSkeleton() {
   return (
-    <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 sm:p-4 flex flex-col w-[280px] sm:w-56 flex-shrink-0 h-[280px] sm:h-[300px] bg-white dark:bg-gray-800">
+    <div className="relative border border-gray-200 rounded-lg p-3 sm:p-4 flex flex-col w-[280px] sm:w-56 flex-shrink-0 h-[280px] sm:h-[300px] bg-white">
       {/* OS 로고 스켈레톤 */}
       <div className="flex justify-center mb-2">
         <Skeleton variant="circular" width={48} height={48} />
@@ -80,7 +80,7 @@ export function VMCardSkeleton() {
       </div>
       
       {/* UUID 스켈레톤 */}
-      <div className="pt-1.5 border-t border-gray-100 dark:border-gray-700 mt-auto">
+      <div className="pt-1.5 border-t border-gray-100 mt-auto">
         <Skeleton variant="text" width="70%" height="0.75rem" className="mx-auto" />
       </div>
     </div>
@@ -92,7 +92,7 @@ export function CardGridSkeleton({ count = 3 }: { count?: number }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="p-4 sm:p-6 bg-white dark:bg-gray-800/90 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+        <div key={i} className="p-4 sm:p-6 bg-white rounded-xl shadow-lg border border-gray-200">
           <Skeleton variant="text" width="60%" height="1.5rem" className="mb-4" />
           <Skeleton variant="text" lines={3} />
         </div>

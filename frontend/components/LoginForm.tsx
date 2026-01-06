@@ -344,26 +344,26 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 transition-colors">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 transition-colors">
+      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-md border border-gray-200 transition-colors">
         <header>
-          <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-gray-100">LIMEN</h1>
-          <p className="mt-2 text-center text-gray-600 dark:text-gray-400">VM Management System</p>
+          <h1 className="text-3xl font-bold text-center text-gray-900">LIMEN</h1>
+          <p className="mt-2 text-center text-gray-600">VM Management System</p>
         </header>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit} aria-label="Login form">
           {/* 백엔드 연결 상태 표시 */}
           {isCheckingBackend ? (
             <div 
-              className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 px-4 py-3 rounded transition-colors flex items-center gap-2"
+              className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded transition-colors flex items-center gap-2"
               role="status"
               aria-live="polite"
             >
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-700 dark:border-blue-400"></div>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-700"></div>
               <span>백엔드 연결 확인 중...</span>
             </div>
           ) : isOffline ? (
             <div 
-              className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-400 px-4 py-3 rounded transition-colors flex items-center gap-2"
+              className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded transition-colors flex items-center gap-2"
               role="alert"
               aria-live="assertive"
             >
@@ -376,7 +376,7 @@ export default function LoginForm() {
           
           {error && (
             <div 
-              className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded transition-colors"
+              className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded transition-colors"
               role="alert"
               aria-live="assertive"
             >
@@ -385,7 +385,7 @@ export default function LoginForm() {
           )}
           <div className="space-y-4">
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
                 Username
               </label>
               <input
@@ -396,13 +396,13 @@ export default function LoginForm() {
                 autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 aria-describedby={error ? "username-error" : undefined}
                 aria-invalid={!!error}
               />
             </div>
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Password
               </label>
               <input
@@ -413,7 +413,7 @@ export default function LoginForm() {
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 aria-describedby={error ? "password-error" : undefined}
                 aria-invalid={!!error}
               />
@@ -423,7 +423,7 @@ export default function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
               aria-busy={loading}
               aria-label={loading ? 'Logging in, please wait' : 'Sign in to LIMEN'}
             >
@@ -432,7 +432,7 @@ export default function LoginForm() {
             <button
               type="button"
               onClick={() => router.push('/register')}
-              className="w-full flex justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
               aria-label="Navigate to registration page"
             >
               Create Account

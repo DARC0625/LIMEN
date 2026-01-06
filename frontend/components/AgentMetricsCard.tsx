@@ -28,8 +28,8 @@ const AgentMetricsCard = memo(function AgentMetricsCard() {
     return (
       <StatusCard title="Agent Metrics" status="ok" subStatus="Loading...">
         <div className="space-y-4 mt-2">
-          <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse" />
-          <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse" />
+          <div className="h-2.5 bg-gray-200 rounded-full animate-pulse" />
+          <div className="h-2.5 bg-gray-200 rounded-full animate-pulse" />
         </div>
       </StatusCard>
     );
@@ -38,7 +38,7 @@ const AgentMetricsCard = memo(function AgentMetricsCard() {
   if (isError || !metrics) {
     return (
       <StatusCard title="Agent Metrics" status="error" subStatus="Offline">
-        <div className="text-sm text-gray-500 dark:text-gray-400">
+        <div className="text-sm text-gray-500">
           Unable to fetch agent metrics
         </div>
       </StatusCard>
@@ -63,16 +63,16 @@ const AgentMetricsCard = memo(function AgentMetricsCard() {
         <ProgressBar 
           label="CPU Usage" 
           value={cpuPercent} 
-          color="bg-blue-500 dark:bg-blue-600"
+          color="bg-cyan-500"
           aria-label={`CPU usage: ${cpuPercent.toFixed(1)}%`}
         />
         <ProgressBar 
           label="Memory Usage" 
           value={memoryPercent} 
-          color="bg-purple-500 dark:bg-purple-600"
+          color="bg-violet-500"
           aria-label={`Memory usage: ${memoryPercent.toFixed(1)}%`}
         />
-        <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+        <div className="text-xs text-gray-500 space-y-1">
           <div className="flex justify-between">
             <span>Total Memory:</span>
             <span className="font-mono">{totalMemoryGB} GB</span>

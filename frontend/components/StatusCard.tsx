@@ -19,18 +19,18 @@ export const StatusCard = memo(function StatusCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="p-4 sm:p-6 bg-white dark:bg-gray-800/90 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 transition-all backdrop-blur-sm">
+    <div className="p-4 sm:p-6 bg-white rounded-xl shadow-lg border border-gray-200 transition-all backdrop-blur-sm">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
           <span 
-            className={`w-3 h-3 rounded-full ${status === 'ok' ? 'bg-green-500' : 'bg-red-500'}`}
+            className={`w-3 h-3 rounded-full ${status === 'ok' ? 'bg-emerald-500' : 'bg-rose-500'}`}
             role="status"
             aria-label={`Status: ${status === 'ok' ? 'OK' : 'Error'}`}
           ></span>
           {title}
         </h2>
         {subStatus && (
-          <span className="text-xs font-mono text-gray-500 dark:text-gray-400" aria-label={`Sub status: ${subStatus}`}>
+          <span className="text-xs font-mono text-gray-500" aria-label={`Sub status: ${subStatus}`}>
             {subStatus}
           </span>
         )}
@@ -54,17 +54,17 @@ export const StatusRow = memo(function StatusRow({ label, value }: { label: stri
   // 상태에 따른 색상 결정
   let statusColor = '';
   if (isConnected) {
-    statusColor = 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200';
+    statusColor = 'bg-emerald-100 text-emerald-800';
   } else if (isOffline) {
-    statusColor = 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200';
+    statusColor = 'bg-rose-100 text-rose-800';
   } else if (isError) {
-    statusColor = 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200';
+    statusColor = 'bg-rose-100 text-rose-800';
   } else {
-    statusColor = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+    statusColor = 'bg-slate-100 text-slate-600';
   }
   
   return (
-    <div className="flex justify-between items-center p-2 bg-gray-100 dark:bg-gray-700 rounded mb-2 transition-colors">
+    <div className="flex justify-between items-center p-2 bg-gray-100 rounded mb-2 transition-colors">
       <span className="font-medium">{label}</span>
       <span 
         className={`px-2 py-0.5 text-xs rounded-full ${statusColor}`}
@@ -94,7 +94,7 @@ export const ProgressBar = memo(function ProgressBar({ label, value, color }: { 
         </span>
       </div>
       <div 
-        className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5"
+        className="w-full bg-gray-200 rounded-full h-2.5"
         role="progressbar"
         aria-valuenow={percentage}
         aria-valuemin={0}

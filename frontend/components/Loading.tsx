@@ -15,11 +15,11 @@ export default function Loading({ message = 'Loading...', size = 'md' }: Loading
   return (
     <div className="flex flex-col items-center justify-center p-4" role="status" aria-live="polite" aria-label={message || 'Loading'}>
       <div
-        className={`${sizeClasses[size]} border-4 border-gray-200 dark:border-gray-700 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin`}
+        className={`${sizeClasses[size]} border-4 border-gray-200 border-t-blue-600 rounded-full animate-spin`}
         aria-hidden="true"
       />
       {message && (
-        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+        <p className="mt-2 text-sm text-gray-600">
           {message}
         </p>
       )}
