@@ -36,23 +36,38 @@ export default function LoginForm() {
           return true;
         });
         
-        const response = await fetch('/api/health', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          signal: AbortSignal.timeout(3000), // 3초 타임아웃
-          // credentials 제거 (헬스체크는 인증 불필요, 로그인 페이지 깜빡임 방지)
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5초 타임아웃으로 증가
         
-        // 이전 상태와 비교하여 변경이 있을 때만 업데이트
-        if (response.ok) {
-          setIsOffline(prev => prev ? false : prev); // false로 변경할 때만 업데이트
-        } else {
-          setIsOffline(prev => !prev ? true : prev); // true로 변경할 때만 업데이트
+        try {
+          const response = await fetch('/api/health', {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+            // credentials 제거 (헬스체크는 인증 불필요, 로그인 페이지 깜빡임 방지)
+          });
+          
+          clearTimeout(timeoutId);
+          
+          // 이전 상태와 비교하여 변경이 있을 때만 업데이트
+          if (response.ok) {
+            setIsOffline(prev => prev ? false : prev); // false로 변경할 때만 업데이트
+          } else {
+            setIsOffline(prev => !prev ? true : prev); // true로 변경할 때만 업데이트
+          }
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+          throw fetchError;
         }
       } catch (err) {
         // 네트워크 오류 또는 타임아웃
+        const error = err instanceof Error ? err : new Error(String(err));
+        // AbortError는 타임아웃이므로 조용히 처리
+        if (error.name !== 'AbortError') {
+          logger.warn('[LoginForm] Backend health check failed:', error);
+        }
         setIsOffline(prev => !prev ? true : prev); // true로 변경할 때만 업데이트
       } finally {
         setIsCheckingBackend(false);

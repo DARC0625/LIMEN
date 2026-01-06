@@ -48,11 +48,18 @@ export function useVMs() {
           if (protectedState && (Date.now() - protectedState.timestamp) < 30000) {
             // 보호 기간 내이고, 서버 응답 상태가 보호된 상태와 다르면 보호된 상태를 우선
             if (vm.status !== protectedState.status) {
+              const timeSinceProtection = Date.now() - protectedState.timestamp;
+              window.console.log('[useVMs] ====== PRESERVING PROTECTED VM STATE ======');
+              window.console.log('[useVMs] UUID:', vm.uuid);
+              window.console.log('[useVMs] Protected status:', protectedState.status);
+              window.console.log('[useVMs] Server status:', vm.status);
+              window.console.log('[useVMs] Time since protection:', timeSinceProtection, 'ms');
+              
               logger.log('[useVMs] Preserving protected VM state:', {
                 uuid: vm.uuid,
                 protectedStatus: protectedState.status,
                 serverStatus: vm.status,
-                timeSinceProtection: Date.now() - protectedState.timestamp
+                timeSinceProtection: timeSinceProtection
               });
               return { ...vm, status: protectedState.status };
             }
@@ -379,6 +386,13 @@ export function useVMAction() {
     
     // 서버 응답 성공: 최종 데이터로 업데이트
     onSuccess: (updatedVM, variables, context) => {
+      // 강제 로깅 (콘솔 필터링 우회)
+      window.console.log('[useVMAction] ====== ON SUCCESS CALLED ======');
+      window.console.log('[useVMAction] Action:', variables.action);
+      window.console.log('[useVMAction] UUID:', variables.uuid);
+      window.console.log('[useVMAction] Server response VM status:', updatedVM.status);
+      window.console.log('[useVMAction] Full server response:', updatedVM);
+      
       logger.log('[useVMAction] onSuccess called:', {
         action: variables.action,
         uuid: variables.uuid,
@@ -400,6 +414,14 @@ export function useVMAction() {
           // 서버가 반환한 상태가 예상과 다르면 실패로 간주
           const expectedStatus = variables.action === 'start' ? 'Running' : 'Stopped';
           const actualStatus = updatedVM.status;
+          
+          // 강제 로깅
+          window.console.log('[useVMAction] ====== ACTION RESULT CHECK ======');
+          window.console.log('[useVMAction] Action:', variables.action);
+          window.console.log('[useVMAction] Expected status:', expectedStatus);
+          window.console.log('[useVMAction] Actual status from server:', actualStatus);
+          window.console.log('[useVMAction] Status match:', actualStatus === expectedStatus);
+          window.console.log('[useVMAction] Full VM response:', updatedVM);
           
           logger.log('[useVMAction] Action result check:', {
             action: variables.action,
@@ -446,9 +468,17 @@ export function useVMAction() {
           });
           
           // 서버 응답 상태를 즉시 보호 설정 (refetch가 덮어쓰기 전에)
+          const protectionTimestamp = Date.now();
           protectedVMStates.set(variables.uuid, {
             status: updatedVM.status,
-            timestamp: Date.now()
+            timestamp: protectionTimestamp
+          });
+          
+          window.console.log('[useVMAction] Protected VM state set:', {
+            uuid: variables.uuid,
+            protectedStatus: updatedVM.status,
+            timestamp: protectionTimestamp,
+            protectedUntil: new Date(protectionTimestamp + 30000).toISOString()
           });
           
           // 서버 응답으로 업데이트 (서버가 최종 상태를 결정)
