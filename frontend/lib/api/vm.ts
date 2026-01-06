@@ -135,29 +135,53 @@ export const vmAPI = {
       // 500 에러인 경우 상세 정보 로깅
       if (error instanceof Error && (error as any).status === 500) {
         const apiError = error as any;
+        
+        // errorDetails에서 실제 에러 메시지 추출
+        let actualErrorMessage = apiError.message;
+        if (apiError.details) {
+          const details = apiError.details;
+          
+          // 다양한 구조에서 에러 메시지 추출 시도
+          if (details.error) {
+            if (typeof details.error === 'string') {
+              actualErrorMessage = details.error;
+            } else if (typeof details.error === 'object' && details.error.message) {
+              actualErrorMessage = details.error.message;
+            }
+          } else if (details.message) {
+            actualErrorMessage = details.message;
+          } else if (details.detail) {
+            actualErrorMessage = details.detail;
+          } else if (typeof details === 'string') {
+            actualErrorMessage = details;
+          }
+          
+          // libvirt/XML 관련 에러인지 확인
+          const isLibvirtError = actualErrorMessage.toLowerCase().includes('libvirt') ||
+                                 actualErrorMessage.toLowerCase().includes('virerror') ||
+                                 actualErrorMessage.toLowerCase().includes('domain_definition') ||
+                                 actualErrorMessage.toLowerCase().includes('xml') ||
+                                 actualErrorMessage.toLowerCase().includes('failed to define domain');
+          
+          if (isLibvirtError) {
+            // libvirt 에러인 경우 사용자 친화적인 메시지
+            actualErrorMessage = `VM 생성 중 백엔드 오류가 발생했습니다.\n\n기술적 세부사항:\n${actualErrorMessage}\n\n이 문제는 백엔드 서버의 libvirt 설정 문제일 수 있습니다. 관리자에게 문의해주세요.`;
+          }
+        }
+        
         window.console.error('[vmAPI.create] 500 Internal Server Error:', {
           endpoint: '/vms',
           method: 'POST',
-          errorMessage: apiError.message,
+          errorMessage: actualErrorMessage,
           errorDetails: apiError.details,
           requestData: vmData,
         });
         
-        // 백엔드에서 제공한 상세 에러 정보가 있으면 사용
-        if (apiError.details) {
-          const details = apiError.details;
-          let detailedMessage = apiError.message;
-          
-          if (details.error || details.message) {
-            detailedMessage = `${apiError.message}\n${details.error || details.message}`;
-          }
-          
-          // 더 구체적인 에러 메시지로 재생성
-          const enhancedError = new Error(detailedMessage);
-          (enhancedError as any).status = 500;
-          (enhancedError as any).details = details;
-          throw enhancedError;
-        }
+        // 더 구체적인 에러 메시지로 재생성
+        const enhancedError = new Error(actualErrorMessage);
+        (enhancedError as any).status = 500;
+        (enhancedError as any).details = apiError.details;
+        throw enhancedError;
       }
       
       throw error;

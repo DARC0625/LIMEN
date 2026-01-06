@@ -245,11 +245,36 @@ export function useCreateVM() {
         // 500 에러인 경우 상세 정보 확인
         if (error instanceof Error && (error as any).status === 500) {
           const apiError = error as any;
+          
+          // errorDetails에서 실제 에러 메시지 추출
           if (apiError.details) {
             const details = apiError.details;
-            // 백엔드에서 제공한 상세 에러 메시지 사용
-            if (details.error || details.message) {
-              errorMessage = `${errorMessage}\n${details.error || details.message}`;
+            
+            // 다양한 구조에서 에러 메시지 추출 시도
+            if (details.error) {
+              if (typeof details.error === 'string') {
+                errorMessage = details.error;
+              } else if (typeof details.error === 'object' && details.error.message) {
+                errorMessage = details.error.message;
+              }
+            } else if (details.message) {
+              errorMessage = details.message;
+            } else if (details.detail) {
+              errorMessage = details.detail;
+            } else if (typeof details === 'string') {
+              errorMessage = details;
+            }
+            
+            // libvirt/XML 관련 에러인지 확인
+            const isLibvirtError = errorMessage.toLowerCase().includes('libvirt') ||
+                                   errorMessage.toLowerCase().includes('virerror') ||
+                                   errorMessage.toLowerCase().includes('domain_definition') ||
+                                   errorMessage.toLowerCase().includes('xml') ||
+                                   errorMessage.toLowerCase().includes('failed to define domain');
+            
+            if (isLibvirtError) {
+              // libvirt 에러인 경우 사용자 친화적인 메시지
+              errorMessage = `VM 생성 중 백엔드 오류가 발생했습니다.\n\n기술적 세부사항:\n${errorMessage}\n\n이 문제는 백엔드 서버의 libvirt 설정 문제일 수 있습니다. 관리자에게 문의해주세요.`;
             }
           }
           
@@ -262,7 +287,13 @@ export function useCreateVM() {
         
         // 에러 메시지를 여러 줄로 표시 (toast는 한 줄만 지원하므로 첫 줄만 표시)
         const firstLine = errorMessage.split('\n')[0];
-        toast.error(`VM 생성 실패: ${firstLine}`);
+        
+        // libvirt 에러인 경우 특별한 메시지
+        if (errorMessage.toLowerCase().includes('libvirt') || errorMessage.toLowerCase().includes('백엔드 오류')) {
+          toast.error(`VM 생성 실패: 백엔드 서버 오류가 발생했습니다. 관리자에게 문의해주세요.`);
+        } else {
+          toast.error(`VM 생성 실패: ${firstLine}`);
+        }
         
         // 전체 에러 메시지는 콘솔에만 출력
         if (errorMessage.includes('\n')) {
