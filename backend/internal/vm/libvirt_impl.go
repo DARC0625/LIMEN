@@ -115,25 +115,27 @@ func (d *libvirtDomain) Undefine() error {
 }
 
 func (d *libvirtDomain) SetVcpusFlags(vcpu uint, flags uint32) error {
-	return d.dom.SetVcpusFlags(int(vcpu), libvirt.DomainVcpuFlags(flags))
+	return d.dom.SetVcpusFlags(libvirt.DomainVcpuFlags(flags), int(vcpu))
 }
 
 func (d *libvirtDomain) SetMemoryFlags(memory uint64, flags uint32) error {
-	return d.dom.SetMemoryFlags(int64(memory), libvirt.DomainMemoryModFlags(flags))
+	return d.dom.SetMemoryFlags(libvirt.DomainMemoryModFlags(flags), uint(memory))
 }
 
 func (d *libvirtDomain) GetVcpusFlags(flags uint32) (int, error) {
-	return d.dom.GetVcpusFlags(libvirt.DomainVcpuFlags(flags))
+	count, err := d.dom.GetVcpusFlags(libvirt.DomainVcpuFlags(flags))
+	return int(count), err
 }
 
 func (d *libvirtDomain) GetMemoryStats(flags uint32) (map[string]uint64, error) {
-	stats, err := d.dom.MemoryStats(libvirt.DomainMemoryStatFlags(flags), 0)
+	stats, err := d.dom.MemoryStats(uint(libvirt.DOMAIN_MEMORY_STAT_ACTUAL), 0)
 	if err != nil {
 		return nil, err
 	}
 	result := make(map[string]uint64)
 	for _, stat := range stats {
-		result[stat.Tag] = stat.Val
+		// libvirt returns Tag as int32, convert to string key
+		result[fmt.Sprintf("tag_%d", stat.Tag)] = stat.Val
 	}
 	return result, nil
 }

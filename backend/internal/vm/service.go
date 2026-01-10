@@ -818,7 +818,7 @@ func (s *VMService) SetBootOrder(name string, bootOrder models.BootOrder) error 
 	defer dom.Free()
 
 	// Get current XML
-	xmlDesc, err := dom.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
+	xmlDesc, err := dom.GetXMLDescInactive()
 	if err != nil {
 		// If VM is running, try to get active XML
 		xmlDesc, err = dom.GetXMLDescSecure()
@@ -842,7 +842,7 @@ func (s *VMService) SetBootOrder(name string, bootOrder models.BootOrder) error 
 	if active {
 		// VM is running - need to undefine and redefine
 		// Save current state
-		dom.UndefineFlags(libvirt.DOMAIN_UNDEFINE_KEEP_NVRAM)
+		dom.UndefineFlags(1)
 	}
 
 	// Define updated domain
@@ -1673,7 +1673,7 @@ func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
 
 	// Update Memory (Config)
 	// DOMAIN_AFFECT_CONFIG = 2
-	memFlags := uint32(2) // DOMAIN_MEM_CURRENT
+	memFlags := uint32(2) // DOMAIN_MEM_CURRENT // DOMAIN_MEM_CURRENT
 
 	if err := dom.SetMemoryFlags(uint64(memoryMB*1024), memFlags); err != nil {
 		return fmt.Errorf("failed to set memory: %w", err)
@@ -1681,7 +1681,7 @@ func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
 
 	// Update VCPU (Config)
 	// DOMAIN_VCPU_CONFIG = 2
-	vcpuFlags := uint32(2) // DOMAIN_VCPU_LIVE
+	vcpuFlags := uint32(2) // DOMAIN_VCPU_LIVE // DOMAIN_VCPU_LIVE
 	if err := dom.SetVcpusFlags(uint(vcpu), vcpuFlags); err != nil {
 		return fmt.Errorf("failed to set vcpus: %w", err)
 	}
