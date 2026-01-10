@@ -36,7 +36,8 @@ func (d *libvirtDriver) Connect(uri string) error {
 
 func (d *libvirtDriver) Close() error {
 	if d.conn != nil {
-		return d.conn.Close()
+		_, err := d.conn.Close()
+		return err
 	}
 	return nil
 }
