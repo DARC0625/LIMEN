@@ -38,11 +38,18 @@ jobs:
           # Here we only block obvious mistakes that violate our global rules.
 
           echo "[5/6] Ensure .github/workflows only contains allowed workflows"
-          allowed="^(ci-edge|ci-backend|policy-gates)(\.yml)$"
-          bad="$(ls -1 .github/workflows | grep -Ev "$allowed" || true)"
+          allowed="^(ci-edge|ci-backend|policy-gates)(\.yml|\.yaml)$"
+          bad="$(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -printf '%f\n' | grep -Ev "$allowed" || true)"
           if [ -n "$bad" ]; then
             echo "[FATAL] Found non-allowed workflow files:"
             echo "$bad"
+            exit 1
+          fi
+
+          echo "[5.5/6] Check for merge conflict markers"
+          if git grep -n '<<<<<<\|>>>>>>\|=======' -- .github/workflows src frontend backend 2>/dev/null | grep -v '^Binary' || true | grep -q .; then
+            echo "[FATAL] Found merge conflict markers in codebase:"
+            git grep -n '<<<<<<\|>>>>>>\|=======' -- .github/workflows src frontend backend 2>/dev/null | grep -v '^Binary' || true
             exit 1
           fi
 
