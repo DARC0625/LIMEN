@@ -153,7 +153,46 @@ func (s *VMService) FinalizeInstall(name string) error {
 	return fmt.Errorf("libvirt not available: FinalizeInstall requires libvirt build tag")
 }
 
+// CreateSnapshot creates a snapshot of a VM (stub: returns error)
+func (s *VMService) CreateSnapshot(vmID uint, snapshotName, description string) (*models.VMSnapshot, error) {
+	return nil, fmt.Errorf("libvirt not available: CreateSnapshot requires libvirt build tag")
+}
+
+// ListSnapshots lists all snapshots for a VM (stub: returns empty list)
+func (s *VMService) ListSnapshots(vmID uint) ([]models.VMSnapshot, error) {
+	return []models.VMSnapshot{}, nil
+}
+
+// GetSnapshot gets a snapshot by ID (stub: returns error)
+func (s *VMService) GetSnapshot(snapshotID uint) (*models.VMSnapshot, error) {
+	return nil, fmt.Errorf("libvirt not available: GetSnapshot requires libvirt build tag")
+}
+
+// RestoreSnapshot restores a VM from a snapshot (stub: returns error)
+func (s *VMService) RestoreSnapshot(snapshotID uint) error {
+	return fmt.Errorf("libvirt not available: RestoreSnapshot requires libvirt build tag")
+}
+
+// DeleteSnapshot deletes a snapshot (stub: returns error)
+func (s *VMService) DeleteSnapshot(snapshotID uint) error {
+	return fmt.Errorf("libvirt not available: DeleteSnapshot requires libvirt build tag")
+}
+
 // UpdateVM updates a VM (stub: returns error)
 func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
 	return fmt.Errorf("libvirt not available: VM update requires libvirt build tag")
+}
+
+// VMStats represents VM resource usage statistics (stub type definition)
+type VMStats struct {
+	CPUUsagePercent    float64 `json:"cpu_usage_percent"`
+	MemoryUsedMB       uint64  `json:"memory_used_mb"`
+	MemoryTotalMB      uint64  `json:"memory_total_mb"`
+	MemoryUsagePercent float64 `json:"memory_usage_percent"`
+	Timestamp          int64   `json:"timestamp"`
+}
+
+// GetVMStats gets VM resource usage statistics (stub: returns error)
+func (s *VMService) GetVMStats(vmName string) (*VMStats, error) {
+	return nil, fmt.Errorf("libvirt not available: GetVMStats requires libvirt build tag")
 }
