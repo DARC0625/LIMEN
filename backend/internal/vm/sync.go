@@ -14,7 +14,7 @@ import (
 
 // SyncVMStatus syncs VM status from libvirt to database
 func (s *VMService) SyncVMStatus(vm *models.VM) error {
-	dom, err := s.conn.LookupDomainByName(vm.Name)
+	dom, err := s.driver.LookupDomainByName(vm.Name)
 	if err != nil {
 		// Domain not found in libvirt - VM was likely deleted externally
 		// Check if error indicates domain not found
@@ -90,7 +90,7 @@ func (s *VMService) SyncAllVMStatuses() error {
 
 // GetVMStatusFromLibvirt gets the actual status from libvirt without updating DB
 func (s *VMService) GetVMStatusFromLibvirt(vmName string) (models.VMStatus, error) {
-	dom, err := s.conn.LookupDomainByName(vmName)
+	dom, err := s.driver.LookupDomainByName(vmName)
 	if err != nil {
 		// Domain not found = stopped
 		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "No such domain") {
@@ -113,7 +113,7 @@ func (s *VMService) GetVMStatusFromLibvirt(vmName string) (models.VMStatus, erro
 
 // EnsureVMExists checks if VM exists in libvirt, if not marks it as stopped
 func (s *VMService) EnsureVMExists(vm *models.VM) error {
-	dom, err := s.conn.LookupDomainByName(vm.Name)
+	dom, err := s.driver.LookupDomainByName(vm.Name)
 	if err != nil {
 		// VM doesn't exist in libvirt but exists in DB
 		// This can happen if VM was deleted externally or libvirt crashed

@@ -69,7 +69,7 @@ func (s *VMService) CreateSnapshot(vmID uint, snapshotName, description string) 
 
 	if err := s.db.Create(&snapshot).Error; err != nil {
 		// Try to delete snapshot from libvirt if DB save fails
-		if delErr := snap.Delete(libvirt.DOMAIN_SNAPSHOT_DELETE_CHILDREN); delErr != nil {
+		if delErr := snap.Delete(SnapshotDeleteChildren); delErr != nil {
 			logger.Log.Error("Failed to delete snapshot after DB error", zap.Error(delErr))
 		}
 		return nil, fmt.Errorf("failed to save snapshot to database: %w", err)
@@ -112,7 +112,7 @@ func (s *VMService) RestoreSnapshot(snapshotID uint) error {
 	}
 
 	// Get libvirt domain
-	dom, err := s.conn.LookupDomainByName(vm.Name)
+	dom, err := s.driver.LookupDomainByName(vm.Name)
 	if err != nil {
 		return fmt.Errorf("failed to lookup domain: %w", err)
 	}
@@ -164,7 +164,7 @@ func (s *VMService) RestoreSnapshot(snapshotID uint) error {
 	defer snap.Free()
 
 	// Revert to snapshot
-	flags := libvirt.DOMAIN_SNAPSHOT_REVERT_RUNNING | libvirt.DOMAIN_SNAPSHOT_REVERT_FORCE
+	flags := SnapshotRevertRunning | SnapshotRevertForce
 	if err := snap.RevertToSnapshot(flags); err != nil {
 		return fmt.Errorf("failed to revert to snapshot: %w", err)
 	}
@@ -194,7 +194,7 @@ func (s *VMService) DeleteSnapshot(snapshotID uint) error {
 	}
 
 	// Get libvirt domain
-	dom, err := s.conn.LookupDomainByName(vm.Name)
+	dom, err := s.driver.LookupDomainByName(vm.Name)
 	if err != nil {
 		return fmt.Errorf("failed to lookup domain: %w", err)
 	}
@@ -209,7 +209,7 @@ func (s *VMService) DeleteSnapshot(snapshotID uint) error {
 		defer snap.Free()
 
 		// Delete snapshot from libvirt
-		flags := libvirt.DOMAIN_SNAPSHOT_DELETE_CHILDREN | libvirt.DOMAIN_SNAPSHOT_DELETE_METADATA_ONLY
+		flags := SnapshotDeleteChildren | SnapshotDeleteMetadataOnly
 		if err := snap.Delete(flags); err != nil {
 			logger.Log.Warn("Failed to delete snapshot from libvirt", zap.Error(err))
 			// Continue to delete from DB anyway

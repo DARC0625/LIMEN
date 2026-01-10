@@ -72,7 +72,10 @@ func (d *libvirtDriver) DomainDefineXML(xml string) (Domain, error) {
 }
 
 func (d *libvirtDriver) Domain() Domain {
-	return d.dom
+	if d.dom == nil {
+		return nil
+	}
+	return &libvirtDomain{dom: d.dom}
 }
 
 // libvirtDomain implementation

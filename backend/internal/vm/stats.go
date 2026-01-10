@@ -42,7 +42,7 @@ func (s *VMService) GetVMStats(vmName string) (*VMStats, error) {
 }
 
 // getVMStatsFallback uses alternative methods to get VM stats
-func (s *VMService) getVMStatsFallback(dom *libvirt.Domain, vmName string) (*VMStats, error) {
+func (s *VMService) getVMStatsFallback(dom Domain, vmName string) (*VMStats, error) {
 	stats := &VMStats{
 		Timestamp: time.Now().Unix(),
 	}
@@ -108,7 +108,7 @@ func (s *VMService) getVMStatsFallback(dom *libvirt.Domain, vmName string) (*VMS
 	// CPU usage requires time-based sampling
 	// For now, we'll use a simple approach: get CPU count and estimate
 	// Actual CPU usage calculation would require periodic sampling
-	cpuCount, err := dom.GetVcpusFlags(libvirt.DOMAIN_VCPU_CURRENT)
+	cpuCount, err := dom.GetVcpusFlags(DomainVCPUCurrent)
 	if err == nil && cpuCount > 0 {
 		// CPU usage is difficult to calculate without time-based sampling
 		// We'll return 0 and let the frontend handle it or use periodic updates
