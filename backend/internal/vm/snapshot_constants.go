@@ -13,4 +13,4 @@ var (
 	SnapshotRevertRunning    = libvirt.DOMAIN_SNAPSHOT_REVERT_RUNNING
 	SnapshotRevertForce       = libvirt.DOMAIN_SNAPSHOT_REVERT_FORCE
 	SnapshotDeleteMetadataOnly = libvirt.DOMAIN_SNAPSHOT_DELETE_METADATA_ONLY
-)
+))

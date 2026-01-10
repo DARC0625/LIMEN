@@ -138,10 +138,18 @@ func (d *libvirtDomain) GetVcpusFlags(flags uint32) (int, error) {
 	return int(count), err
 }
 
+func (d *libvirtDomain) SnapshotLookupByName(name string) (Snapshot, error) {
+	snap, err := d.dom.SnapshotLookupByName(name, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to lookup snapshot: %w", err)
+	}
+	return &libvirtSnapshot{snap: snap}, nil
+}
+
 func (d *libvirtDomain) GetMemoryStats(flags uint32) (map[string]uint64, error) {
-	// libvirt-go MemoryStats: MemoryStats(flags DomainMemoryStatFlags, nrStats uint) ([]DomainMemoryStat, error)
+	// libvirt-go MemoryStats: MemoryStats(nrStats uint32, flags uint32) ([]DomainMemoryStat, error)
 	// DOMAIN_MEMORY_STAT_ACTUAL = 1
-	stats, err := d.dom.MemoryStats(1, 0)
+	stats, err := d.dom.MemoryStats(0, 1)
 	if err != nil {
 		return nil, err
 	}
