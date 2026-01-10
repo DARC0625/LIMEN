@@ -15,6 +15,7 @@ import (
 
 const UserIDKey contextKey = "user_id"
 const UsernameKey contextKey = "username"
+const BetaAccessKey contextKey = "beta_access"
 
 // Auth creates an authentication middleware that validates JWT tokens.
 func Auth(cfg *config.Config) func(http.Handler) http.Handler {
@@ -157,6 +158,7 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 			ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
 			ctx = context.WithValue(ctx, UsernameKey, claims.Username)
 			ctx = context.WithValue(ctx, RoleKey, claims.Role)
+			ctx = context.WithValue(ctx, BetaAccessKey, claims.BetaAccess)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -217,6 +219,12 @@ func GetUserID(ctx context.Context) (uint, bool) {
 func GetUsername(ctx context.Context) (string, bool) {
 	username, ok := ctx.Value(UsernameKey).(string)
 	return username, ok
+}
+
+// GetBetaAccess retrieves the beta access flag from context.
+func GetBetaAccess(ctx context.Context) (bool, bool) {
+	betaAccess, ok := ctx.Value(BetaAccessKey).(bool)
+	return betaAccess, ok
 }
 
 // min returns the minimum of two integers

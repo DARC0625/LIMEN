@@ -1,74 +1,105 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# 백엔드 서버 초기 설정 스크립트
-# 이 스크립트는 백엔드 서버에서 실행하여 backend/와 RAG/만 체크아웃합니다.
+# Backend 서버 세팅 스크립트
+# 실행: bash scripts/setup-backend-server.sh
 
-set -e
+echo "=== LIMEN Backend Server Setup ==="
 
-REPO_URL="git@github.com:DARC0625/LIMEN.git"
-TARGET_DIR="${1:-limen-backend}"
+# 1. 디렉토리 생성 및 권한 설정
+echo "[1/5] Creating /opt/limen directory..."
+sudo mkdir -p /opt/limen
+sudo chown -R $USER:$USER /opt/limen
+echo "✓ Directory created: /opt/limen"
 
-if [ -d "$TARGET_DIR" ]; then
-  echo "❌ $TARGET_DIR 디렉토리가 이미 존재합니다."
-  echo "   기존 디렉토리를 삭제하거나 다른 이름을 사용하세요."
+# 2. Git 저장소 클론
+echo "[2/5] Cloning repository..."
+cd /opt/limen
+if [ -d "repo" ]; then
+    echo "⚠ Repository already exists. Skipping clone."
+    cd repo
+else
+    git clone git@github.com:DARC0625/LIMEN.git repo
+    cd repo
+fi
+
+# 3. Sparse checkout 설정
+echo "[3/5] Setting up sparse checkout..."
+git sparse-checkout init --cone
+git sparse-checkout set apps/backend RAG docs packages/shared
+
+# 4. Main 브랜치 체크아웃
+echo "[4/5] Checking out main branch..."
+git checkout main
+
+# 5. 동기화 스크립트 생성
+echo "[5/5] Creating sync script..."
+mkdir -p scripts
+cat > scripts/sync-backend.sh << 'SYNC_SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd /opt/limen/repo
+git fetch origin main
+git reset --hard origin/main
+
+# 게이트: edge 코드가 존재하면 즉시 실패
+if [ -d "apps/edge" ]; then
+  echo "[FATAL] apps/edge exists on BACKEND server. Aborting."
   exit 1
 fi
 
-echo "🚀 백엔드 서버 설정 시작..."
-echo "📦 리포지토리: $REPO_URL"
-echo "📁 대상 디렉토리: $TARGET_DIR"
+echo "[OK] Sync complete. Restart backend service here."
+SYNC_SCRIPT
+
+chmod +x scripts/sync-backend.sh
+echo "✓ Sync script created: scripts/sync-backend.sh"
+
+# 6. Systemd 서비스 및 타이머 생성
+echo "[6/6] Creating systemd service and timer..."
+sudo tee /etc/systemd/system/limen-backend-sync.service > /dev/null << 'SERVICE_SCRIPT'
+[Unit]
+Description=LIMEN Backend Repository Sync Service
+After=network.target
+
+[Service]
+Type=oneshot
+User=darc0
+Group=darc0
+WorkingDirectory=/opt/limen/repo
+ExecStart=/opt/limen/repo/scripts/sync-backend.sh
+StandardOutput=journal
+StandardError=journal
+SERVICE_SCRIPT
+
+sudo tee /etc/systemd/system/limen-backend-sync.timer > /dev/null << 'TIMER_SCRIPT'
+[Unit]
+Description=LIMEN Backend Repository Sync Timer
+Requires=limen-backend-sync.service
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
+TIMER_SCRIPT
+
+# Systemd 리로드 및 타이머 활성화
+sudo systemctl daemon-reload
+sudo systemctl enable limen-backend-sync.timer
+sudo systemctl start limen-backend-sync.timer
+
+echo "✓ Systemd timer created and enabled"
 echo ""
-
-# 클론 (체크아웃 없이)
-echo "1️⃣ 리포지토리 클론 중..."
-git clone --no-checkout "$REPO_URL" "$TARGET_DIR"
-cd "$TARGET_DIR"
-
-# Sparse-checkout 설정
-echo "2️⃣ Sparse-checkout 설정 중..."
-git sparse-checkout init --cone
-
-# 필요한 디렉토리만 추가
-echo "3️⃣ 필요한 디렉토리 추가 중..."
-git sparse-checkout set \
-  backend/ \
-  RAG/ \
-  .github/workflows/backend*.yml \
-  .github/workflows/ci.yml \
-  .github/workflows/release.yml \
-  .github/workflows/validate-md.yml \
-  scripts/check-rag-before-work.sh \
-  scripts/record-changes-to-rag.sh \
-  scripts/workflow-guide.sh \
-  scripts/verify-rag-structure.sh \
-  scripts/sync-rag-between-servers.sh
-
-# 체크아웃
-echo "4️⃣ 파일 체크아웃 중..."
-git checkout main
-
-# 검증
+echo "=== Setup Complete ==="
+echo "Repository location: /opt/limen/repo"
+echo "Sync script: /opt/limen/repo/scripts/sync-backend.sh"
 echo ""
-echo "5️⃣ 검증 중..."
-if [ -d "backend" ] && [ -d "RAG" ]; then
-  if [ ! -d "frontend" ]; then
-    echo "✅ 백엔드 서버 설정 완료!"
-    echo ""
-    echo "📁 위치: $(pwd)"
-    echo "📋 체크아웃된 디렉토리:"
-    git sparse-checkout list
-    echo ""
-    echo "📊 디렉토리 구조:"
-    ls -la | grep -E "^d" | awk '{print $9}' | grep -v "^\.$" | grep -v "^\.\.$"
-  else
-    echo "❌ 오류: frontend 디렉토리가 존재합니다!"
-    exit 1
-  fi
-  else
-    echo "❌ 오류: backend 또는 RAG 디렉토리가 없습니다!"
-    exit 1
-  fi
-
+echo "Timer status:"
+sudo systemctl status limen-backend-sync.timer --no-pager | head -n 10
 echo ""
-echo "🎉 설정 완료! 이제 백엔드 개발을 시작할 수 있습니다."
-
+echo "Manual sync: bash /opt/limen/repo/scripts/sync-backend.sh"
+echo "View timer: sudo systemctl status limen-backend-sync.timer"
+echo "View logs: sudo journalctl -u limen-backend-sync.service -f"

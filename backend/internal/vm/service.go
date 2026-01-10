@@ -25,7 +25,21 @@ type VMService struct {
 	db     *gorm.DB
 	isoDir string
 	vmDir  string
+	
+	// Concurrency control for libvirt operations
+	operationSemaphore chan struct{}
+	
+	// Timeout for libvirt operations
+	operationTimeout time.Duration
 }
+
+const (
+	// MaxConcurrentLibvirtOps limits concurrent libvirt operations
+	MaxConcurrentLibvirtOps = 5
+	
+	// DefaultLibvirtTimeout is the default timeout for libvirt operations
+	DefaultLibvirtTimeout = 30 * time.Second
+)
 
 // GetVMDir returns the VM directory path
 func (s *VMService) GetVMDir() string {
@@ -47,10 +61,12 @@ func NewVMService(db *gorm.DB, libvirtURI, isoDir, vmDir string) (*VMService, er
 	}
 
 	return &VMService{
-		conn:   conn,
-		db:     db,
-		isoDir: isoDir,
-		vmDir:  vmDir,
+		conn:              conn,
+		db:                db,
+		isoDir:            isoDir,
+		vmDir:             vmDir,
+		operationSemaphore: make(chan struct{}, MaxConcurrentLibvirtOps),
+		operationTimeout:   DefaultLibvirtTimeout,
 	}, nil
 }
 
@@ -129,6 +145,12 @@ func (s *VMService) EnsureISO(osType string) (string, error) {
 }
 
 func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string, vmUUID string, graphicsType string, vncEnabled bool) error {
+	return s.withLibvirtGuard("CreateVM", func() error {
+		return s.createVMInternal(name, memoryMB, vcpu, osType, vmUUID, graphicsType, vncEnabled)
+	})
+}
+
+func (s *VMService) createVMInternal(name string, memoryMB int, vcpu int, osType string, vmUUID string, graphicsType string, vncEnabled bool) error {
 	// 0. Cleanup existing resources (Libvirt domain and Disk)
 	// Check if domain exists in libvirt and cleanup
 	if dom, err := s.conn.LookupDomainByName(name); err == nil {
@@ -334,6 +356,12 @@ func (s *VMService) ListVMs() ([]string, error) {
 }
 
 func (s *VMService) DeleteVM(name string) error {
+	return s.withLibvirtGuard("DeleteVM", func() error {
+		return s.deleteVMInternal(name)
+	})
+}
+
+func (s *VMService) deleteVMInternal(name string) error {
 	// First, get VM from DB to retrieve UUID for disk file cleanup
 	var vmRec models.VM
 	if err := s.db.Where("name = ?", name).First(&vmRec).Error; err != nil {
@@ -475,16 +503,24 @@ func (s *VMService) DeleteVM(name string) error {
 }
 
 func (s *VMService) StopVM(name string) error {
-	dom, err := s.conn.LookupDomainByName(name)
-	if err != nil {
-		return err
-	}
-	defer dom.Free()
+	return s.withLibvirtGuard("StopVM", func() error {
+		dom, err := s.conn.LookupDomainByName(name)
+		if err != nil {
+			return err
+		}
+		defer dom.Free()
 
-	return dom.Destroy()
+		return dom.Destroy()
+	})
 }
 
 func (s *VMService) StartVM(name string) error {
+	return s.withLibvirtGuard("StartVM", func() error {
+		return s.startVMInternal(name)
+	})
+}
+
+func (s *VMService) startVMInternal(name string) error {
 	dom, err := s.conn.LookupDomainByName(name)
 	if err != nil {
 		return fmt.Errorf("VM not found: %w", err)

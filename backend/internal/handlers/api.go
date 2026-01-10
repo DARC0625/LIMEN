@@ -24,6 +24,7 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/metrics"
 	"github.com/DARC0625/LIMEN/backend/internal/middleware"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
+	"github.com/DARC0625/LIMEN/backend/internal/security"
 	"github.com/DARC0625/LIMEN/backend/internal/session"
 	"github.com/DARC0625/LIMEN/backend/internal/validator"
 	"github.com/DARC0625/LIMEN/backend/internal/vm"
@@ -1058,7 +1059,9 @@ func (h *Handler) HandleVMConsole(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Generate short-lived JWT token (5 minutes TTL)
+	// Generate console token using standardized policy
+	policy := security.DefaultConsoleTokenPolicy()
+
 	// Get user info for token generation
 	var user models.User
 	if err := h.DB.Select("beta_access", "role", "approved").Where("id = ?", userID).First(&user).Error; err == nil {
@@ -1070,8 +1073,8 @@ func (h *Handler) HandleVMConsole(w http.ResponseWriter, r *http.Request) {
 		user.Role = models.RoleUser
 	}
 
-	// Create custom token with 5 minute expiry
-	expirationTime := time.Now().Add(5 * time.Minute)
+	// Create token with policy-defined TTL and claims
+	expirationTime := time.Now().Add(policy.TTL)
 	claims := &auth.Claims{
 		UserID:     userID,
 		Username:   username,
@@ -1081,9 +1084,15 @@ func (h *Handler) HandleVMConsole(w http.ResponseWriter, r *http.Request) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "limen",
+			Issuer:    policy.Issuer,
+			Audience:  []string{policy.Audience},
 		},
 	}
+	// Add UUID binding if required by policy
+	if policy.RequireUUIDBinding {
+		claims.RegisteredClaims.Subject = uuidStr // Use Subject claim for UUID binding
+	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	consoleToken, err := token.SignedString([]byte(h.Config.JWTSecret))
 	if err != nil {
