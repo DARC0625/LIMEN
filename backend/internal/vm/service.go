@@ -1665,7 +1665,7 @@ func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
 	// If requested vCPU is greater than max, update max first
 	if uint(vcpu) > maxVcpu {
 		// DOMAIN_VCPU_MAXIMUM = 1 (set maximum)
-		maxVcpuFlags := libvirt.DomainVcpuFlags(1)
+		maxVcpuFlags := uint32(1) // DOMAIN_VCPU_MAXIMUM
 		if err := dom.SetVcpusFlags(uint(vcpu), maxVcpuFlags); err != nil {
 			return fmt.Errorf("failed to set max vcpus: %w", err)
 		}

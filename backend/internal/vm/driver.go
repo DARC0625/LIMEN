@@ -26,7 +26,7 @@ type LibvirtDriver interface {
 type Domain interface {
 	Free() error
 	IsActive() (bool, error)
-	GetState() (DomainState, error)
+	GetState() (DomainState, int, error) // Returns (state, reason, error)
 	GetXMLDesc(flags uint32) (string, error)
 	Create() error
 	Destroy() error
