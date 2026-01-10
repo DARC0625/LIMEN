@@ -52,20 +52,26 @@ func ValidateVMName(name string) error {
 }
 
 // ValidateCPU validates CPU count.
-// No maximum limit - system resources determine the limit.
+// Maximum limit: 32 cores (typical physical server limit).
 func ValidateCPU(cpu int) error {
 	if cpu < 1 {
 		return fmt.Errorf("CPU must be at least 1")
 	}
-	// No maximum limit - removed for flexibility
+	if cpu > 32 {
+		return fmt.Errorf("CPU must be at most 32 cores")
+	}
 	return nil
 }
 
 // ValidateMemory validates memory amount in MB.
-// No maximum limit - system resources determine the limit.
+// Minimum: 512MB, Maximum: 65536MB (64GB).
+// Memory should be a multiple of 256MB for better performance and stability.
 func ValidateMemory(memory int) error {
-	if memory < 1024 {
-		return fmt.Errorf("Memory must be at least 1024MB (1GB)")
+	if memory < 512 {
+		return fmt.Errorf("Memory must be at least 512MB")
+	}
+	if memory > 65536 {
+		return fmt.Errorf("Memory must be at most 65536MB (64GB)")
 	}
 	// Memory should be a multiple of 256MB for better performance and stability
 	if memory%256 != 0 {
