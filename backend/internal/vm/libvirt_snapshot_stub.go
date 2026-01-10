@@ -3,9 +3,11 @@
 
 package vm
 
-import "errors"
-
 func (d *stubDomain) CreateSnapshotXML(xml string, flags uint32) (Snapshot, error) {
+	return nil, ErrLibvirtDisabled
+}
+
+func (d *stubDomain) SnapshotLookupByName(name string) (Snapshot, error) {
 	return nil, ErrLibvirtDisabled
 }
 

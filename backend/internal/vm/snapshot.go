@@ -156,7 +156,7 @@ func (s *VMService) RestoreSnapshot(snapshotID uint) error {
 	}
 
 	// Lookup snapshot in libvirt
-	snap, err := dom.SnapshotLookupByName(snapshot.LibvirtName, 0)
+	snap, err := dom.SnapshotLookupByName(snapshot.LibvirtName)
 	if err != nil {
 		return fmt.Errorf("failed to lookup snapshot in libvirt: %w", err)
 	}
@@ -200,7 +200,7 @@ func (s *VMService) DeleteSnapshot(snapshotID uint) error {
 	defer dom.Free()
 
 	// Lookup snapshot in libvirt
-	snap, err := dom.SnapshotLookupByName(snapshot.LibvirtName, 0)
+	snap, err := dom.SnapshotLookupByName(snapshot.LibvirtName)
 	if err != nil {
 		// Snapshot might not exist in libvirt, but we should still delete from DB
 		logger.Log.Warn("Snapshot not found in libvirt, deleting from DB only", zap.Error(err))
