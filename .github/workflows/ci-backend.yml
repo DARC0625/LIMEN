@@ -6,18 +6,16 @@ on:
       - "backend/**"
       - "config/**"
       - "infra/**"
-      - "scripts/**"
-      - "RAG/**"
-      - ".github/workflows/**"
+      - "scripts/shared/**"
+      - ".github/workflows/ci-backend.yml"
   push:
-    branches: ["main"]
+    branches: [ main ]
     paths:
       - "backend/**"
       - "config/**"
       - "infra/**"
-      - "scripts/**"
-      - "RAG/**"
-      - ".github/workflows/**"
+      - "scripts/shared/**"
+      - ".github/workflows/ci-backend.yml"
 
 jobs:
   backend-test:
