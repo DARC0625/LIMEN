@@ -32,7 +32,7 @@ fi
 # ⚠️ .github/, .vscode/는 CI/DEV 전용이므로 포함하지 않음
 echo "[3/5] Setting up sparse checkout..."
 git sparse-checkout init --cone
-git sparse-checkout set backend config infra scripts RAG
+git sparse-checkout set backend config infra scripts/backend scripts/shared
 
 # 4. Main 브랜치 체크아웃
 echo "[4/5] Checking out main branch..."
@@ -89,6 +89,12 @@ fi
 
 if [ -d ".vscode" ]; then
   echo "[FATAL][POLICY:DEV] .vscode/ exists on server. This is DEV-only and must not be deployed."
+  exit 1
+fi
+
+# 게이트: RAG/ 폴더가 존재하면 실패 (런타임 불필요, 배포 제외)
+if [ -d "RAG" ]; then
+  echo "[FATAL][POLICY:RAG] RAG/ exists on server. This is runtime unnecessary and must not be deployed."
   exit 1
 fi
 

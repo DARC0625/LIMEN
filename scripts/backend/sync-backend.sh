@@ -48,4 +48,10 @@ if [ -d ".vscode" ]; then
   exit 1
 fi
 
+# 게이트: RAG/ 폴더가 존재하면 실패 (런타임 불필요, 배포 제외)
+if [ -d "RAG" ]; then
+  echo "[FATAL][POLICY:RAG] RAG/ exists on server. This is runtime unnecessary and must not be deployed."
+  exit 1
+fi
+
 echo "[OK] BACK sync done"
