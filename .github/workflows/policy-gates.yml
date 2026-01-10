@@ -46,4 +46,85 @@ jobs:
             exit 1
           fi
 
+<<<<<<< HEAD
           echo "[6/6] OK"
+=======
+          # Backend 금지 폴더 검사
+          if [ -d "backend" ]; then
+            FORBIDDEN_IN_BACKEND=("frontend" "package.json" "package-lock.json" "pnpm-lock.yaml" ".next")
+            for item in "${FORBIDDEN_IN_BACKEND[@]}"; do
+              if [ -e "backend/$item" ]; then
+                echo "❌ backend/에 금지된 항목 발견: $item"
+                exit 1
+              fi
+            done
+            echo "✅ backend/ 금지 폴더 검사 통과"
+          fi
+
+      - name: Check changed files policy
+        id: check-changed-files
+        run: |
+          # PR인 경우 변경된 파일 확인
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "변경된 파일 확인 중..."
+            
+            # 루트 src/ 변경 감지
+            if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E "^src/" | grep -vE "^frontend/src/|^backend/src/"; then
+              echo "❌ 루트 src/ 파일이 변경되었습니다."
+              exit 1
+            fi
+            
+            # RAG 외 문서 변경 감지 (docs/ 폴더)
+            if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E "^docs/" | grep -vE "^RAG/"; then
+              echo "❌ RAG/ 외의 docs/ 파일이 변경되었습니다."
+              exit 1
+            fi
+            
+            # Edge sync 게이트: .github/ 금지
+            if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -qE "^frontend/|^config/|^infra/|^scripts/"; then
+              if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -qE "^\.github/"; then
+                echo "❌ FATAL: Edge 서버 동기화에 .github/ 폴더가 포함될 수 없습니다."
+                exit 1
+              fi
+            fi
+            
+            # Edge sync 게이트: RAG/ 금지 (WARN 또는 FATAL)
+            if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -qE "^frontend/|^config/|^infra/|^scripts/"; then
+              if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -qE "^RAG/"; then
+                echo "⚠️  WARN: Edge 서버 동기화에 RAG/ 폴더가 포함될 수 없습니다. (런타임 불필요)"
+                # FATAL로 변경하려면 exit 1 활성화
+                # exit 1
+              fi
+            fi
+            
+            # Backend sync 게이트: .github/ 금지
+            if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -qE "^backend/|^config/|^infra/|^scripts/"; then
+              if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -qE "^\.github/"; then
+                echo "❌ FATAL: Backend 서버 동기화에 .github/ 폴더가 포함될 수 없습니다."
+                exit 1
+              fi
+            fi
+            
+            # Backend sync 게이트: RAG/ 금지 (WARN 또는 FATAL)
+            if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -qE "^backend/|^config/|^infra/|^scripts/"; then
+              if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -qE "^RAG/"; then
+                echo "⚠️  WARN: Backend 서버 동기화에 RAG/ 폴더가 포함될 수 없습니다. (런타임 불필요)"
+                # FATAL로 변경하려면 exit 1 활성화
+                # exit 1
+              fi
+            fi
+            
+            echo "✅ 변경 파일 정책 검사 통과"
+          else
+            echo "Push 이벤트: 변경 파일 검사 스킵"
+          fi
+
+      - name: Policy check summary
+        run: |
+          echo "✅ 모든 정책 검사 통과"
+          echo ""
+          echo "검사 항목:"
+          echo "  - 루트 src/ 금지"
+          echo "  - RAG 외 문서 금지"
+          echo "  - Edge/Backend 금지 폴더 정책"
+>>>>>>> d4748c2 (feat(ci): add Edge/Backend sync gates and scripts folder structure)
