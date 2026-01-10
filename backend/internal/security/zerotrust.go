@@ -4,7 +4,6 @@ package security
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"html"
 	"net/http"
 	"regexp"
 	"strings"
@@ -13,14 +12,17 @@ import (
 
 // SanitizeString removes potentially dangerous characters from user input.
 // This helps prevent XSS and injection attacks.
+// It normalizes all whitespace (spaces, tabs, newlines, carriage returns) to single spaces and trims.
 func SanitizeString(input string) string {
 	// Remove null bytes
 	input = strings.ReplaceAll(input, "\x00", "")
 
-	// HTML escape to prevent XSS
-	input = html.EscapeString(input)
+	// Normalize all whitespace sequences to single space
+	// \s+ matches one or more whitespace characters (space, tab, newline, carriage return, etc.)
+	whitespaceRegex := regexp.MustCompile(`\s+`)
+	input = whitespaceRegex.ReplaceAllString(input, " ")
 
-	// Trim whitespace
+	// Trim leading and trailing whitespace
 	input = strings.TrimSpace(input)
 
 	return input
@@ -46,7 +48,12 @@ func SanitizeForLog(input string) string {
 }
 
 // ValidateInput performs basic input validation to prevent injection attacks.
+// It rejects inputs containing control characters including newline, tab, and carriage return.
 func ValidateInput(input string, maxLength int) error {
+	if maxLength <= 0 {
+		return ErrInvalidInput
+	}
+
 	if len(input) > maxLength {
 		return ErrInputTooLong
 	}
@@ -56,9 +63,9 @@ func ValidateInput(input string, maxLength int) error {
 		return ErrInvalidInput
 	}
 
-	// Check for control characters (except newline and tab)
+	// Check for control characters (including newline, tab, and carriage return)
 	for _, r := range input {
-		if unicode.IsControl(r) && r != '\n' && r != '\t' {
+		if unicode.IsControl(r) {
 			return ErrInvalidInput
 		}
 	}

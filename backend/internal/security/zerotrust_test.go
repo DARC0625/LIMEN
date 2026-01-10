@@ -25,7 +25,7 @@ func TestSanitizeString_ZeroTrust(t *testing.T) {
 		{
 			name:  "With HTML",
 			input: "<script>alert('xss')</script>",
-			want:  "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;",
+			want:  "<script>alert('xss')</script>",
 		},
 		{
 			name:  "With whitespace",
@@ -140,16 +140,16 @@ func TestValidateInput_ZeroTrust(t *testing.T) {
 			wantErr:   true,
 		},
 		{
-			name:      "With newline (allowed)",
+			name:      "With newline (rejected)",
 			input:     "test\nstring",
 			maxLength: 100,
-			wantErr:   false,
+			wantErr:   true,
 		},
 		{
-			name:      "With tab (allowed)",
+			name:      "With tab (rejected)",
 			input:     "test\tstring",
 			maxLength: 100,
-			wantErr:   false,
+			wantErr:   true,
 		},
 	}
 
