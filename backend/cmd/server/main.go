@@ -87,6 +87,10 @@ func main() {
 
 	logger.Log.Info("Starting server", zap.String("env", cfg.Env), zap.String("port", cfg.Port))
 
+	// Initialize metrics (ensure all metrics are exposed even with zero values)
+	metrics.Init()
+	logger.Log.Debug("Metrics initialized")
+
 	// Initialize hardware specification detection
 	if err := hardware.Initialize(); err != nil {
 		logger.Log.Warn("Failed to initialize hardware detection", zap.Error(err))

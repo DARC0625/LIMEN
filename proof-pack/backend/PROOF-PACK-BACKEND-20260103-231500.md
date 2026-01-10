@@ -337,3 +337,5 @@ curl http://localhost:18443/api/metrics | grep console_active_sessions
 3. Prometheus Alertmanager 설정 및 알림 전달 경로 구성
 
 
+
+

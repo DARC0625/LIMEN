@@ -132,3 +132,5 @@ WSL2 IP가 변경되면 다음 파일들을 업데이트해야 합니다:
 - `/mnt/c/Users/darc0/.wslconfig` - WSL2 설정 (미러 모드 비활성화됨)
 
 
+
+

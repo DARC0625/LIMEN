@@ -186,6 +186,15 @@ var (
 		[]string{"type"}, // type: sent, received
 	)
 
+	// WebSocket upgrade failure metrics (브라우저별 실패율 추적용)
+	WebSocketUpgradeFailTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "ws_upgrade_fail_total",
+			Help: "Total number of WebSocket upgrade failures",
+		},
+		[]string{"reason", "ua_family"}, // reason: origin_not_allowed, accept_failed, etc. ua_family: chrome, firefox, safari, etc.
+	)
+
 	// API response time metrics
 	APIResponseTime = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -244,6 +253,27 @@ var (
 		},
 	)
 )
+
+// Init initializes metrics that should be exposed even with zero values.
+// This ensures metrics are visible in Prometheus even before any events occur.
+func Init() {
+	// ws_upgrade_fail_total을 0으로 미리 노출 (디버그 편의)
+	// 모든 reason과 ua_family 조합을 초기화하여 메트릭이 항상 노출되도록 함
+	reasons := []string{
+		"origin_not_allowed",
+		"accept_failed",
+		"invalid_request",
+		"missing_token",    // 토큰이 없는 경우
+		"invalid_token",    // 토큰이 유효하지 않은 경우
+	}
+	uaFamilies := []string{"chrome", "firefox", "safari", "edge", "opera", "unknown"}
+
+	for _, reason := range reasons {
+		for _, ua := range uaFamilies {
+			WebSocketUpgradeFailTotal.WithLabelValues(reason, ua).Add(0)
+		}
+	}
+}
 
 // UpdateVMMetrics updates VM-related metrics based on current state.
 func UpdateVMMetrics(vmCountByStatus map[string]int, cpuByStatus map[string]int, memoryByStatus map[string]int) {

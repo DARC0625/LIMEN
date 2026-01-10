@@ -113,3 +113,5 @@ if err := h.VMService.StartVM(vmRec.Name); err != nil {
 - 커밋: `d17d020` - "fix: VM start/stop 액션 DB 저장 누락 수정 및 WSL2 라우팅 자동 수정 스크립트 추가"
 - 날짜: 2026-01-06
 
+
+

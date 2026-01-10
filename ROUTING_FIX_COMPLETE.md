@@ -54,3 +54,5 @@ sudo ip route del default via 10.0.0.1 dev eth0
 - 문제가 지속되면 `~/LIMEN/scripts/fix-wsl2-routing-auto.sh`를 수동 실행하세요
 - 비밀번호 변경 시 스크립트의 비밀번호도 업데이트 필요
 
+
+

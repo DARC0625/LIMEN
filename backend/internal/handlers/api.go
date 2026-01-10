@@ -19,6 +19,7 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/cache"
 	"github.com/DARC0625/LIMEN/backend/internal/config"
 	"github.com/DARC0625/LIMEN/backend/internal/errors"
+	"github.com/DARC0625/LIMEN/backend/internal/featureflags"
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
 	"github.com/DARC0625/LIMEN/backend/internal/metrics"
 	"github.com/DARC0625/LIMEN/backend/internal/middleware"
@@ -27,6 +28,7 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/validator"
 	"github.com/DARC0625/LIMEN/backend/internal/vm"
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-jwt/jwt/v5"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"nhooyr.io/websocket"
@@ -244,6 +246,35 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 			return
 		}
 
+		// E2E force spec (4C/4G) - only if E2E_MODE is enabled
+		forceE2E := featureflags.CheckE2EHeader(r.Header.Get("X-Limen-E2E"))
+
+		if forceE2E {
+			// req.CPU / req.Memory 단위 확인: 현재 프론트 payload 기준 cpu=코어, memory=MB
+			if req.CPU < 4 {
+				req.CPU = 4
+			}
+			if req.Memory < 4096 {
+				req.Memory = 4096
+			}
+
+			// 콘솔 테스트를 위해 그래픽 강제
+			vncEnabled := true
+			req.VNCEnabled = &vncEnabled
+			if req.GraphicsType == "" || req.GraphicsType == "none" {
+				req.GraphicsType = "vnc"
+			}
+
+			logger.Log.Info("E2E override VM spec applied",
+				zap.Int("cpu", req.CPU),
+				zap.Int("memory_mb", req.Memory),
+				zap.Bool("vnc_enabled", true),
+				zap.String("graphics_type", req.GraphicsType),
+				zap.String("remote_addr", r.RemoteAddr),
+				zap.String("ua", r.UserAgent()),
+			)
+		}
+
 		// Validate input
 		if err := validator.ValidateVMName(req.Name); err != nil {
 			errors.WriteBadRequest(w, err.Error(), err)
@@ -260,6 +291,44 @@ func (h *Handler) HandleVMs(w http.ResponseWriter, r *http.Request, cfg *config.
 		if err := validator.ValidateOSType(req.OSType); err != nil {
 			errors.WriteBadRequest(w, err.Error(), err)
 			return
+		}
+
+		// 안전장치: 최소 리소스 강제 (재발 방지)
+		// vcpu < 2 이면 2로 올림
+		if req.CPU < cfg.VMMinVCPU {
+			logger.Log.Info("VM CPU clamped to minimum",
+				zap.String("vm_name", req.Name),
+				zap.Int("requested_cpu", req.CPU),
+				zap.Int("min_cpu", cfg.VMMinVCPU))
+			req.CPU = cfg.VMMinVCPU
+		}
+
+		// ISO/Windows 계열 VM인지 확인 (더 높은 메모리 요구사항)
+		// Windows, ISO 설치용 OS 타입 확인
+		isISOOrWindows := false
+		isoWindowsTypes := []string{"windows", "windows10", "windows11", "iso", "install"}
+		osTypeLower := strings.ToLower(req.OSType)
+		for _, isoType := range isoWindowsTypes {
+			if strings.Contains(osTypeLower, strings.ToLower(isoType)) {
+				isISOOrWindows = true
+				break
+			}
+		}
+
+		// memory_mb < 2048(리눅스) / < 4096(윈도우/ISO) 이면 올림
+		minMemory := cfg.VMMinMemMB
+		if isISOOrWindows {
+			minMemory = cfg.VMMinMemMBISO
+		}
+
+		if req.Memory < minMemory {
+			logger.Log.Info("VM memory clamped to minimum",
+				zap.String("vm_name", req.Name),
+				zap.String("os_type", req.OSType),
+				zap.Bool("is_iso_or_windows", isISOOrWindows),
+				zap.Int("requested_memory", req.Memory),
+				zap.Int("min_memory", minMemory))
+			req.Memory = minMemory
 		}
 
 		// Get user ID from context (set by auth middleware)
@@ -927,6 +996,171 @@ func (h *Handler) HandleVMAction(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleVMConsole handles GET /api/vms/{uuid}/console - Get WebSocket URL for VM console
+// @Summary Get WebSocket URL for VM console
+// @Description Returns a WebSocket URL with a short-lived JWT token for connecting to the VM's VNC console
+// @Tags vms
+// @Accept json
+// @Produce json
+// @Param uuid path string true "VM UUID" format(uuid)
+// @Success 200 {object} map[string]interface{} "Console URL with token"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - no access to VM"
+// @Failure 404 {object} map[string]interface{} "VM not found"
+// @Security BearerAuth
+// @Router /vms/{uuid}/console [get]
+func (h *Handler) HandleVMConsole(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		errors.WriteUnauthorized(w, "Authentication required")
+		return
+	}
+
+	// Get role from context
+	role, _ := middleware.GetRole(r.Context())
+
+	// Get VM UUID from URL path variable
+	uuidStr := chi.URLParam(r, "uuid")
+	if uuidStr == "" {
+		errors.WriteBadRequest(w, "VM UUID is required", nil)
+		return
+	}
+
+	// Find VM by UUID
+	var vmRec models.VM
+	if err := h.DB.Where("uuid = ?", uuidStr).First(&vmRec).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			errors.WriteNotFound(w, "VM not found")
+		} else {
+			logger.Log.Error("Failed to find VM", zap.Error(err), zap.String("vm_uuid", uuidStr))
+			errors.WriteInternalError(w, err, h.Config.Env == "development")
+		}
+		return
+	}
+
+	// Check ownership (user must own the VM or be admin)
+	if vmRec.OwnerID != userID && role != string(models.RoleAdmin) {
+		errors.WriteForbidden(w, "You don't have permission to access this VM's console")
+		return
+	}
+
+	// Get username from context for token generation
+	username, _ := middleware.GetUsername(r.Context())
+	if username == "" {
+		// Fallback: query from database
+		var user models.User
+		if err := h.DB.Select("username").Where("id = ?", userID).First(&user).Error; err == nil {
+			username = user.Username
+		} else {
+			username = "unknown"
+		}
+	}
+
+	// Generate short-lived JWT token (5 minutes TTL)
+	// Get user info for token generation
+	var user models.User
+	if err := h.DB.Select("beta_access", "role", "approved").Where("id = ?", userID).First(&user).Error; err == nil {
+		// User found, use actual beta access and approval status
+	} else {
+		// Fallback: assume no beta access if user not found
+		user.BetaAccess = false
+		user.Approved = false
+		user.Role = models.RoleUser
+	}
+
+	// Create custom token with 5 minute expiry
+	expirationTime := time.Now().Add(5 * time.Minute)
+	claims := &auth.Claims{
+		UserID:     userID,
+		Username:   username,
+		Role:       string(user.Role), // Convert UserRole to string
+		Approved:   user.Approved,
+		BetaAccess: user.BetaAccess,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "limen",
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	consoleToken, err := token.SignedString([]byte(h.Config.JWTSecret))
+	if err != nil {
+		logger.Log.Error("Failed to sign console token", zap.Error(err))
+		errors.WriteInternalError(w, err, h.Config.Env == "development")
+		return
+	}
+
+	// Build WebSocket URL using external base (X-Forwarded-* headers)
+	wsScheme, host := externalWSBase(r, "limen.kr")
+	wsURL := fmt.Sprintf("%s://%s/vnc/%s?token=%s", wsScheme, host, uuidStr, consoleToken)
+
+	// Return response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ws_url":     wsURL,
+		"protocol":   "vnc",
+		"expires_at": expirationTime.Format(time.RFC3339),
+	})
+
+	logger.Log.Info("Console URL issued",
+		zap.String("vm_uuid", uuidStr),
+		zap.Uint("user_id", userID),
+		zap.String("username", username),
+		zap.String("ws_url", wsURL),
+		zap.String("ws_scheme", wsScheme),
+		zap.String("host", host),
+		zap.String("x_forwarded_proto", r.Header.Get("X-Forwarded-Proto")),
+		zap.String("x_forwarded_host", r.Header.Get("X-Forwarded-Host")),
+		zap.Time("expires_at", expirationTime))
+}
+
+// externalWSBase determines the external WebSocket base URL from request headers.
+// It prioritizes X-Forwarded-* headers (for Envoy/proxy scenarios) over direct request info.
+// Returns: (wsScheme, host)
+func externalWSBase(r *http.Request, fallbackHost string) (wsScheme string, host string) {
+	// 1) Determine protocol (http/https) from X-Forwarded-Proto
+	proto := r.Header.Get("X-Forwarded-Proto")
+	if proto == "" {
+		// Some Envoy configurations use this header
+		proto = r.Header.Get("X-Envoy-Original-Proto")
+	}
+	if proto == "" {
+		// Fallback to TLS detection
+		if r.TLS != nil {
+			proto = "https"
+		} else {
+			proto = "http"
+		}
+	}
+
+	// 2) Determine host from X-Forwarded-Host
+	host = r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	if host == "" {
+		host = fallbackHost
+	}
+
+	// X-Forwarded-Host can be comma-separated list (first one is the original)
+	if i := strings.Index(host, ","); i >= 0 {
+		host = strings.TrimSpace(host[:i])
+	}
+	host = strings.TrimSpace(host)
+
+	// 3) Convert HTTP protocol to WebSocket scheme
+	if strings.EqualFold(proto, "https") {
+		wsScheme = "wss"
+	} else {
+		wsScheme = "ws"
+	}
+
+	return wsScheme, host
+}
+
 // HandleVMDelete handles DELETE /api/vms/{uuid} - Delete VM
 func (h *Handler) HandleVMDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "DELETE" {
@@ -1059,12 +1293,21 @@ func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*webs
 
 	allowed := h.isOriginAllowed(origin)
 	if !allowed {
+		userAgent := r.Header.Get("User-Agent")
+		uaFamily := extractUAFamily(userAgent)
+		metrics.WebSocketUpgradeFailTotal.WithLabelValues("origin_not_allowed", uaFamily).Inc()
+
 		logger.Log.Warn("WebSocket origin not allowed",
 			zap.String("origin", origin),
 			zap.String("path", r.URL.Path),
 			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("user_agent", userAgent),
+			zap.String("ua_family", uaFamily),
 			zap.String("host", r.Host),
 			zap.String("referer", r.Header.Get("Referer")),
+			zap.String("sec_websocket_extensions", r.Header.Get("Sec-WebSocket-Extensions")),
+			zap.String("sec_websocket_protocol", r.Header.Get("Sec-WebSocket-Protocol")),
+			zap.String("x_forwarded_for", r.Header.Get("X-Forwarded-For")),
 			zap.Strings("allowed_origins", h.Config.AllowedOrigins))
 		return nil, fmt.Errorf("origin not allowed: %s", origin)
 	}
@@ -1087,6 +1330,17 @@ func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*webs
 		}
 	}
 
+	// WebSocket 압축 및 서브프로토콜 정보 로깅
+	secWebSocketExtensions := r.Header.Get("Sec-WebSocket-Extensions")
+	secWebSocketProtocol := r.Header.Get("Sec-WebSocket-Protocol")
+
+	logger.Log.Debug("WebSocket accept options",
+		zap.String("path", r.URL.Path),
+		zap.String("compression_mode", "CompressionContextTakeover"),
+		zap.String("requested_extensions", secWebSocketExtensions),
+		zap.String("requested_protocol", secWebSocketProtocol),
+		zap.Strings("origin_patterns", originPatterns))
+
 	opts := &websocket.AcceptOptions{
 		OriginPatterns:  originPatterns,
 		CompressionMode: websocket.CompressionContextTakeover, // Enable compression
@@ -1103,11 +1357,27 @@ func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*webs
 		r.Header.Set("Connection", "Upgrade")
 		logger.Log.Debug("Restored Connection header for WebSocket upgrade",
 			zap.String("path", r.URL.Path),
-			zap.String("upgrade", upgradeHeader))
+			zap.String("upgrade", upgradeHeader),
+			zap.String("user_agent", r.Header.Get("User-Agent")))
 	}
 
 	conn, err := websocket.Accept(w, r, opts)
 	if err != nil {
+		// WebSocket Accept 실패 상세 로깅 및 메트릭 기록
+		userAgent := r.Header.Get("User-Agent")
+		uaFamily := extractUAFamily(userAgent)
+		metrics.WebSocketUpgradeFailTotal.WithLabelValues("accept_failed", uaFamily).Inc()
+
+		logger.Log.Error("WebSocket Accept failed",
+			zap.Error(err),
+			zap.String("path", r.URL.Path),
+			zap.String("user_agent", userAgent),
+			zap.String("ua_family", uaFamily),
+			zap.String("origin", origin),
+			zap.String("sec_websocket_extensions", secWebSocketExtensions),
+			zap.String("sec_websocket_protocol", secWebSocketProtocol),
+			zap.String("upgrade", upgradeHeader),
+			zap.String("connection", connectionHeader))
 		return nil, err
 	}
 
@@ -1115,6 +1385,28 @@ func (h *Handler) acceptWebSocket(w http.ResponseWriter, r *http.Request) (*webs
 	conn.SetReadLimit(8192)
 
 	return conn, nil
+}
+
+// extractUAFamily extracts browser family from User-Agent string
+// Returns: chrome, firefox, safari, edge, opera, unknown
+func extractUAFamily(userAgent string) string {
+	ua := strings.ToLower(userAgent)
+	if strings.Contains(ua, "chrome") && !strings.Contains(ua, "edg") && !strings.Contains(ua, "opr") {
+		return "chrome"
+	}
+	if strings.Contains(ua, "firefox") {
+		return "firefox"
+	}
+	if strings.Contains(ua, "safari") && !strings.Contains(ua, "chrome") {
+		return "safari"
+	}
+	if strings.Contains(ua, "edg") {
+		return "edge"
+	}
+	if strings.Contains(ua, "opr") || strings.Contains(ua, "opera") {
+		return "opera"
+	}
+	return "unknown"
 }
 
 // isOriginAllowed checks if the given origin is in the allowed origins list.
@@ -1221,14 +1513,11 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Check beta access for VNC console (admin always has access)
-	// Get user ID from token or cookie
-	var userID uint
-	var username string
-	var role string
-	var betaAccess bool
+	// SECURITY: Token is REQUIRED for VNC WebSocket connections
+	// Exception: X-Limen-E2E: 1 header allows token-less connection for testing (only if E2E_MODE enabled)
+	forceE2E := featureflags.CheckE2EHeader(r.Header.Get("X-Limen-E2E"))
 
-	// Try to get from token first
+	// Get token from query parameter or Authorization header
 	token := r.URL.Query().Get("token")
 	if token == "" {
 		authHeader := r.Header.Get("Authorization")
@@ -1237,48 +1526,106 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if token != "" {
-		claims, err := auth.ValidateToken(token, h.Config.JWTSecret)
-		if err == nil {
-			userID = claims.UserID
-			username = claims.Username
-			role = claims.Role
-			betaAccess = claims.BetaAccess
+	// Validate token (unless E2E test mode)
+	var claims *auth.Claims
+	var tokenErr error
+	tokenPresent := token != ""
+
+	if tokenPresent {
+		claims, tokenErr = auth.ValidateToken(token, h.Config.JWTSecret)
+		if tokenErr != nil {
+			// Invalid token - log and reject
+			userAgent := r.Header.Get("User-Agent")
+			uaFamily := extractUAFamily(userAgent)
+			metrics.WebSocketUpgradeFailTotal.WithLabelValues("invalid_token", uaFamily).Inc()
+
+			logger.Log.Warn("VNC connection attempt with invalid token",
+				zap.String("remote_addr", r.RemoteAddr),
+				zap.String("user_agent", userAgent),
+				zap.String("ua_family", uaFamily),
+				zap.Error(tokenErr))
+
+			// For WebSocket, close with policy violation
+			if isWebSocketRequest {
+				w.Header().Set("Upgrade", "websocket")
+				w.Header().Set("Connection", "Upgrade")
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte("Invalid authentication token"))
+				return
+			}
+			http.Error(w, `{"type":"error","error":"Invalid authentication token","code":"INVALID_TOKEN"}`, http.StatusUnauthorized)
+			return
 		}
+	} else if !forceE2E {
+		// Missing token and not E2E test mode - reject
+		userAgent := r.Header.Get("User-Agent")
+		uaFamily := extractUAFamily(userAgent)
+		metrics.WebSocketUpgradeFailTotal.WithLabelValues("missing_token", uaFamily).Inc()
+
+		logger.Log.Warn("VNC connection attempt without token",
+			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("user_agent", userAgent),
+			zap.String("ua_family", uaFamily),
+			zap.String("path", r.URL.Path),
+			zap.Bool("e2e_header", forceE2E))
+
+		// For WebSocket, close with policy violation (1008)
+		if isWebSocketRequest {
+			w.Header().Set("Upgrade", "websocket")
+			w.Header().Set("Connection", "Upgrade")
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte("Authentication token required"))
+			return
+		}
+		http.Error(w, `{"type":"error","error":"Authentication token required","code":"AUTH_REQUIRED"}`, http.StatusUnauthorized)
+		return
 	}
 
-	// Fallback to refresh token cookie
-	if userID == 0 {
-		if cookie, err := r.Cookie("refresh_token"); err == nil {
-			refreshClaims, err := auth.ValidateRefreshToken(cookie.Value, h.Config.JWTSecret)
-			if err == nil {
-				userID = refreshClaims.UserID
-				username = refreshClaims.Username
-				role = refreshClaims.Role
-				betaAccess = refreshClaims.BetaAccess
-			}
+	// If E2E mode without token, create dummy claims for testing
+	if forceE2E && !tokenPresent {
+		claims = &auth.Claims{
+			UserID:     0,
+			Username:   "e2e-test",
+			Role:       "admin",
+			Approved:   true,
+			BetaAccess: true,
 		}
+		logger.Log.Info("VNC E2E test mode - token bypass enabled",
+			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("user_agent", r.Header.Get("User-Agent")))
 	}
 
 	// Check beta access (admin always has access)
-	if role != string(models.RoleAdmin) && !betaAccess {
-		// Fallback: check database
-		if userID > 0 {
-			var user models.User
-			if err := h.DB.Select("id", "beta_access", "role").Where("id = ?", userID).First(&user).Error; err == nil {
-				if user.Role != models.RoleAdmin && !user.BetaAccess {
-					logger.Log.Warn("VNC console access denied - beta access required",
-						zap.Uint("user_id", userID),
-						zap.String("username", username))
-					http.Error(w, `{"type":"error","error":"Beta access required to access console. Please contact administrator.","code":"BETA_ACCESS_REQUIRED"}`, http.StatusForbidden)
-					return
+	if claims != nil {
+		var userID uint
+		var username string
+		var role string
+		var betaAccess bool
+
+		userID = claims.UserID
+		username = claims.Username
+		role = claims.Role
+		betaAccess = claims.BetaAccess
+
+		if role != string(models.RoleAdmin) && !betaAccess {
+			// Fallback: check database
+			if userID > 0 {
+				var user models.User
+				if err := h.DB.Select("id", "beta_access", "role").Where("id = ?", userID).First(&user).Error; err == nil {
+					if user.Role != models.RoleAdmin && !user.BetaAccess {
+						logger.Log.Warn("VNC console access denied - beta access required",
+							zap.Uint("user_id", userID),
+							zap.String("username", username))
+						http.Error(w, `{"type":"error","error":"Beta access required to access console. Please contact administrator.","code":"BETA_ACCESS_REQUIRED"}`, http.StatusForbidden)
+						return
+					}
 				}
+			} else if !forceE2E {
+				// No user ID found and not E2E mode
+				logger.Log.Warn("VNC console access denied - authentication required")
+				http.Error(w, `{"type":"error","error":"Authentication required","code":"AUTH_REQUIRED"}`, http.StatusUnauthorized)
+				return
 			}
-		} else {
-			// No user ID found, deny access
-			logger.Log.Warn("VNC console access denied - authentication required")
-			http.Error(w, `{"type":"error","error":"Authentication required","code":"AUTH_REQUIRED"}`, http.StatusUnauthorized)
-			return
 		}
 	}
 
@@ -1286,135 +1633,108 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 	if h.Config.Env == "development" {
 		logger.Log.Debug("VNC WebSocket connection attempt",
 			zap.String("remote_addr", r.RemoteAddr),
-			zap.String("path", r.URL.Path))
+			zap.String("path", r.URL.Path),
+			zap.Bool("token_present", tokenPresent),
+			zap.Bool("e2e_mode", forceE2E))
 	}
 
-	// Verify authentication: Try multiple methods (query param, Authorization header, refresh token cookie)
-	// Note: token variable already declared above for beta access check
-	var claims *auth.Claims
-	var err error
+	// Token validation already completed above
+	// If we reach here, either:
+	// 1. Valid token was provided and validated (claims != nil)
+	// 2. E2E mode is enabled (forceE2E == true, claims created above)
+	// 3. Token was missing/invalid and request was already rejected
 
-	// 1. Try query parameter (for backward compatibility) - token already set above
-	if token == "" {
-		token = r.URL.Query().Get("token")
-	}
-	if token != "" {
-		claims, err = auth.ValidateToken(token, h.Config.JWTSecret)
-		if err == nil {
-			logger.Log.Debug("VNC authentication via query parameter")
+	// Check if user is approved (skip for E2E mode)
+	if claims != nil && !forceE2E {
+		if !claims.Approved && claims.Role != "admin" {
+			logger.Log.Warn("VNC connection attempt by unapproved user",
+				zap.Uint("user_id", claims.UserID),
+				zap.String("username", claims.Username))
+			http.Error(w, "Account pending approval", http.StatusForbidden)
+			return
 		}
-	}
-
-	// 2. Try Authorization header (preferred method from frontend)
-	if token == "" || err != nil {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader != "" {
-			token, err = auth.ExtractTokenFromHeader(authHeader)
-			if err == nil {
-				claims, err = auth.ValidateToken(token, h.Config.JWTSecret)
-				if err == nil {
-					logger.Log.Debug("VNC authentication via Authorization header")
-				}
-			}
-		}
-	}
-
-	// 3. Try refresh token cookie (for session-based auth)
-	if token == "" || err != nil {
-		if cookie, cookieErr := r.Cookie("refresh_token"); cookieErr == nil {
-			// Only log in development
-			if h.Config.Env == "development" {
-				logger.Log.Debug("VNC: refresh_token cookie found, attempting authentication")
-			}
-			refreshClaims, refreshErr := auth.ValidateRefreshToken(cookie.Value, h.Config.JWTSecret)
-			if refreshErr != nil {
-				logger.Log.Warn("VNC: refresh token validation failed",
-					zap.Error(refreshErr),
-					zap.String("cookie_preview", cookie.Value[:min(20, len(cookie.Value))]+"..."))
-			} else {
-				sessionStore := auth.GetSessionStore()
-				_, exists := sessionStore.GetSessionByRefreshToken(cookie.Value)
-				if !exists {
-					logger.Log.Warn("VNC: refresh token not found in session store",
-						zap.Uint("user_id", refreshClaims.UserID))
-				} else {
-					// Generate new access token from refresh token
-					token, err = auth.GenerateAccessToken(refreshClaims.UserID, refreshClaims.Username, refreshClaims.Role, refreshClaims.Approved, h.Config.JWTSecret)
-					if err == nil {
-						claims = &auth.Claims{
-							UserID:   refreshClaims.UserID,
-							Username: refreshClaims.Username,
-							Role:     refreshClaims.Role,
-							Approved: refreshClaims.Approved,
-						}
-						// Only log in development
-						if h.Config.Env == "development" {
-							logger.Log.Debug("VNC authentication via refresh token cookie - SUCCESS",
-								zap.Uint("user_id", claims.UserID))
-						}
-					} else {
-						logger.Log.Warn("VNC: failed to generate access token from refresh token",
-							zap.Error(err))
-					}
-				}
-			}
-		} else {
-			logger.Log.Debug("VNC: no refresh_token cookie found",
-				zap.Error(cookieErr))
-		}
-	}
-
-	// Token is REQUIRED for production security
-	if token == "" || err != nil {
-		logger.Log.Warn("VNC connection attempt without valid token",
-			zap.String("remote_addr", r.RemoteAddr),
-			zap.String("user_agent", r.Header.Get("User-Agent")),
-			zap.String("referer", r.Header.Get("Referer")),
-			zap.String("origin", r.Header.Get("Origin")),
-			zap.Bool("has_auth_header", r.Header.Get("Authorization") != ""),
-			zap.Bool("has_refresh_cookie", func() bool { _, err := r.Cookie("refresh_token"); return err == nil }()),
-			zap.Error(err))
-		http.Error(w, "Authentication token required", http.StatusUnauthorized)
-		return
-	}
-
-	// Check if user is approved
-	if !claims.Approved && claims.Role != "admin" {
-		logger.Log.Warn("VNC connection attempt by unapproved user",
-			zap.Uint("user_id", claims.UserID),
-			zap.String("username", claims.Username))
-		http.Error(w, "Account pending approval", http.StatusForbidden)
-		return
 	}
 
 	// Only log in development
-	if h.Config.Env == "development" {
+	if h.Config.Env == "development" && claims != nil {
 		logger.Log.Debug("VNC connection authenticated",
 			zap.Uint("user_id", claims.UserID),
 			zap.String("role", claims.Role))
 	}
 
-	// Only log in development
-	if h.Config.Env == "development" {
-		logger.Log.Debug("Attempting WebSocket upgrade",
-			zap.String("path", r.URL.Path),
-			zap.Uint("user_id", claims.UserID))
+	// WebSocket 핸드셰이크 상세 로깅 (브라우저별 실패 진단용)
+	logFields := []zap.Field{
+		zap.String("path", r.URL.Path),
+		zap.String("query", r.URL.RawQuery),
+		zap.String("method", r.Method),
+		zap.String("remote_addr", r.RemoteAddr),
+		zap.String("user_agent", r.Header.Get("User-Agent")),
+		zap.String("origin", r.Header.Get("Origin")),
+		zap.String("upgrade", r.Header.Get("Upgrade")),
+		zap.String("connection", r.Header.Get("Connection")),
+		zap.String("sec_websocket_key", r.Header.Get("Sec-WebSocket-Key")),
+		zap.String("sec_websocket_version", r.Header.Get("Sec-WebSocket-Version")),
+		zap.String("sec_websocket_protocol", r.Header.Get("Sec-WebSocket-Protocol")),
+		zap.String("sec_websocket_extensions", r.Header.Get("Sec-WebSocket-Extensions")),
+		zap.String("x_forwarded_for", r.Header.Get("X-Forwarded-For")),
+		zap.String("referer", r.Header.Get("Referer")),
+		zap.Bool("token_present", tokenPresent),
+		zap.Bool("e2e_mode", forceE2E),
 	}
+	if claims != nil {
+		logFields = append(logFields,
+			zap.Uint("user_id", claims.UserID),
+			zap.String("username", claims.Username))
+	}
+	logger.Log.Info("WebSocket handshake attempt - DETAILED", logFields...)
 
 	ws, err := h.acceptWebSocket(w, r)
 	if err != nil {
-		logger.Log.Error("WebSocket accept failed - DETAILED",
+		// WebSocket 업그레이드 실패 상세 로깅 및 메트릭 기록
+		closeCode := websocket.StatusNormalClosure
+		if wsErr, ok := err.(websocket.CloseError); ok {
+			closeCode = wsErr.Code
+		}
+
+		userAgent := r.Header.Get("User-Agent")
+		uaFamily := extractUAFamily(userAgent)
+
+		// 실패 이유 추출
+		reason := "accept_failed"
+		if strings.Contains(err.Error(), "origin not allowed") {
+			reason = "origin_not_allowed"
+		} else if strings.Contains(err.Error(), "invalid") {
+			reason = "invalid_request"
+		}
+
+		metrics.WebSocketUpgradeFailTotal.WithLabelValues(reason, uaFamily).Inc()
+
+		errorLogFields := []zap.Field{
 			zap.Error(err),
 			zap.String("path", r.URL.Path),
 			zap.String("query", r.URL.RawQuery),
 			zap.String("remote_addr", r.RemoteAddr),
-			zap.String("user_agent", r.Header.Get("User-Agent")),
+			zap.String("user_agent", userAgent),
+			zap.String("ua_family", uaFamily),
 			zap.String("origin", r.Header.Get("Origin")),
 			zap.String("upgrade_header", r.Header.Get("Upgrade")),
 			zap.String("connection_header", r.Header.Get("Connection")),
-			zap.Uint("user_id", claims.UserID),
-			zap.String("username", claims.Username),
-			zap.String("error_type", fmt.Sprintf("%T", err)))
+			zap.String("sec_websocket_key", r.Header.Get("Sec-WebSocket-Key")),
+			zap.String("sec_websocket_version", r.Header.Get("Sec-WebSocket-Version")),
+			zap.String("sec_websocket_protocol", r.Header.Get("Sec-WebSocket-Protocol")),
+			zap.String("sec_websocket_extensions", r.Header.Get("Sec-WebSocket-Extensions")),
+			zap.String("x_forwarded_for", r.Header.Get("X-Forwarded-For")),
+			zap.Int("close_code", int(closeCode)),
+			zap.String("failure_reason", reason),
+			zap.String("error_type", fmt.Sprintf("%T", err)),
+		}
+		if claims != nil {
+			errorLogFields = append(errorLogFields,
+				zap.Uint("user_id", claims.UserID),
+				zap.String("username", claims.Username))
+		}
+		logger.Log.Error("WebSocket accept failed - DETAILED", errorLogFields...)
+
 		http.Error(w, fmt.Sprintf("WebSocket accept failed: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -1453,7 +1773,11 @@ func (h *Handler) HandleVNC(w http.ResponseWriter, r *http.Request) {
 		zap.String("path", r.URL.Path),
 		zap.String("query", r.URL.RawQuery),
 		zap.String("remote_addr", r.RemoteAddr),
+		zap.String("user_agent", r.Header.Get("User-Agent")),
 		zap.String("origin", r.Header.Get("Origin")),
+		zap.String("sec_websocket_protocol", r.Header.Get("Sec-WebSocket-Protocol")),
+		zap.String("sec_websocket_extensions", r.Header.Get("Sec-WebSocket-Extensions")),
+		zap.String("x_forwarded_for", r.Header.Get("X-Forwarded-For")),
 		zap.Uint("user_id", claims.UserID),
 		zap.String("username", claims.Username))
 

@@ -47,3 +47,5 @@ func main() {
 	fmt.Printf("✅ Successfully deleted %d VMs from database\n", count)
 }
 
+
+

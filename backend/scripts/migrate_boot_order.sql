@@ -36,3 +36,5 @@ CREATE INDEX IF NOT EXISTS idx_vm_installation_status ON vms(installation_status
 CREATE INDEX IF NOT EXISTS idx_vm_boot_order ON vms(boot_order);
 
 
+
+

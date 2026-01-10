@@ -115,3 +115,5 @@ logger.Log.Info("VM status broadcasted via WebSocket", zap.String("vm_name", vmR
 2. **상태 동기화 재시도 로직**: DB 저장 실패 시 재시도 메커니즘 추가
 3. **상태 불일치 감지**: libvirt 상태와 DB 상태가 불일치할 경우 자동 동기화
 
+
+

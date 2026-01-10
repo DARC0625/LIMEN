@@ -145,6 +145,7 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *chi.Mux {
 	api.Delete("/vms/{uuid}", h.HandleVMDelete)
 	api.Post("/vms/{uuid}/action", h.HandleVMAction)
 	api.Get("/vms/{uuid}/stats", h.HandleVMStats)
+	api.Get("/vms/{uuid}/console", h.HandleVMConsole)
 	api.Get("/vms/{uuid}/media", h.HandleVMMedia)
 	api.Post("/vms/{uuid}/media", h.HandleVMMedia)
 	api.Get("/vms/{uuid}/boot-order", h.HandleGetVMBootOrder)

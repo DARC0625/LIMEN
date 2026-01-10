@@ -66,6 +66,11 @@ type Config struct {
 	AlertEmailFrom     string   // Email sender address
 	AlertEmailTo       []string // Email recipient addresses
 	AlertDedupWindow   int      // Deduplication window in minutes
+
+	// VM Minimum Resource Configuration (안전장치: 최소 리소스 강제)
+	VMMinVCPU      int // Minimum CPU cores (default: 2)
+	VMMinMemMB     int // Minimum memory in MB for Linux VMs (default: 2048)
+	VMMinMemMBISO  int // Minimum memory in MB for Windows/ISO VMs (default: 4096)
 }
 
 // Load reads environment variables and returns a Config instance.
@@ -108,6 +113,11 @@ func Load() *Config {
 		AlertEmailSMTPPass: getEnv("ALERT_EMAIL_SMTP_PASS", ""),
 		AlertEmailFrom:     getEnv("ALERT_EMAIL_FROM", ""),
 		AlertDedupWindow:   parseInt(getEnv("ALERT_DEDUP_WINDOW", "5"), 5),
+
+		// VM Minimum Resource Configuration (안전장치)
+		VMMinVCPU:     parseInt(getEnv("VM_MIN_VCPU", "2"), 2),           // Minimum 2 CPU cores
+		VMMinMemMB:    parseInt(getEnv("VM_MIN_MEM_MB", "2048"), 2048),   // Minimum 2GB for Linux
+		VMMinMemMBISO: parseInt(getEnv("VM_MIN_MEM_MB_ISO", "4096"), 4096), // Minimum 4GB for Windows/ISO
 	}
 
 	// Build DatabaseURL from components
