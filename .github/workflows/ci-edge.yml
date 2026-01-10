@@ -1,0 +1,58 @@
+name: CI Edge (Frontend)
+
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - "config/**"
+      - "infra/**"
+      - "scripts/**"
+      - "RAG/**"
+      - ".github/workflows/**"
+  push:
+    branches: ["main"]
+    paths:
+      - "frontend/**"
+      - "config/**"
+      - "infra/**"
+      - "scripts/**"
+      - "RAG/**"
+      - ".github/workflows/**"
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies (npm)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests (PR=smoke, main=ci)
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            npm run test:smoke
+          else
+            npm run test:ci
+          fi

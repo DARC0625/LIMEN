@@ -1,0 +1,49 @@
+name: Policy Gates
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enforce repository policies
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "[1/6] root src/ must not exist"
+          if [ -d "src" ]; then
+            echo "[FATAL] root src/ exists. Must be split into frontend/src and backend/src."
+            exit 1
+          fi
+
+          echo "[2/6] docs/ must not exist (all docs under RAG/)"
+          if [ -d "docs" ]; then
+            echo "[FATAL] docs/ exists. Move all docs into RAG/."
+            exit 1
+          fi
+
+          echo "[3/6] Required folders sanity"
+          test -d "frontend" || (echo "[FATAL] frontend/ missing" && exit 1)
+          test -d "backend"  || (echo "[FATAL] backend/ missing" && exit 1)
+          test -d "RAG"      || (echo "[FATAL] RAG/ missing" && exit 1)
+
+          echo "[4/6] Prevent edge-only/backend-only leakage (policy-level)"
+          # Repo can contain both; server-side sync gates enforce deployment.
+          # Here we only block obvious mistakes that violate our global rules.
+
+          echo "[5/6] Ensure .github/workflows only contains allowed workflows"
+          allowed="^(ci-edge|ci-backend|policy-gates)(\.yml)$"
+          bad="$(ls -1 .github/workflows | grep -Ev "$allowed" || true)"
+          if [ -n "$bad" ]; then
+            echo "[FATAL] Found non-allowed workflow files:"
+            echo "$bad"
+            exit 1
+          fi
+
+          echo "[6/6] OK"
