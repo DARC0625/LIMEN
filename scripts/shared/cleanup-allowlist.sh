@@ -16,7 +16,8 @@ cleanup_allowlist() {
   fi
 
   # Build allow regex (anchored)
-  local allow_regex="^($(printf "%s|" "$@" | sed 's/|$//'))(/|$)"
+  # Escape dots in filenames for regex matching
+  local allow_regex="^($(printf "%s|" "$@" | sed 's/\./\\./g' | sed 's/|$//'))(/|$)"
   if [[ -z "${allow_regex}" || "${allow_regex}" == "^()(/|$)" ]]; then
     echo "[FATAL] Empty allowlist"
     exit 1
