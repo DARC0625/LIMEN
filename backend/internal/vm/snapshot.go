@@ -10,7 +10,6 @@ import (
 
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
-	"github.com/libvirt/libvirt-go"
 	"go.uber.org/zap"
 )
 

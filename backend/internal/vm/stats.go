@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/libvirt/libvirt-go"
 )
 
 // VMStats represents VM resource usage statistics
