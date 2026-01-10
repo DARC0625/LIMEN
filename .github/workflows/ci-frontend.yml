@@ -1,23 +1,21 @@
-name: CI Edge (Frontend)
+name: CI Frontend
 
 on:
   pull_request:
     paths:
       - "frontend/**"
-      - "config/**"
-      - "infra/**"
-      - "scripts/**"
-      - "RAG/**"
-      - ".github/workflows/**"
+      - "config/**"        # 프론트가 의존하면 포함
+      - "infra/**"         # 프론트가 의존하면 포함
+      - "scripts/shared/**"
+      - ".github/workflows/ci-frontend.yml"
   push:
-    branches: ["main"]
+    branches: [ main ]
     paths:
       - "frontend/**"
       - "config/**"
       - "infra/**"
-      - "scripts/**"
-      - "RAG/**"
-      - ".github/workflows/**"
+      - "scripts/shared/**"
+      - ".github/workflows/ci-frontend.yml"
 
 jobs:
   frontend:

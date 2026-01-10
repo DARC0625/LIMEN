@@ -38,7 +38,7 @@ jobs:
           # Here we only block obvious mistakes that violate our global rules.
 
           echo "[5/6] Ensure .github/workflows only contains allowed workflows"
-          allowed="^(ci-edge|ci-backend|policy-gates)(\.yml|\.yaml)$"
+          allowed="^(ci-frontend|ci-backend|policy-gates)(\.yml|\.yaml)$"
           bad="$(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -printf '%f\n' | grep -Ev "$allowed" || true)"
           if [ -n "$bad" ]; then
             echo "[FATAL] Found non-allowed workflow files:"
