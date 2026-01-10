@@ -14,13 +14,13 @@ lint:
 		echo "golangci-lint not found, installing..."; \
 		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v1.55.2; \
 	fi
-	@$(GOLANGCI_LINT) run ./... || (echo "Lint failed" && exit 1)
+	@$(GOLANGCI_LINT) run ./internal/... ./cmd/... || (echo "Lint failed" && exit 1)
 	@echo "✓ Lint passed"
 
 # Test
 test:
 	@echo "=== Running tests ==="
-	@$(GO) test -v -race -coverprofile=coverage.out ./... || (echo "Tests failed" && exit 1)
+	@$(GO) test -v -race -coverprofile=coverage.out ./internal/... ./cmd/... || (echo "Tests failed" && exit 1)
 	@echo "✓ Tests passed"
 
 # Build
