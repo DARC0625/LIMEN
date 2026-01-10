@@ -23,7 +23,7 @@ func (s *VMService) CreateSnapshot(vmID uint, snapshotName, description string) 
 	}
 
 	// Get libvirt domain
-	dom, err := s.conn.LookupDomainByName(vm.Name)
+	dom, err := s.driver.LookupDomainByName(vm.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to lookup domain: %w", err)
 	}
@@ -44,7 +44,7 @@ func (s *VMService) CreateSnapshot(vmID uint, snapshotName, description string) 
 `, snapshotUUID, description)
 
 	// Create snapshot flags
-	flags := libvirt.DOMAIN_SNAPSHOT_CREATE_ATOMIC | libvirt.DOMAIN_SNAPSHOT_CREATE_DISK_ONLY
+	flags := SnapshotCreateAtomic | SnapshotCreateDiskOnly
 
 	// Create snapshot
 	snap, err := dom.CreateSnapshotXML(snapshotXML, flags)

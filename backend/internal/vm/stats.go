@@ -22,7 +22,7 @@ type VMStats struct {
 
 // GetVMStats retrieves current resource usage statistics for a VM
 func (s *VMService) GetVMStats(vmName string) (*VMStats, error) {
-	dom, err := s.conn.LookupDomainByName(vmName)
+	dom, err := s.driver.LookupDomainByName(vmName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to lookup domain: %v", err)
 	}

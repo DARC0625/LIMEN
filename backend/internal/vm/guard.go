@@ -1,6 +1,3 @@
-//go:build libvirt
-// +build libvirt
-
 // Package vm provides concurrency and timeout guards for libvirt operations.
 package vm
 

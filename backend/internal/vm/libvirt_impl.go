@@ -94,6 +94,14 @@ func (d *libvirtDomain) GetXMLDesc(flags uint32) (string, error) {
 	return d.dom.GetXMLDesc(libvirt.DomainXMLFlags(flags))
 }
 
+func (d *libvirtDomain) GetXMLDescInactive() (string, error) {
+	return d.dom.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
+}
+
+func (d *libvirtDomain) GetXMLDescSecure() (string, error) {
+	return d.dom.GetXMLDesc(libvirt.DOMAIN_XML_SECURE)
+}
+
 func (d *libvirtDomain) Create() error {
 	return d.dom.Create()
 }
@@ -115,11 +123,11 @@ func (d *libvirtDomain) Undefine() error {
 }
 
 func (d *libvirtDomain) SetVcpusFlags(vcpu uint, flags uint32) error {
-	return d.dom.SetVcpusFlags(libvirt.DomainVcpuFlags(flags), int(vcpu))
+	return d.dom.SetVcpusFlags(vcpu, libvirt.DomainVcpuFlags(flags))
 }
 
 func (d *libvirtDomain) SetMemoryFlags(memory uint64, flags uint32) error {
-	return d.dom.SetMemoryFlags(libvirt.DomainMemoryModFlags(flags), uint(memory))
+	return d.dom.SetMemoryFlags(memory, libvirt.DomainMemoryModFlags(flags))
 }
 
 func (d *libvirtDomain) GetVcpusFlags(flags uint32) (int, error) {
