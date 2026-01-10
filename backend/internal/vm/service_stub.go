@@ -119,9 +119,38 @@ func (s *VMService) ListVMs() ([]string, error) {
 }
 
 // GetCurrentMedia gets the current media for a VM (stub: returns error)
-// This method may not exist in service.go, but handlers may call it
-func (s *VMService) GetCurrentMedia(vmID uint) (string, error) {
+func (s *VMService) GetCurrentMedia(name string) (string, error) {
 	return "", fmt.Errorf("libvirt not available: GetCurrentMedia requires libvirt build tag")
+}
+
+// GetVNCPort gets the VNC port for a VM (stub: returns error)
+func (s *VMService) GetVNCPort(name string) (int, error) {
+	return 0, fmt.Errorf("libvirt not available: GetVNCPort requires libvirt build tag")
+}
+
+// ListISOs lists available ISO files (stub: returns empty list)
+func (s *VMService) ListISOs() ([]string, error) {
+	return []string{}, nil
+}
+
+// DetachMedia detaches media from a VM (stub: returns error)
+func (s *VMService) DetachMedia(name string) error {
+	return fmt.Errorf("libvirt not available: DetachMedia requires libvirt build tag")
+}
+
+// AttachMedia attaches media to a VM (stub: returns error)
+func (s *VMService) AttachMedia(name string, isoPath string) error {
+	return fmt.Errorf("libvirt not available: AttachMedia requires libvirt build tag")
+}
+
+// SetBootOrder sets the boot order for a VM (stub: returns error)
+func (s *VMService) SetBootOrder(name string, bootOrder models.BootOrder) error {
+	return fmt.Errorf("libvirt not available: SetBootOrder requires libvirt build tag")
+}
+
+// FinalizeInstall finalizes VM installation (stub: returns error)
+func (s *VMService) FinalizeInstall(name string) error {
+	return fmt.Errorf("libvirt not available: FinalizeInstall requires libvirt build tag")
 }
 
 // UpdateVM updates a VM (stub: returns error)
