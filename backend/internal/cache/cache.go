@@ -7,8 +7,8 @@ import (
 
 // CacheItem represents a cached item with expiration time
 type CacheItem struct {
-	Value      interface{}
-	ExpiresAt  time.Time
+	Value     interface{}
+	ExpiresAt time.Time
 }
 
 // IsExpired checks if the cache item has expired
@@ -29,10 +29,10 @@ func NewInMemoryCache(ttl time.Duration) *InMemoryCache {
 		items: make(map[string]*CacheItem),
 		ttl:   ttl,
 	}
-	
+
 	// Start background cleanup goroutine
 	go cache.cleanup()
-	
+
 	return cache
 }
 
@@ -40,12 +40,12 @@ func NewInMemoryCache(ttl time.Duration) *InMemoryCache {
 func (c *InMemoryCache) Get(key string) (interface{}, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	item, exists := c.items[key]
 	if !exists || item.IsExpired() {
 		return nil, false
 	}
-	
+
 	return item.Value, true
 }
 
@@ -58,7 +58,7 @@ func (c *InMemoryCache) Set(key string, value interface{}) {
 func (c *InMemoryCache) SetWithTTL(key string, value interface{}, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	c.items[key] = &CacheItem{
 		Value:     value,
 		ExpiresAt: time.Now().Add(ttl),
@@ -69,7 +69,7 @@ func (c *InMemoryCache) SetWithTTL(key string, value interface{}, ttl time.Durat
 func (c *InMemoryCache) Delete(key string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	delete(c.items, key)
 }
 
@@ -77,7 +77,7 @@ func (c *InMemoryCache) Delete(key string) {
 func (c *InMemoryCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	c.items = make(map[string]*CacheItem)
 }
 
@@ -85,7 +85,7 @@ func (c *InMemoryCache) Clear() {
 func (c *InMemoryCache) cleanup() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
-	
+
 	for range ticker.C {
 		c.mu.Lock()
 		for key, item := range c.items {
@@ -101,7 +101,7 @@ func (c *InMemoryCache) cleanup() {
 func (c *InMemoryCache) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	return len(c.items)
 }
 
@@ -109,27 +109,18 @@ func (c *InMemoryCache) Size() int {
 func (c *InMemoryCache) Stats() map[string]interface{} {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	expired := 0
 	for _, item := range c.items {
 		if item.IsExpired() {
 			expired++
 		}
 	}
-	
+
 	return map[string]interface{}{
-		"total_items": len(c.items),
+		"total_items":   len(c.items),
 		"expired_items": expired,
-		"active_items": len(c.items) - expired,
-		"ttl_seconds": c.ttl.Seconds(),
+		"active_items":  len(c.items) - expired,
+		"ttl_seconds":   c.ttl.Seconds(),
 	}
 }
-
-
-
-
-
-
-
-
-

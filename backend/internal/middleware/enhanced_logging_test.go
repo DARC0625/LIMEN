@@ -112,9 +112,9 @@ func TestEnhancedLogging_ServerError(t *testing.T) {
 
 func TestExtractTokenFromRequest(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		authHeader string
-		want      string
+		want       string
 	}{
 		{
 			name:       "Valid Bearer token",
@@ -297,4 +297,3 @@ func TestEnhancedResponseWriter_Write_LargeBody(t *testing.T) {
 		t.Errorf("Write() written = %v, want %v", rw.written, len(largeData))
 	}
 }
-

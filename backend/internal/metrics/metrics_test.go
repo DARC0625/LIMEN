@@ -87,4 +87,3 @@ func TestUpdateVMMetrics_MultipleStatuses(t *testing.T) {
 	UpdateVMMetrics(vmCountByStatus, cpuByStatus, memoryByStatus)
 	// Should not panic
 }
-

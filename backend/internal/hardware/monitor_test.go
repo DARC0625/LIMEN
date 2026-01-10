@@ -51,4 +51,3 @@ func TestStopMonitor_WhenRunning(t *testing.T) {
 		t.Error("Monitor should be stopped after StopMonitor()")
 	}
 }
-

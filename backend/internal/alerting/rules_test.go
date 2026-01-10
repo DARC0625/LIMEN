@@ -190,4 +190,3 @@ func TestProcessAliveRule_Check_EmptyPIDFile(t *testing.T) {
 		t.Errorf("ProcessAliveRule.Check() should return nil when PID file is empty, got alert")
 	}
 }
-

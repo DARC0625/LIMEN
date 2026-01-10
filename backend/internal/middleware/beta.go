@@ -71,4 +71,3 @@ func BetaAccess(cfg *config.Config) func(http.Handler) http.Handler {
 		})
 	}
 }
-

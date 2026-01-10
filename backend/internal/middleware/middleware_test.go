@@ -216,22 +216,22 @@ func TestRequestID(t *testing.T) {
 
 func TestGetRequestID(t *testing.T) {
 	tests := []struct {
-		name    string
-		ctx     context.Context
-		want    string
-		wantOk  bool
+		name   string
+		ctx    context.Context
+		want   string
+		wantOk bool
 	}{
 		{
-			name:    "With request ID",
-			ctx:      context.WithValue(context.Background(), RequestIDKey, "test-id"),
-			want:     "test-id",
-			wantOk:   true,
+			name:   "With request ID",
+			ctx:    context.WithValue(context.Background(), RequestIDKey, "test-id"),
+			want:   "test-id",
+			wantOk: true,
 		},
 		{
-			name:    "Without request ID",
-			ctx:      context.Background(),
-			want:     "",
-			wantOk:   false,
+			name:   "Without request ID",
+			ctx:    context.Background(),
+			want:   "",
+			wantOk: false,
 		},
 	}
 
@@ -283,9 +283,9 @@ func TestRecovery(t *testing.T) {
 
 func TestSecurityHeaders(t *testing.T) {
 	tests := []struct {
-		name    string
-		isHTTPS bool
-		proto   string
+		name     string
+		isHTTPS  bool
+		proto    string
 		wantHSTS bool
 	}{
 		{
@@ -510,22 +510,22 @@ func TestAdmin(t *testing.T) {
 
 func TestGetRole(t *testing.T) {
 	tests := []struct {
-		name    string
-		ctx     context.Context
-		want    string
-		wantOk  bool
+		name   string
+		ctx    context.Context
+		want   string
+		wantOk bool
 	}{
 		{
-			name:    "With role",
-			ctx:      context.WithValue(context.Background(), RoleKey, "admin"),
-			want:     "admin",
-			wantOk:   true,
+			name:   "With role",
+			ctx:    context.WithValue(context.Background(), RoleKey, "admin"),
+			want:   "admin",
+			wantOk: true,
 		},
 		{
-			name:    "Without role",
-			ctx:      context.Background(),
-			want:     "",
-			wantOk:   false,
+			name:   "Without role",
+			ctx:    context.Background(),
+			want:   "",
+			wantOk: false,
 		},
 	}
 
@@ -574,4 +574,3 @@ func TestIsAdmin(t *testing.T) {
 		})
 	}
 }
-

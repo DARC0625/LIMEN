@@ -111,11 +111,3 @@ func (h *Handler) HandleLogSearch(w http.ResponseWriter, r *http.Request, cfg *c
 		logger.Log.Error("Failed to encode log entries", zap.Error(err))
 	}
 }
-
-
-
-
-
-
-
-

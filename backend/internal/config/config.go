@@ -28,8 +28,8 @@ type Config struct {
 	LibvirtURI string // Libvirt connection URI
 
 	// File System Paths
-	ISODir string // ISO images directory
-	VMDir  string // VM disk images directory
+	ISODir  string // ISO images directory
+	VMDir   string // VM disk images directory
 	RAGPath string // RAG documents directory
 
 	// Security Configuration
@@ -68,9 +68,9 @@ type Config struct {
 	AlertDedupWindow   int      // Deduplication window in minutes
 
 	// VM Minimum Resource Configuration (안전장치: 최소 리소스 강제)
-	VMMinVCPU      int // Minimum CPU cores (default: 2)
-	VMMinMemMB     int // Minimum memory in MB for Linux VMs (default: 2048)
-	VMMinMemMBISO  int // Minimum memory in MB for Windows/ISO VMs (default: 4096)
+	VMMinVCPU     int // Minimum CPU cores (default: 2)
+	VMMinMemMB    int // Minimum memory in MB for Linux VMs (default: 2048)
+	VMMinMemMBISO int // Minimum memory in MB for Windows/ISO VMs (default: 4096)
 }
 
 // Load reads environment variables and returns a Config instance.
@@ -115,8 +115,8 @@ func Load() *Config {
 		AlertDedupWindow:   parseInt(getEnv("ALERT_DEDUP_WINDOW", "5"), 5),
 
 		// VM Minimum Resource Configuration (안전장치)
-		VMMinVCPU:     parseInt(getEnv("VM_MIN_VCPU", "2"), 2),           // Minimum 2 CPU cores
-		VMMinMemMB:    parseInt(getEnv("VM_MIN_MEM_MB", "2048"), 2048),   // Minimum 2GB for Linux
+		VMMinVCPU:     parseInt(getEnv("VM_MIN_VCPU", "2"), 2),             // Minimum 2 CPU cores
+		VMMinMemMB:    parseInt(getEnv("VM_MIN_MEM_MB", "2048"), 2048),     // Minimum 2GB for Linux
 		VMMinMemMBISO: parseInt(getEnv("VM_MIN_MEM_MB_ISO", "4096"), 4096), // Minimum 4GB for Windows/ISO
 	}
 

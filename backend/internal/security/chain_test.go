@@ -194,4 +194,3 @@ func TestSecurityChain_WeakLinks(t *testing.T) {
 		}
 	}
 }
-

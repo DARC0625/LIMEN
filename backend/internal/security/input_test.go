@@ -128,4 +128,3 @@ func TestValidateInput_ControlCharacters(t *testing.T) {
 		})
 	}
 }
-

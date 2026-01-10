@@ -11,7 +11,7 @@ import (
 type VMCreationLimiter struct {
 	mu              sync.RWMutex
 	userLastRequest map[uint]time.Time // userID -> last request time
-	minInterval     time.Duration       // Minimum interval between requests (default: 30 seconds)
+	minInterval     time.Duration      // Minimum interval between requests (default: 30 seconds)
 }
 
 var (
@@ -48,4 +48,3 @@ type RateLimitError struct {
 func (e *RateLimitError) Error() string {
 	return fmt.Sprintf("%s. Please wait %v before creating another VM.", e.Message, e.RetryAfter.Round(time.Second))
 }
-

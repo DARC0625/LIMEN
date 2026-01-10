@@ -12,7 +12,7 @@ import (
 // RAGClient RAG 클라이언트
 type RAGClient struct {
 	RAGPath     string
-	DocsPath   string
+	DocsPath    string
 	VectorsPath string
 	IndexPath   string
 }
@@ -299,12 +299,3 @@ func extractCategory(path string) string {
 	}
 	return "other"
 }
-
-
-
-
-
-
-
-
-

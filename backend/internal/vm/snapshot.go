@@ -134,10 +134,10 @@ func (s *VMService) RestoreSnapshot(snapshotID uint) error {
 		// Wait for VM to shut down (max 30 seconds)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		
+
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
-		
+
 		for {
 			select {
 			case <-ctx.Done():

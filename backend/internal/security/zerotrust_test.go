@@ -370,16 +370,16 @@ func TestRedactSensitiveFields(t *testing.T) {
 		{
 			name: "Multiple sensitive fields",
 			data: map[string]interface{}{
-				"password":      "secret",
-				"access_token":  "token123",
-				"api_key":       "key456",
-				"normal_field":  "value",
+				"password":     "secret",
+				"access_token": "token123",
+				"api_key":      "key456",
+				"normal_field": "value",
 			},
 			want: map[string]interface{}{
-				"password":      "[REDACTED]",
-				"access_token":  "[REDACTED]",
-				"api_key":       "[REDACTED]",
-				"normal_field":  "value",
+				"password":     "[REDACTED]",
+				"access_token": "[REDACTED]",
+				"api_key":      "[REDACTED]",
+				"normal_field": "value",
 			},
 		},
 	}
@@ -408,4 +408,3 @@ func TestSecurityError(t *testing.T) {
 		t.Errorf("SecurityError.Error() = %v, want 'Invalid input detected'", err2.Error())
 	}
 }
-

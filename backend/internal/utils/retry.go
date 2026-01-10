@@ -11,21 +11,21 @@ import (
 
 // RetryConfig configures retry behavior
 type RetryConfig struct {
-	MaxAttempts      int
-	InitialDelay     time.Duration
-	MaxDelay         time.Duration
+	MaxAttempts       int
+	InitialDelay      time.Duration
+	MaxDelay          time.Duration
 	BackoffMultiplier float64
-	Logger           *zap.Logger
+	Logger            *zap.Logger
 }
 
 // DefaultRetryConfig returns a default retry configuration
 func DefaultRetryConfig() RetryConfig {
 	return RetryConfig{
-		MaxAttempts:      3,
-		InitialDelay:     100 * time.Millisecond,
-		MaxDelay:         5 * time.Second,
+		MaxAttempts:       3,
+		InitialDelay:      100 * time.Millisecond,
+		MaxDelay:          5 * time.Second,
 		BackoffMultiplier: 2.0,
-		Logger:           nil,
+		Logger:            nil,
 	}
 }
 
@@ -96,11 +96,3 @@ func RetryWithTimeout(ctx context.Context, fn func() error, config RetryConfig, 
 
 	return Retry(timeoutCtx, fn, config)
 }
-
-
-
-
-
-
-
-

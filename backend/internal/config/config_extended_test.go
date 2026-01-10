@@ -213,4 +213,3 @@ func TestLoad_EmptyAlertEmailTo(t *testing.T) {
 		t.Errorf("Expected empty alert email recipients, got %d", len(cfg.AlertEmailTo))
 	}
 }
-

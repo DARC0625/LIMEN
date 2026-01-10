@@ -22,24 +22,24 @@ func TestConnect_ConnectionPoolSettings(t *testing.T) {
 			sqlDB.Close()
 		}
 	}()
-	
+
 	sqlDB, err := db.DB()
 	if err != nil {
 		t.Fatalf("Failed to get underlying sql.DB: %v", err)
 	}
-	
+
 	// Test connection pool settings (matching Connect function)
 	sqlDB.SetMaxIdleConns(25)
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(30 * time.Minute)
 	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
-	
+
 	// Verify settings were applied
 	stats := sqlDB.Stats()
 	if stats.MaxOpenConnections != 100 {
 		t.Errorf("MaxOpenConns not set correctly, got %d, want 100", stats.MaxOpenConnections)
 	}
-	
+
 	// Verify connection pool is working
 	if stats.OpenConnections > stats.MaxOpenConnections {
 		t.Errorf("OpenConnections (%d) exceeds MaxOpenConnections (%d)", stats.OpenConnections, stats.MaxOpenConnections)
@@ -58,13 +58,13 @@ func TestConnect_AutoMigrate(t *testing.T) {
 			sqlDB.Close()
 		}
 	}()
-	
+
 	// Test AutoMigrate with models
 	err = db.AutoMigrate(&models.User{}, &models.VM{}, &models.VMImage{}, &models.VMSnapshot{}, &models.ResourceQuota{})
 	if err != nil {
 		t.Fatalf("AutoMigrate failed: %v", err)
 	}
-	
+
 	// Verify tables were created by trying to insert a record
 	user := models.User{
 		Username: "testuser",
@@ -74,7 +74,7 @@ func TestConnect_AutoMigrate(t *testing.T) {
 	if err := db.Create(&user).Error; err != nil {
 		t.Errorf("Failed to create user after migration: %v", err)
 	}
-	
+
 	// Verify user was created
 	var foundUser models.User
 	if err := db.First(&foundUser, user.ID).Error; err != nil {
@@ -97,15 +97,15 @@ func TestConnect_ConnectionPoolStats(t *testing.T) {
 			sqlDB.Close()
 		}
 	}()
-	
+
 	sqlDB, err := db.DB()
 	if err != nil {
 		t.Fatalf("Failed to get underlying sql.DB: %v", err)
 	}
-	
+
 	// Get initial stats
 	stats := sqlDB.Stats()
-	
+
 	// Verify stats structure
 	if stats.MaxOpenConnections < 0 {
 		t.Error("MaxOpenConnections should be non-negative")
@@ -119,10 +119,10 @@ func TestConnect_ConnectionPoolStats(t *testing.T) {
 	if stats.Idle < 0 {
 		t.Error("Idle should be non-negative")
 	}
-	
+
 	// Verify InUse + Idle <= OpenConnections
 	if stats.InUse+stats.Idle > stats.OpenConnections {
-		t.Errorf("InUse (%d) + Idle (%d) should not exceed OpenConnections (%d)", 
+		t.Errorf("InUse (%d) + Idle (%d) should not exceed OpenConnections (%d)",
 			stats.InUse, stats.Idle, stats.OpenConnections)
 	}
 }
@@ -139,23 +139,23 @@ func TestConnect_ConnectionLifetime(t *testing.T) {
 			sqlDB.Close()
 		}
 	}()
-	
+
 	sqlDB, err := db.DB()
 	if err != nil {
 		t.Fatalf("Failed to get underlying sql.DB: %v", err)
 	}
-	
+
 	// Set connection lifetime
 	maxLifetime := 30 * time.Minute
 	maxIdleTime := 5 * time.Minute
 	sqlDB.SetConnMaxLifetime(maxLifetime)
 	sqlDB.SetConnMaxIdleTime(maxIdleTime)
-	
+
 	// Verify settings (we can't directly read these, but we can verify they don't cause errors)
 	// The settings are applied internally by the database driver
 	_ = maxLifetime
 	_ = maxIdleTime
-	
+
 	// Test that connections can be created and used
 	// Verify connection is usable by querying directly
 	var result sql.NullString
@@ -167,5 +167,3 @@ func TestConnect_ConnectionLifetime(t *testing.T) {
 		t.Errorf("Query result mismatch, got %v, want 'test'", result)
 	}
 }
-
-

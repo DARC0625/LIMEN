@@ -77,14 +77,14 @@ func TestGetLogDir(t *testing.T) {
 func TestSetLogDir(t *testing.T) {
 	Init("info")
 	tempDir := t.TempDir()
-	
+
 	SetLogDir(tempDir)
-	
+
 	// Verify directory was created
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
 		t.Errorf("SetLogDir() directory was not created: %v", err)
 	}
-	
+
 	// Verify GetLogDir returns the set directory
 	dir := GetLogDir()
 	if dir != tempDir {
@@ -94,15 +94,14 @@ func TestSetLogDir(t *testing.T) {
 
 func TestSetLogDir_InvalidPath(t *testing.T) {
 	Init("info")
-	
+
 	// Try to set invalid path (should not panic, just log error)
 	invalidPath := "/root/invalid/path/that/should/not/exist"
 	SetLogDir(invalidPath)
-	
+
 	// Should not crash
 	dir := GetLogDir()
 	if dir == "" {
 		t.Error("GetLogDir() should return a value even with invalid path")
 	}
 }
-

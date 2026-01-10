@@ -13,7 +13,6 @@ func init() {
 	logger.Init("debug")
 }
 
-
 func TestVMStats_Structure(t *testing.T) {
 	// Test VMStats struct fields
 	stats := &VMStats{
@@ -105,4 +104,3 @@ func TestVMStats_EdgeCases(t *testing.T) {
 		})
 	}
 }
-

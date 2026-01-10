@@ -191,4 +191,3 @@ func (h *Handler) HandleRAGCategories(w http.ResponseWriter, r *http.Request) {
 		"categories": categories,
 	})
 }
-

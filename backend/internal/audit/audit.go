@@ -46,20 +46,20 @@ func LogEvent(ctx context.Context, action, resource, resourceID string, result s
 
 	// Create audit log entry
 	auditLog := models.AuditLog{
-		RequestID:     requestID,
-		UserID:        &userID,
-		Username:      username,
-		Role:          role,
-		Action:        action,
-		Resource:      resource,
-		ResourceID:    resourceID,
-		Result:        result,
-		ErrorCode:     errorCode,
-		ErrorMessage:  errorMessage,
-		ClientIP:      clientIP,
-		UserAgent:     userAgent,
-		Metadata:      metadataJSON,
-		CreatedAt:     time.Now(),
+		RequestID:    requestID,
+		UserID:       &userID,
+		Username:     username,
+		Role:         role,
+		Action:       action,
+		Resource:     resource,
+		ResourceID:   resourceID,
+		Result:       result,
+		ErrorCode:    errorCode,
+		ErrorMessage: errorMessage,
+		ClientIP:     clientIP,
+		UserAgent:    userAgent,
+		Metadata:     metadataJSON,
+		CreatedAt:    time.Now(),
 	}
 
 	if err := database.DB.Create(&auditLog).Error; err != nil {
@@ -211,4 +211,3 @@ func GetAuditLogs(db *gorm.DB, userID *uint, action, resource string, limit, off
 
 	return logs, total, nil
 }
-

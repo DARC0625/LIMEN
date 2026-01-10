@@ -201,4 +201,3 @@ func TestVMStatus_ValidTransitions(t *testing.T) {
 		})
 	}
 }
-

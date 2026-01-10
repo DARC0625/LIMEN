@@ -35,19 +35,19 @@ func TestIPWhitelist_SingleIP(t *testing.T) {
 	wrapped := middleware(handler)
 
 	tests := []struct {
-		name     string
+		name       string
 		remoteAddr string
-		wantCode int
+		wantCode   int
 	}{
 		{
-			name:     "Allowed IP",
+			name:       "Allowed IP",
 			remoteAddr: "192.168.1.1:12345",
-			wantCode: http.StatusOK,
+			wantCode:   http.StatusOK,
 		},
 		{
-			name:     "Disallowed IP",
+			name:       "Disallowed IP",
 			remoteAddr: "192.168.1.2:12345",
-			wantCode: http.StatusForbidden,
+			wantCode:   http.StatusForbidden,
 		},
 	}
 
@@ -75,19 +75,19 @@ func TestIPWhitelist_CIDR(t *testing.T) {
 	wrapped := middleware(handler)
 
 	tests := []struct {
-		name     string
+		name       string
 		remoteAddr string
-		wantCode int
+		wantCode   int
 	}{
 		{
-			name:     "IP in CIDR range",
+			name:       "IP in CIDR range",
 			remoteAddr: "192.168.1.100:12345",
-			wantCode: http.StatusOK,
+			wantCode:   http.StatusOK,
 		},
 		{
-			name:     "IP outside CIDR range",
+			name:       "IP outside CIDR range",
 			remoteAddr: "192.168.2.1:12345",
-			wantCode: http.StatusForbidden,
+			wantCode:   http.StatusForbidden,
 		},
 	}
 
@@ -115,24 +115,24 @@ func TestIPWhitelist_MultipleIPs(t *testing.T) {
 	wrapped := middleware(handler)
 
 	tests := []struct {
-		name     string
+		name       string
 		remoteAddr string
-		wantCode int
+		wantCode   int
 	}{
 		{
-			name:     "First allowed IP",
+			name:       "First allowed IP",
 			remoteAddr: "192.168.1.1:12345",
-			wantCode: http.StatusOK,
+			wantCode:   http.StatusOK,
 		},
 		{
-			name:     "Second allowed IP",
+			name:       "Second allowed IP",
 			remoteAddr: "192.168.1.2:12345",
-			wantCode: http.StatusOK,
+			wantCode:   http.StatusOK,
 		},
 		{
-			name:     "Disallowed IP",
+			name:       "Disallowed IP",
 			remoteAddr: "192.168.1.3:12345",
-			wantCode: http.StatusForbidden,
+			wantCode:   http.StatusForbidden,
 		},
 	}
 
@@ -232,6 +232,3 @@ func TestIPWhitelist_EmptyString(t *testing.T) {
 		t.Errorf("IPWhitelist() with empty strings code = %v, want %v", w.Code, http.StatusOK)
 	}
 }
-
-
-

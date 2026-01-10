@@ -11,7 +11,7 @@ import (
 // WithTimeout creates a context with timeout and logs timeout events.
 func WithTimeout(parent context.Context, timeout time.Duration, logger *zap.Logger, operation string) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(parent, timeout)
-	
+
 	// Log timeout if it occurs
 	go func() {
 		<-ctx.Done()
@@ -23,7 +23,7 @@ func WithTimeout(parent context.Context, timeout time.Duration, logger *zap.Logg
 			}
 		}
 	}()
-	
+
 	return ctx, cancel
 }
 
@@ -36,11 +36,3 @@ func WithCancel(parent context.Context) (context.Context, context.CancelFunc) {
 func ContextWithTimeout(timeout time.Duration) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), timeout)
 }
-
-
-
-
-
-
-
-

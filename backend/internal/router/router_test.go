@@ -25,9 +25,9 @@ func setupTestRouter(t *testing.T) (*chi.Mux, *handlers.Handler, *config.Config)
 	}
 
 	cfg := &config.Config{
-		Env:           "test",
-		Port:          "18443",
-		JWTSecret:     "test-secret-key-for-testing-only-very-long-key",
+		Env:            "test",
+		Port:           "18443",
+		JWTSecret:      "test-secret-key-for-testing-only-very-long-key",
 		AllowedOrigins: []string{"http://localhost:3000"},
 	}
 
@@ -118,4 +118,3 @@ func TestStaticFileEndpoint(t *testing.T) {
 	// Should not crash, may return 404 if file doesn't exist
 	_ = w.Code
 }
-

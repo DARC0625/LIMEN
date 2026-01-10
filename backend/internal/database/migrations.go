@@ -19,7 +19,7 @@ func CreateIndexes(db *gorm.DB) error {
 		{"vms", "idx_vms_owner_id", "owner_id", false}, // Use owner_id (not user_id) - matches VM model
 		{"vms", "idx_vms_status", "status", false},
 		{"vms", "idx_vms_created_at", "created_at DESC", false},
-		{"vms", "idx_vms_uuid", "uuid", true}, // Already exists as uniqueIndex, but ensure it's there
+		{"vms", "idx_vms_uuid", "uuid", true},                      // Already exists as uniqueIndex, but ensure it's there
 		{"vms", "idx_vms_owner_status", "owner_id, status", false}, // Composite index for common query pattern
 
 		// User indexes (additional)
@@ -49,4 +49,3 @@ func CreateIndexes(db *gorm.DB) error {
 
 	return nil
 }
-

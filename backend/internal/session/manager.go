@@ -20,11 +20,11 @@ import (
 type SessionManager struct {
 	mu              sync.RWMutex
 	activeSessions  map[string]*ActiveSession // sessionID -> ActiveSession
-	userSessions    map[uint][]string          // userID -> []sessionID
-	maxIdleDuration time.Duration              // Default: 15 minutes
-	maxDuration     time.Duration              // Default: 4 hours
-	maxConcurrent   int                        // Default: 2 per user
-	reconnectWindow time.Duration              // Default: 30 seconds
+	userSessions    map[uint][]string         // userID -> []sessionID
+	maxIdleDuration time.Duration             // Default: 15 minutes
+	maxDuration     time.Duration             // Default: 4 hours
+	maxConcurrent   int                       // Default: 2 per user
+	reconnectWindow time.Duration             // Default: 30 seconds
 }
 
 // ActiveSession represents an active console session.
@@ -57,10 +57,10 @@ func GetSessionManager() *SessionManager {
 		managerInstance = &SessionManager{
 			activeSessions:  make(map[string]*ActiveSession),
 			userSessions:    make(map[uint][]string),
-			maxIdleDuration: 15 * time.Minute,  // 15 minutes idle timeout
-			maxDuration:     4 * time.Hour,     // 4 hours max duration
-			maxConcurrent:   2,                 // 2 concurrent sessions per user
-			reconnectWindow: 30 * time.Second,  // 30 seconds reconnect window
+			maxIdleDuration: 15 * time.Minute, // 15 minutes idle timeout
+			maxDuration:     4 * time.Hour,    // 4 hours max duration
+			maxConcurrent:   2,                // 2 concurrent sessions per user
+			reconnectWindow: 30 * time.Second, // 30 seconds reconnect window
 		}
 		go managerInstance.cleanupLoop()
 	})
@@ -272,14 +272,14 @@ func (sm *SessionManager) cleanupExpiredSessions() {
 		}
 	}
 
-		// End expired sessions
-		for _, sid := range expired {
-			sess := sm.activeSessions[sid]
-			sess.cancel()
-			delete(sm.activeSessions, sid)
+	// End expired sessions
+	for _, sid := range expired {
+		sess := sm.activeSessions[sid]
+		sess.cancel()
+		delete(sm.activeSessions, sid)
 
-			// Update active sessions metric
-			metrics.ConsoleActiveSessions.Set(float64(len(sm.activeSessions)))
+		// Update active sessions metric
+		metrics.ConsoleActiveSessions.Set(float64(len(sm.activeSessions)))
 
 		// Remove from user sessions
 		userSessions := sm.userSessions[sess.UserID]
@@ -339,4 +339,3 @@ func generateSessionID() (string, error) {
 	}
 	return base64.URLEncoding.EncodeToString(b), nil
 }
-

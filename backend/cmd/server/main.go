@@ -183,24 +183,24 @@ func main() {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check if this is a WebSocket upgrade request or WebSocket path
 		// Some proxies may not send Upgrade header initially, so also check path
-		isWebSocketPath := strings.HasPrefix(r.URL.Path, "/ws/") || 
+		isWebSocketPath := strings.HasPrefix(r.URL.Path, "/ws/") ||
 			r.URL.Path == "/vnc" ||
 			strings.HasPrefix(r.URL.Path, "/vnc/") || // VNC with UUID in path
 			r.URL.Path == "/ws/vnc" ||
 			r.URL.Path == "/ws/vm-status"
-		isWebSocketUpgrade := r.Header.Get("Upgrade") == "websocket" || 
+		isWebSocketUpgrade := r.Header.Get("Upgrade") == "websocket" ||
 			strings.ToLower(r.Header.Get("Connection")) == "upgrade"
-		
+
 		// Check if this is a static file path (should skip authentication)
-		isStaticPath := strings.HasPrefix(r.URL.Path, "/downloads/") || 
+		isStaticPath := strings.HasPrefix(r.URL.Path, "/downloads/") ||
 			strings.HasPrefix(r.URL.Path, "/media/") ||
 			strings.HasPrefix(r.URL.Path, "/swagger/") ||
 			r.URL.Path == "/swagger" ||
 			r.URL.Path == "/docs"
-		
+
 		// Check if this is a public endpoint (should skip authentication middleware)
 		isPublicEndpoint := middleware.IsPublicEndpoint(r.URL.Path)
-		
+
 		if isWebSocketPath || isWebSocketUpgrade {
 			logger.Log.Info("WebSocket request detected - skipping middleware",
 				zap.String("path", r.URL.Path),
@@ -212,29 +212,29 @@ func main() {
 			router.ServeHTTP(w, r)
 			return
 		}
-		
+
 		if isStaticPath {
 			// Skip middleware for static file paths
 			router.ServeHTTP(w, r)
 			return
 		}
-		
+
 		if isPublicEndpoint {
 			// Skip authentication middleware for public endpoints (but apply other middleware)
 			httpHandler := middleware.Recovery(router)
 			httpHandler = middleware.Logging(httpHandler)
 			httpHandler = middleware.RequestID(httpHandler)
-			
+
 			// Security headers
 			isHTTPS := cfg.Port == "443" || cfg.Port == "8443"
 			httpHandler = middleware.SecurityHeaders(isHTTPS)(httpHandler)
-			
+
 			// CORS must be before Auth to handle OPTIONS preflight requests
 			httpHandler = middleware.CORS(cfg.AllowedOrigins)(httpHandler)
-			
+
 			// HTTP Response Compression (gzip)
 			httpHandler = middleware.Compression(httpHandler)
-			
+
 			httpHandler.ServeHTTP(w, r)
 			return
 		}
@@ -284,12 +284,12 @@ func main() {
 	// Start HTTP server with optimized timeouts for network performance
 	addr := ":" + cfg.Port
 	server := &http.Server{
-		Addr:         addr,
-		Handler:      handler,
-		ReadTimeout:  30 * time.Second,  // Increased for large requests (VM creation, file uploads)
-		WriteTimeout: 30 * time.Second,  // Increased for large responses (VM lists, WebSocket upgrades)
-		IdleTimeout:  300 * time.Second, // Increased Keep-Alive timeout (5 min) for better connection reuse
-		MaxHeaderBytes: 1 << 20,         // 1MB max header size
+		Addr:           addr,
+		Handler:        handler,
+		ReadTimeout:    30 * time.Second,  // Increased for large requests (VM creation, file uploads)
+		WriteTimeout:   30 * time.Second,  // Increased for large responses (VM lists, WebSocket upgrades)
+		IdleTimeout:    300 * time.Second, // Increased Keep-Alive timeout (5 min) for better connection reuse
+		MaxHeaderBytes: 1 << 20,           // 1MB max header size
 	}
 
 	// Create shutdown manager for graceful shutdown
@@ -334,7 +334,7 @@ func main() {
 	if err != nil {
 		logger.Log.Fatal("Failed to create listener", zap.Error(err))
 	}
-	
+
 	// Optimize TCP settings for better network performance
 	if tcpListener, ok := listener.(*net.TCPListener); ok {
 		// TCP settings are applied via system-level configuration
@@ -344,7 +344,7 @@ func main() {
 		// - net.ipv4.tcp_keepalive_time
 		_ = tcpListener // Use TCP listener for potential future optimizations
 	}
-	
+
 	// Start server in a goroutine with optimized listener
 	go func() {
 		logger.Log.Info("Server starting with optimized network settings", zap.String("address", addr))
@@ -481,7 +481,7 @@ func initImages(db *gorm.DB, isoDir string) error {
 // cleanupOrphanedVMs removes VM records that are soft-deleted or don't exist in libvirt
 func cleanupOrphanedVMs(db *gorm.DB, vmService *vm.VMService) {
 	logger.Log.Info("Starting orphaned VM cleanup...")
-	
+
 	// Get all soft-deleted VMs and hard delete immediately
 	var softDeletedVMs []models.VM
 	if err := db.Unscoped().Where("deleted_at IS NOT NULL").Find(&softDeletedVMs).Error; err == nil {
@@ -506,7 +506,7 @@ func cleanupOrphanedVMs(db *gorm.DB, vmService *vm.VMService) {
 			}
 		}
 	}
-	
+
 	// Check for VMs that exist in DB but not in libvirt
 	var allVMs []models.VM
 	if err := db.Find(&allVMs).Error; err == nil {
@@ -518,8 +518,8 @@ func cleanupOrphanedVMs(db *gorm.DB, vmService *vm.VMService) {
 			if err != nil || status == "" {
 				// VM doesn't exist in libvirt, but exists in DB
 				// This is an orphaned record - mark for cleanup
-				logger.Log.Info("Found orphaned VM (exists in DB but not in libvirt)", 
-					zap.String("vm_name", vmRec.Name), 
+				logger.Log.Info("Found orphaned VM (exists in DB but not in libvirt)",
+					zap.String("vm_name", vmRec.Name),
 					zap.String("vm_uuid", vmRec.UUID))
 				orphanedVMIDs = append(orphanedVMIDs, vmRec.ID)
 				orphanedVMUUIDs = append(orphanedVMUUIDs, vmRec.UUID)
@@ -537,14 +537,14 @@ func cleanupOrphanedVMs(db *gorm.DB, vmService *vm.VMService) {
 			}
 		}
 	}
-	
+
 	logger.Log.Info("Orphaned VM cleanup completed")
 }
 
 // cleanupSoftDeletedVMs removes only soft-deleted VM records (when libvirt is unavailable)
 func cleanupSoftDeletedVMs(db *gorm.DB) {
 	logger.Log.Info("Starting soft-deleted VM cleanup (libvirt unavailable)...")
-	
+
 	// Get all soft-deleted VMs
 	var softDeletedVMs []models.VM
 	if err := db.Unscoped().Where("deleted_at IS NOT NULL").Find(&softDeletedVMs).Error; err == nil {
@@ -569,6 +569,6 @@ func cleanupSoftDeletedVMs(db *gorm.DB) {
 			}
 		}
 	}
-	
+
 	logger.Log.Info("Soft-deleted VM cleanup completed")
 }

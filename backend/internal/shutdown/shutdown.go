@@ -16,20 +16,20 @@ import (
 
 // ShutdownManager manages graceful shutdown of the server and other resources.
 type ShutdownManager struct {
-	server      *http.Server
+	server       *http.Server
 	cleanupFuncs []func(context.Context) error
-	mu          sync.Mutex
-	logger      *zap.Logger
-	shutdownCh  chan struct{}
+	mu           sync.Mutex
+	logger       *zap.Logger
+	shutdownCh   chan struct{}
 }
 
 // NewShutdownManager creates a new ShutdownManager.
 func NewShutdownManager(server *http.Server, logger *zap.Logger) *ShutdownManager {
 	return &ShutdownManager{
-		server:      server,
+		server:       server,
 		cleanupFuncs: make([]func(context.Context) error, 0),
-		logger:      logger,
-		shutdownCh:  make(chan struct{}),
+		logger:       logger,
+		shutdownCh:   make(chan struct{}),
 	}
 }
 
@@ -123,11 +123,3 @@ func GracefulShutdown(server *http.Server, timeout time.Duration, logger *zap.Lo
 	logger.Info("Server shut down gracefully")
 	return nil
 }
-
-
-
-
-
-
-
-

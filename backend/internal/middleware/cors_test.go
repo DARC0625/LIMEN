@@ -123,4 +123,3 @@ func TestCORSMiddleware_Credentials(t *testing.T) {
 		t.Logf("Access-Control-Allow-Credentials: %s (may vary by implementation)", credentials)
 	}
 }
-

@@ -199,4 +199,3 @@ func TestCheckPassword_WrongPassword(t *testing.T) {
 		t.Error("CheckPassword should fail with wrong password")
 	}
 }
-

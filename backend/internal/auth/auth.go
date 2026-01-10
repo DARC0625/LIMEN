@@ -14,11 +14,11 @@ import (
 )
 
 var (
-	ErrInvalidCredentials   = errors.New("invalid credentials")
-	ErrTokenExpired         = errors.New("token expired")
-	ErrInvalidToken         = errors.New("invalid token")
-	ErrInvalidRefreshToken  = errors.New("invalid or expired refresh token")
-	ErrInvalidCSRFToken     = errors.New("invalid CSRF token")
+	ErrInvalidCredentials  = errors.New("invalid credentials")
+	ErrTokenExpired        = errors.New("token expired")
+	ErrInvalidToken        = errors.New("invalid token")
+	ErrInvalidRefreshToken = errors.New("invalid or expired refresh token")
+	ErrInvalidCSRFToken    = errors.New("invalid CSRF token")
 )
 
 // RefreshTokenClaims represents JWT claims for refresh tokens.

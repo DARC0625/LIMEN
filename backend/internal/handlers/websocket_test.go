@@ -88,4 +88,3 @@ func TestVMStatusBroadcaster_BroadcastVMUpdate_EmptyVM(t *testing.T) {
 	// Should handle empty VM without panic
 	broadcaster.BroadcastVMUpdate(vm)
 }
-

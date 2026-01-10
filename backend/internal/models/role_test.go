@@ -6,16 +6,16 @@ import (
 
 func TestUserRole_IsValid(t *testing.T) {
 	tests := []struct {
-		name   string
-		role   UserRole
-		want   bool
+		name string
+		role UserRole
+		want bool
 	}{
 		{"valid admin", RoleAdmin, true},
 		{"valid user", RoleUser, true},
 		{"invalid role", UserRole("invalid"), false},
 		{"empty role", UserRole(""), false},
 		{"lowercase admin", UserRole("admin"), true}, // RoleAdmin is "admin", so lowercase is valid
-		{"lowercase user", UserRole("user"), true},     // RoleUser is "user", so lowercase is valid
+		{"lowercase user", UserRole("user"), true},   // RoleUser is "user", so lowercase is valid
 		{"uppercase admin", UserRole("ADMIN"), false},
 		{"uppercase user", UserRole("USER"), false},
 	}
@@ -31,9 +31,9 @@ func TestUserRole_IsValid(t *testing.T) {
 
 func TestUserRole_String(t *testing.T) {
 	tests := []struct {
-		name   string
-		role   UserRole
-		want   string
+		name string
+		role UserRole
+		want string
 	}{
 		{"admin", RoleAdmin, "admin"},
 		{"user", RoleUser, "user"},
@@ -51,9 +51,9 @@ func TestUserRole_String(t *testing.T) {
 
 func TestUserRole_IsAdmin(t *testing.T) {
 	tests := []struct {
-		name   string
-		role   UserRole
-		want   bool
+		name string
+		role UserRole
+		want bool
 	}{
 		{"admin role", RoleAdmin, true},
 		{"user role", RoleUser, false},
@@ -69,4 +69,3 @@ func TestUserRole_IsAdmin(t *testing.T) {
 		})
 	}
 }
-

@@ -197,11 +197,11 @@ func TestIsPublicEndpointForRateLimit(t *testing.T) {
 
 func TestGetClientIP(t *testing.T) {
 	tests := []struct {
-		name           string
-		xForwardedFor  string
-		xRealIP        string
-		remoteAddr     string
-		want           string
+		name          string
+		xForwardedFor string
+		xRealIP       string
+		remoteAddr    string
+		want          string
 	}{
 		{
 			name:          "X-Forwarded-For present",
@@ -264,5 +264,3 @@ func TestIPRateLimiter_cleanupExpiredNow(t *testing.T) {
 		t.Error("cleanup() should not clear ips map immediately")
 	}
 }
-
-

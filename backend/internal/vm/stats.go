@@ -4,7 +4,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"time"
-
 )
 
 // VMStats represents VM resource usage statistics

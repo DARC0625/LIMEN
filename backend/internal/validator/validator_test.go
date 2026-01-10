@@ -166,8 +166,8 @@ func TestValidateVMName_ControlCharacters(t *testing.T) {
 		// null byte is removed by SanitizeString, so "vm\x00name" becomes "vmname" which is valid
 		// However, we still want to test that control characters are rejected
 		{"null_byte", "vm\x00name", false}, // SanitizeString removes null byte, making it valid
-		{"newline", "vm\nname", true},       // newline is allowed by ValidateInput but rejected by alphanumeric check
-		{"tab", "vm\tname", true},           // tab is allowed by ValidateInput but rejected by alphanumeric check
+		{"newline", "vm\nname", true},      // newline is allowed by ValidateInput but rejected by alphanumeric check
+		{"tab", "vm\tname", true},          // tab is allowed by ValidateInput but rejected by alphanumeric check
 		{"carriage_return", "vm\rname", true},
 	}
 

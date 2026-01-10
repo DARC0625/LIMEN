@@ -158,7 +158,7 @@ func TestHandleHardwareUpdate_InvalidMethod(t *testing.T) {
 func TestNewHandler(t *testing.T) {
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	cfg := &config.Config{
-		Env:           "test",
+		Env:            "test",
 		AllowedOrigins: []string{"http://localhost:3000"},
 	}
 
@@ -180,4 +180,3 @@ func TestNewHandler(t *testing.T) {
 		t.Error("Handler VMStatusBroadcaster not initialized")
 	}
 }
-

@@ -9,43 +9,43 @@ import (
 
 func TestWriteError(t *testing.T) {
 	tests := []struct {
-		name       string
-		code       int
-		message    string
+		name        string
+		code        int
+		message     string
 		internalErr error
-		wantCode   int
+		wantCode    int
 		wantMessage string
 	}{
 		{
-			name:       "400 Bad Request",
-			code:       http.StatusBadRequest,
-			message:    "Invalid input",
+			name:        "400 Bad Request",
+			code:        http.StatusBadRequest,
+			message:     "Invalid input",
 			internalErr: nil,
-			wantCode:   http.StatusBadRequest,
+			wantCode:    http.StatusBadRequest,
 			wantMessage: "Invalid input",
 		},
 		{
-			name:       "401 Unauthorized",
-			code:       http.StatusUnauthorized,
-			message:    "Authentication required",
+			name:        "401 Unauthorized",
+			code:        http.StatusUnauthorized,
+			message:     "Authentication required",
 			internalErr: nil,
-			wantCode:   http.StatusUnauthorized,
+			wantCode:    http.StatusUnauthorized,
 			wantMessage: "Authentication required",
 		},
 		{
-			name:       "404 Not Found",
-			code:       http.StatusNotFound,
-			message:    "Resource not found",
+			name:        "404 Not Found",
+			code:        http.StatusNotFound,
+			message:     "Resource not found",
 			internalErr: nil,
-			wantCode:   http.StatusNotFound,
+			wantCode:    http.StatusNotFound,
 			wantMessage: "Resource not found",
 		},
 		{
-			name:       "500 Internal Server Error",
-			code:       http.StatusInternalServerError,
-			message:    "Internal server error",
+			name:        "500 Internal Server Error",
+			code:        http.StatusInternalServerError,
+			message:     "Internal server error",
 			internalErr: nil,
-			wantCode:   http.StatusInternalServerError,
+			wantCode:    http.StatusInternalServerError,
 			wantMessage: "Internal server error",
 		},
 	}
@@ -320,6 +320,3 @@ func TestAPIError(t *testing.T) {
 		t.Errorf("APIError.Message = %v, want Test error", err.Message)
 	}
 }
-
-
-

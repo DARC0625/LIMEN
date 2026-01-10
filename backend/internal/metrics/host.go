@@ -117,4 +117,3 @@ func GetHostInfo() (hostname string, osInfo string, err error) {
 	osInfo = runtime.GOOS + "/" + runtime.GOARCH
 	return hostname, osInfo, nil
 }
-

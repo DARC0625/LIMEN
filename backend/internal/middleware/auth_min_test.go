@@ -31,4 +31,3 @@ func TestMin(t *testing.T) {
 		})
 	}
 }
-

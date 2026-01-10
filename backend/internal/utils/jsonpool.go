@@ -32,7 +32,3 @@ func PutJSONEncoder(encoder *json.Encoder, buf *bytes.Buffer) {
 	// But we can pool the buffer
 	BufferPool.Put(buf)
 }
-
-
-
-

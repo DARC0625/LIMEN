@@ -164,7 +164,7 @@ func TestVMService_SnapshotModel(t *testing.T) {
 		VMID:        vm.ID,
 		Name:        "full-snapshot",
 		Description: "Full description",
-		LibvirtName:  "libvirt-full-123",
+		LibvirtName: "libvirt-full-123",
 	}
 	if err := db.Create(&snapshot).Error; err != nil {
 		t.Fatalf("Failed to create snapshot: %v", err)
@@ -214,4 +214,3 @@ func TestVMService_SnapshotWithMultipleVMs(t *testing.T) {
 		t.Errorf("Expected 1 snapshot for VM2, got %d", len(vm2Snapshots))
 	}
 }
-

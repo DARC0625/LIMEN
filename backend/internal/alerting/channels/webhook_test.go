@@ -228,4 +228,3 @@ func TestWebhookChannel_Send_ContextTimeout(t *testing.T) {
 		t.Error("Expected error when context times out")
 	}
 }
-

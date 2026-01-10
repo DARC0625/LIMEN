@@ -81,51 +81,51 @@ func TestValidatePasswordPolicy(t *testing.T) {
 	policy := DefaultUserSecurityPolicy()
 
 	tests := []struct {
-		name     string
-		password string
-		want     bool
+		name       string
+		password   string
+		want       bool
 		wantIssues int
 	}{
 		{
-			name:      "Valid password",
+			name:       "Valid password",
 			password:   "StrongPass123!",
-			want:      true,
+			want:       true,
 			wantIssues: 0,
 		},
 		{
-			name:      "Too short",
+			name:       "Too short",
 			password:   "Short1!",
-			want:      false,
+			want:       false,
 			wantIssues: 1,
 		},
 		{
-			name:      "No uppercase",
+			name:       "No uppercase",
 			password:   "lowercase123!",
-			want:      false,
+			want:       false,
 			wantIssues: 1,
 		},
 		{
-			name:      "No lowercase",
+			name:       "No lowercase",
 			password:   "UPPERCASE123!",
-			want:      false,
+			want:       false,
 			wantIssues: 1,
 		},
 		{
-			name:      "No numbers",
+			name:       "No numbers",
 			password:   "NoNumbers!",
-			want:      false,
+			want:       false,
 			wantIssues: 2, // Length (10 < 12) and number check fail
 		},
 		{
-			name:      "No special chars",
+			name:       "No special chars",
 			password:   "NoSpecial123",
-			want:      false,
+			want:       false,
 			wantIssues: 1,
 		},
 		{
-			name:      "Multiple issues",
+			name:       "Multiple issues",
 			password:   "weak",
-			want:      false,
+			want:       false,
 			wantIssues: 4, // uppercase, lowercase, numbers, special (length check happens first but may not be counted separately)
 		},
 	}
@@ -202,4 +202,3 @@ func TestRecordFailedLogin(t *testing.T) {
 	// Should not panic
 	RecordFailedLogin(ctx, userID, ip)
 }
-

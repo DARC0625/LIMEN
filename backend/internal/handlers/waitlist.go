@@ -28,14 +28,14 @@ type WaitlistRequest struct {
 
 // WaitlistResponse represents the response for waitlist registration.
 type WaitlistResponse struct {
-	Code    string                 `json:"code"`
-	Message string                 `json:"message"`
-	Data    *WaitlistResponseData  `json:"data,omitempty"`
+	Code    string                `json:"code"`
+	Message string                `json:"message"`
+	Data    *WaitlistResponseData `json:"data,omitempty"`
 }
 
 // WaitlistResponseData contains the waitlist entry data.
 type WaitlistResponseData struct {
-	ID         uint   `json:"id"`
+	ID          uint   `json:"id"`
 	EmailMasked string `json:"email_masked"`
 }
 
@@ -207,4 +207,3 @@ func getClientIPFromRequest(r *http.Request) string {
 	}
 	return r.RemoteAddr
 }
-

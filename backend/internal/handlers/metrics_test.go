@@ -127,4 +127,3 @@ func TestUpdateMetrics_WithVMs(t *testing.T) {
 	// We can't easily verify the exact metric values without accessing prometheus internals,
 	// but we can verify the function completes successfully
 }
-

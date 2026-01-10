@@ -88,7 +88,6 @@ func BenchmarkHandleVMAction(b *testing.B) {
 	}
 }
 
-
 // BenchmarkDatabaseQuery_SelectAll benchmarks database query without Select
 func BenchmarkDatabaseQuery_SelectAll(b *testing.B) {
 	db := setupBenchDB(b)
@@ -195,9 +194,9 @@ func setupBenchDB(b *testing.B) *gorm.DB {
 func setupBenchHandler(b *testing.B) (*Handler, *config.Config) {
 	db := setupBenchDB(b)
 	cfg := &config.Config{
-		Env:           "test",
-		Port:          "18443",
-		JWTSecret:     "test-secret-key-for-testing-only",
+		Env:            "test",
+		Port:           "18443",
+		JWTSecret:      "test-secret-key-for-testing-only",
 		AllowedOrigins: []string{"http://localhost:3000"},
 	}
 
@@ -211,4 +210,3 @@ func setupBenchHandler(b *testing.B) (*Handler, *config.Config) {
 
 	return handler, cfg
 }
-

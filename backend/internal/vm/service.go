@@ -24,10 +24,10 @@ type VMService struct {
 	db     *gorm.DB
 	isoDir string
 	vmDir  string
-	
+
 	// Concurrency control for libvirt operations
 	operationSemaphore chan struct{}
-	
+
 	// Timeout for libvirt operations
 	operationTimeout time.Duration
 }
@@ -35,7 +35,7 @@ type VMService struct {
 const (
 	// MaxConcurrentLibvirtOps limits concurrent libvirt operations
 	MaxConcurrentLibvirtOps = 5
-	
+
 	// DefaultLibvirtTimeout is the default timeout for libvirt operations
 	DefaultLibvirtTimeout = 30 * time.Second
 )
@@ -61,10 +61,10 @@ func NewVMService(db *gorm.DB, libvirtURI, isoDir, vmDir string) (*VMService, er
 	}
 
 	return &VMService{
-		driver:            driver,
-		db:                db,
-		isoDir:            isoDir,
-		vmDir:             vmDir,
+		driver:             driver,
+		db:                 db,
+		isoDir:             isoDir,
+		vmDir:              vmDir,
 		operationSemaphore: make(chan struct{}, MaxConcurrentLibvirtOps),
 		operationTimeout:   DefaultLibvirtTimeout,
 	}, nil
@@ -132,7 +132,7 @@ func (s *VMService) EnsureISO(osType string) (string, error) {
 	if !filepath.IsAbs(imagePath) {
 		imagePath = filepath.Join(s.isoDir, imagePath)
 	}
-	
+
 	if _, err := os.Stat(imagePath); err == nil {
 		return imagePath, nil
 	}
@@ -424,7 +424,7 @@ func (s *VMService) deleteVMInternal(name string) error {
 				} else if len(fileName) >= len(name) && fileName[:len(name)] == name {
 					shouldRemove = true
 				}
-				
+
 				if shouldRemove {
 					filePath := filepath.Join(s.vmDir, fileName)
 					if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
@@ -442,7 +442,7 @@ func (s *VMService) deleteVMInternal(name string) error {
 	// Only proceed with DB deletion if VM was found in DB
 	if vmRec.ID > 0 {
 		logger.Log.Info("Starting console_sessions deletion", zap.String("vm_name", name), zap.Uint("vm_id", vmRec.ID), zap.String("vm_uuid", vmRec.UUID))
-		
+
 		// Use transaction to ensure atomic deletion
 		err := s.db.Transaction(func(tx *gorm.DB) error {
 			// Delete console_sessions by vm_id (most reliable)
@@ -457,7 +457,7 @@ func (s *VMService) deleteVMInternal(name string) error {
 			} else {
 				logger.Log.Debug("No console sessions found for VM by ID", zap.String("vm_name", name), zap.Uint("vm_id", vmRec.ID))
 			}
-			
+
 			// Also try to delete by UUID as a safety measure
 			// Use Unscoped() to perform hard delete (not soft delete)
 			if vmRec.UUID != "" {
@@ -469,7 +469,7 @@ func (s *VMService) deleteVMInternal(name string) error {
 					logger.Log.Info("Additional console sessions deleted for VM by UUID", zap.String("vm_name", name), zap.String("vm_uuid", vmRec.UUID), zap.Int64("deleted_count", result.RowsAffected))
 				}
 			}
-			
+
 			// Delete VM from DB (within same transaction)
 			// Use Unscoped() to perform hard delete (not soft delete)
 			result = tx.Unscoped().Where("id = ?", vmRec.ID).Delete(&models.VM{})
@@ -482,10 +482,10 @@ func (s *VMService) deleteVMInternal(name string) error {
 			} else {
 				logger.Log.Info("VM successfully deleted from DB (hard delete)", zap.String("vm_name", name), zap.Uint("vm_id", vmRec.ID), zap.Int64("rows_affected", result.RowsAffected))
 			}
-			
+
 			return nil
 		})
-		
+
 		if err != nil {
 			logger.Log.Error("Transaction failed during VM deletion", zap.String("vm_name", name), zap.Error(err))
 			return fmt.Errorf("failed to delete VM and related data: %w", err)
@@ -558,14 +558,14 @@ func (s *VMService) startVMInternal(name string) error {
 	if err := s.db.Where("name = ?", name).First(&vmRec).Error; err == nil {
 		if vmRec.BootOrder != "" && vmRec.BootOrder.IsValid() {
 			if err := s.SetBootOrder(name, vmRec.BootOrder); err != nil {
-				logger.Log.Warn("Failed to set boot order before starting VM", 
-					zap.String("vm_name", name), 
+				logger.Log.Warn("Failed to set boot order before starting VM",
+					zap.String("vm_name", name),
 					zap.String("boot_order", string(vmRec.BootOrder)),
 					zap.Error(err))
 				// Continue anyway - VM might start with default boot order
 			} else {
-				logger.Log.Info("Boot order applied before VM start", 
-					zap.String("vm_name", name), 
+				logger.Log.Info("Boot order applied before VM start",
+					zap.String("vm_name", name),
 					zap.String("boot_order", string(vmRec.BootOrder)))
 			}
 		}
@@ -604,10 +604,10 @@ func (s *VMService) startVMInternal(name string) error {
 	// Wait for VM to fully start and VNC to initialize (max 10 seconds for slow systems)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	
+
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
-	
+
 	vmStarted := false
 	var lastErr error
 	for {
@@ -623,13 +623,13 @@ func (s *VMService) startVMInternal(name string) error {
 				// Get more detailed error information
 				state, reason, stateErr := dom.GetState()
 				if stateErr == nil {
-					logger.Log.Error("Timeout waiting for VM to start", 
+					logger.Log.Error("Timeout waiting for VM to start",
 						zap.String("vm_name", name),
 						zap.Int("state", int(state)),
 						zap.Int("reason", int(reason)))
 					return fmt.Errorf("VM failed to start within timeout period (state: %d, reason: %d)", state, reason)
 				}
-				logger.Log.Error("Timeout waiting for VM to start", 
+				logger.Log.Error("Timeout waiting for VM to start",
 					zap.String("vm_name", name),
 					zap.Error(lastErr))
 				return fmt.Errorf("VM failed to start within timeout period: %w", lastErr)
@@ -653,7 +653,7 @@ func (s *VMService) startVMInternal(name string) error {
 					// VM started but immediately stopped - get state for better error
 					state, reason, stateErr := dom.GetState()
 					if stateErr == nil {
-						logger.Log.Error("VM started but immediately stopped", 
+						logger.Log.Error("VM started but immediately stopped",
 							zap.String("vm_name", name),
 							zap.Int("state", int(state)),
 							zap.Int("reason", int(reason)))
@@ -1127,7 +1127,7 @@ func (s *VMService) updateCDROMSource(xmlDesc string, newSource string) (string,
 
 	// Build replacement patterns
 	var oldPattern, newPattern string
-	
+
 	// Handle detach (newSource is empty)
 	if newSource == "" {
 		if currentSource == "" {
@@ -1136,7 +1136,7 @@ func (s *VMService) updateCDROMSource(xmlDesc string, newSource string) (string,
 		}
 		// Remove existing source - try multiple patterns
 		escapedCurrent := escapeXML(currentSource)
-		
+
 		// Try single quote pattern first
 		oldPattern = fmt.Sprintf(`<source file='%s'/>`, escapedCurrent)
 		if strings.Contains(xmlDesc, oldPattern) {
@@ -1594,7 +1594,7 @@ func (s *VMService) ensureVNCGraphics(name string) error {
       <listen type='address' address='0.0.0.0'/>
     </graphics>
 `
-	
+
 	// Find the position to insert (before </devices>)
 	insertPos := strings.LastIndex(xmlDesc, devicesCloseTag)
 	if insertPos == -1 {
@@ -1638,7 +1638,7 @@ func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
 	if err != nil {
 		return fmt.Errorf("failed to get VM XML: %w", err)
 	}
-	
+
 	// Parse XML to get max vCPU
 	var domainXML struct {
 		VCPU struct {
@@ -1649,14 +1649,14 @@ func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
 	if err := xml.Unmarshal([]byte(xmlDesc), &domainXML); err != nil {
 		return fmt.Errorf("failed to parse VM XML: %w", err)
 	}
-	
+
 	maxVcpu := uint(0)
 	if domainXML.VCPU.Text != "" {
 		if parsed, err := strconv.ParseUint(domainXML.VCPU.Text, 10, 32); err == nil {
 			maxVcpu = uint(parsed)
 		}
 	}
-	
+
 	// Fallback: if XML parsing failed or returned 0, use the requested vCPU as max
 	if maxVcpu == 0 {
 		maxVcpu = uint(vcpu)

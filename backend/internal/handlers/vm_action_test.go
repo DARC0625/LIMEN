@@ -403,4 +403,3 @@ func TestHandleVMMedia_VMNotFound(t *testing.T) {
 		t.Errorf("Expected status 404, got %d", w.Code)
 	}
 }
-

@@ -95,7 +95,7 @@ func TestResourceQuota_CheckQuota(t *testing.T) {
 
 	// Clean up and test CPU limit
 	db.Unscoped().Delete(&VM{}, "name LIKE ?", "vm%")
-	
+
 	// Create VMs that use up CPU
 	vms = []VM{
 		{Name: "vm1", CPU: 5, Memory: 1024, Status: VMStatusRunning, OwnerID: user.ID},
@@ -112,7 +112,7 @@ func TestResourceQuota_CheckQuota(t *testing.T) {
 
 	// Clean up and test Memory limit
 	db.Unscoped().Delete(&VM{}, "name LIKE ?", "vm%")
-	
+
 	// Create VMs that use up memory
 	vms = []VM{
 		{Name: "vm1", CPU: 1, Memory: 4000, Status: VMStatusRunning, OwnerID: user.ID},
@@ -159,4 +159,3 @@ func containsMiddle(s, substr string) bool {
 	}
 	return false
 }
-

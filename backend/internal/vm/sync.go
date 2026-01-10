@@ -69,7 +69,7 @@ func (s *VMService) SyncAllVMStatuses() error {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			sem <- struct{}{} // Acquire semaphore
+			sem <- struct{}{}        // Acquire semaphore
 			defer func() { <-sem }() // Release semaphore
 
 			if err := s.SyncVMStatus(&vms[idx]); err != nil {

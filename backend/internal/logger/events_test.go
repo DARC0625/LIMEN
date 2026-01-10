@@ -7,7 +7,7 @@ import (
 
 func TestLogEvent(t *testing.T) {
 	Init("debug")
-	
+
 	tests := []struct {
 		name      string
 		eventType EventType
@@ -29,7 +29,7 @@ func TestLogEvent(t *testing.T) {
 
 func TestLogVMEvent(t *testing.T) {
 	Init("debug")
-	
+
 	logCtx := LogContext{
 		Timestamp: time.Now(),
 		Component: "vm",
@@ -41,7 +41,7 @@ func TestLogVMEvent(t *testing.T) {
 
 func TestLogUserEvent(t *testing.T) {
 	Init("debug")
-	
+
 	logCtx := LogContext{
 		Timestamp: time.Now(),
 		Component: "auth",
@@ -53,7 +53,7 @@ func TestLogUserEvent(t *testing.T) {
 
 func TestLogSecurityEvent(t *testing.T) {
 	Init("debug")
-	
+
 	logCtx := LogContext{
 		Timestamp: time.Now(),
 		Component: "security",
@@ -65,7 +65,7 @@ func TestLogSecurityEvent(t *testing.T) {
 
 func TestLogPerformanceEvent(t *testing.T) {
 	Init("debug")
-	
+
 	logCtx := LogContext{
 		Timestamp: time.Now(),
 		Component: "database",
@@ -138,4 +138,3 @@ func TestIsPerformanceEvent(t *testing.T) {
 		})
 	}
 }
-

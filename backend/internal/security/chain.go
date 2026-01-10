@@ -460,11 +460,3 @@ func FormatSecurityChainReport(chain *SecurityChain) string {
 
 	return report
 }
-
-
-
-
-
-
-
-

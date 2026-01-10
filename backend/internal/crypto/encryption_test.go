@@ -36,7 +36,7 @@ func TestCheckPassword(t *testing.T) {
 func TestHashPasswordWithConfig(t *testing.T) {
 	password := "test-password-123"
 	config := DefaultArgon2idConfig()
-	
+
 	hash, err := HashPasswordWithConfig(password, config)
 	if err != nil {
 		t.Fatalf("HashPasswordWithConfig() error = %v", err)
@@ -145,5 +145,3 @@ func TestAES256GCMEncryptDecrypt(t *testing.T) {
 		t.Errorf("AES256GCMDecrypt() = %s, want %s", string(decrypted), string(plaintext))
 	}
 }
-
-

@@ -9,10 +9,10 @@ import (
 var (
 	// Email regex pattern
 	emailRegex = regexp.MustCompile(`([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})`)
-	
+
 	// JWT token pattern (3 parts separated by dots)
 	jwtRegex = regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`)
-	
+
 	// Authorization header pattern
 	authHeaderRegex = regexp.MustCompile(`(?i)(bearer|basic|token)\s+([^\s]+)`)
 )
@@ -46,7 +46,7 @@ func MaskToken(s string) string {
 		}
 		return "***[MASKED]"
 	})
-	
+
 	// Mask Authorization headers
 	result = authHeaderRegex.ReplaceAllStringFunc(result, func(match string) string {
 		parts := strings.Fields(match)
@@ -59,7 +59,7 @@ func MaskToken(s string) string {
 		}
 		return "***[MASKED]"
 	})
-	
+
 	return result
 }
 

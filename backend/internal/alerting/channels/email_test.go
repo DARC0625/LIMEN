@@ -126,4 +126,3 @@ func TestEmailChannel_Send_WithTagsAndMetadata(t *testing.T) {
 		t.Error("Expected SMTP send error, got configuration error")
 	}
 }
-

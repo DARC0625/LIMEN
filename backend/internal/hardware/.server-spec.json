@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-01-11T00:09:04.027580433+09:00",
+  "timestamp": "2026-01-11T00:17:42.01084263+09:00",
   "hostname": "DARC",
   "architecture": "amd64",
   "os": "linux",
@@ -129,8 +129,8 @@
   },
   "memory": {
     "total_gb": 188.4648551940918,
-    "available_gb": 184.50746154785156,
-    "used_gb": 3.9573936462402344,
+    "available_gb": 184.36086654663086,
+    "used_gb": 4.1039886474609375,
     "swap_total_gb": 32,
     "swap_used_gb": 0
   },

@@ -39,10 +39,10 @@ func NewWebhookChannel(url string, logger *zap.Logger) *WebhookChannel {
 		MaxIdleConns:        100,              // Maximum idle connections in pool
 		MaxIdleConnsPerHost: 10,               // Maximum idle connections per host
 		IdleConnTimeout:     90 * time.Second, // How long idle connections are kept
-		DisableKeepAlives:   false,             // Enable connection reuse
-		DisableCompression:  false,             // Enable compression
+		DisableKeepAlives:   false,            // Enable connection reuse
+		DisableCompression:  false,            // Enable compression
 	}
-	
+
 	return &WebhookChannel{
 		url:     url,
 		logger:  logger,
@@ -110,11 +110,3 @@ func (c *WebhookChannel) Send(ctx context.Context, alert alerting.Alert) error {
 
 	return nil
 }
-
-
-
-
-
-
-
-

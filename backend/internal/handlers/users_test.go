@@ -456,4 +456,3 @@ func TestHandleApproveUser_Success(t *testing.T) {
 		t.Error("User should be approved")
 	}
 }
-

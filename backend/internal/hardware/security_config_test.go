@@ -128,4 +128,3 @@ func TestValidateHardwareSecurity_Additional(t *testing.T) {
 		t.Logf("Hardware security warning: %s", warning)
 	}
 }
-

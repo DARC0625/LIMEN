@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	
+
 	"github.com/DARC0625/LIMEN/backend/internal/config"
 	"github.com/DARC0625/LIMEN/backend/internal/crypto"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
@@ -36,7 +36,7 @@ func main() {
 	for i := 1; i <= 10; i++ {
 		username := fmt.Sprintf("user%d", i)
 		password := username // 비밀번호는 사용자 이름과 동일
-		
+
 		// 비밀번호 해시 생성
 		hashedPassword, err := crypto.HashPassword(password)
 		if err != nil {
@@ -54,8 +54,8 @@ func main() {
 
 		result := db.Create(&user)
 		if result.Error != nil {
-			if strings.Contains(result.Error.Error(), "duplicate key") || 
-			   strings.Contains(result.Error.Error(), "UNIQUE constraint") {
+			if strings.Contains(result.Error.Error(), "duplicate key") ||
+				strings.Contains(result.Error.Error(), "UNIQUE constraint") {
 				fmt.Printf("User %s already exists, skipping...\n", username)
 			} else {
 				fmt.Fprintf(os.Stderr, "Failed to create user %s: %v\n", username, result.Error)

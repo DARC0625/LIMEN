@@ -25,7 +25,7 @@ func GetOrCreateUserQuota(db *gorm.DB, userID uint) (*UserQuota, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Update existing quota if it's lower than new defaults (migration)
 	updated := false
 	if quota.MaxVMs < 32 {
@@ -44,13 +44,13 @@ func GetOrCreateUserQuota(db *gorm.DB, userID uint) (*UserQuota, error) {
 		quota.MaxDisk = 10000
 		updated = true
 	}
-	
+
 	if updated {
 		if err := db.Save(&quota).Error; err != nil {
 			return nil, err
 		}
 	}
-	
+
 	return &quota, nil
 }
 
@@ -126,4 +126,3 @@ func (q *UserQuota) CheckVMResourceLimits(cpu, memory int) error {
 	// No per-VM CPU or memory limits
 	return nil
 }
-

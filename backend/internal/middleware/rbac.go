@@ -87,7 +87,7 @@ func RequireVMOwnership(db *gorm.DB) func(http.Handler) http.Handler {
 					uuid = parts[0]
 				}
 			}
-			
+
 			// Fallback to query parameter
 			if uuid == "" {
 				uuid = r.URL.Query().Get("uuid")

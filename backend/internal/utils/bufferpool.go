@@ -13,8 +13,3 @@ var BufferPool = sync.Pool{
 		return bytes.NewBuffer(make([]byte, 0, 2048))
 	},
 }
-
-
-
-
-

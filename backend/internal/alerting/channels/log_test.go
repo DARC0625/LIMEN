@@ -174,4 +174,3 @@ func TestLogChannel_Send_WithTagsAndMetadata(t *testing.T) {
 		t.Errorf("Send returned error: %v", err)
 	}
 }
-

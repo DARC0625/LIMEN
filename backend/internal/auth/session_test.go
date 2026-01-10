@@ -349,4 +349,3 @@ func TestDeleteSession(t *testing.T) {
 	// Delete non-existent session (should not panic)
 	store.DeleteSession("non-existent")
 }
-

@@ -23,10 +23,10 @@ func setupTestRouterExtended(t *testing.T) (*handlers.Handler, *config.Config) {
 	}
 
 	cfg := &config.Config{
-		Env:           "test",
-		Port:          "18443",
-		JWTSecret:     "test-secret-key-for-testing-only-very-long-key",
-		AllowedOrigins: []string{"http://localhost:3000"},
+		Env:              "test",
+		Port:             "18443",
+		JWTSecret:        "test-secret-key-for-testing-only-very-long-key",
+		AllowedOrigins:   []string{"http://localhost:3000"},
 		AdminIPWhitelist: []string{},
 	}
 
@@ -455,4 +455,3 @@ func TestAdminEndpoints(t *testing.T) {
 		})
 	}
 }
-

@@ -71,7 +71,7 @@ func TestSpecFile_RelativePath(t *testing.T) {
 	defer os.Chdir(originalDir)
 
 	os.Chdir(tempDir)
-	
+
 	// Initialize should create .server-spec.json in current directory
 	err := Initialize()
 	if err != nil {
@@ -89,4 +89,3 @@ func TestSpecFile_RelativePath(t *testing.T) {
 		_ = absPath // Use absPath to avoid unused variable
 	}
 }
-

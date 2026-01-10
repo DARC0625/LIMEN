@@ -478,4 +478,3 @@ func TestVMService_GetSnapshot_NotFound(t *testing.T) {
 		}
 	}
 }
-

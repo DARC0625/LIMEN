@@ -9,10 +9,10 @@ import (
 
 func TestAnalyzeLogs(t *testing.T) {
 	Init("debug")
-	
+
 	tempDir := t.TempDir()
 	logFile := filepath.Join(tempDir, "test.log")
-	
+
 	// Create a test log file
 	f, err := os.Create(logFile)
 	if err != nil {
@@ -22,7 +22,7 @@ func TestAnalyzeLogs(t *testing.T) {
 {"level":"error","timestamp":"2026-01-01T00:00:01Z","message":"test error"}
 `)
 	f.Close()
-	
+
 	stats, err := AnalyzeLogs(tempDir, 1*time.Hour)
 	if err != nil {
 		t.Errorf("AnalyzeLogs() error = %v", err)
@@ -34,10 +34,10 @@ func TestAnalyzeLogs(t *testing.T) {
 
 func TestSearchLogs(t *testing.T) {
 	Init("debug")
-	
+
 	tempDir := t.TempDir()
 	logFile := filepath.Join(tempDir, "test.log")
-	
+
 	// Create a test log file
 	f, err := os.Create(logFile)
 	if err != nil {
@@ -47,7 +47,7 @@ func TestSearchLogs(t *testing.T) {
 {"level":"error","timestamp":"2026-01-01T00:00:01Z","message":"test error"}
 `)
 	f.Close()
-	
+
 	results, err := SearchLogs(tempDir, "test", 1*time.Hour, 100)
 	if err != nil {
 		t.Errorf("SearchLogs() error = %v", err)
@@ -59,7 +59,7 @@ func TestSearchLogs(t *testing.T) {
 
 func TestFormatLogStats(t *testing.T) {
 	Init("debug")
-	
+
 	stats := &LogStats{
 		TotalEntries:      100,
 		ErrorCount:        10,
@@ -71,10 +71,9 @@ func TestFormatLogStats(t *testing.T) {
 			End:   time.Now(),
 		},
 	}
-	
+
 	formatted := FormatLogStats(stats)
 	if formatted == "" {
 		t.Error("FormatLogStats() returned empty string")
 	}
 }
-

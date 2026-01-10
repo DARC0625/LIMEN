@@ -207,4 +207,3 @@ func TestHandleLogSearch_InvalidMethod(t *testing.T) {
 		t.Errorf("Expected status 405, got %d", w.Code)
 	}
 }
-

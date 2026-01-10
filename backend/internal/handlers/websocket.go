@@ -15,8 +15,8 @@ import (
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
 	"github.com/DARC0625/LIMEN/backend/internal/utils"
-	"nhooyr.io/websocket"
 	"go.uber.org/zap"
+	"nhooyr.io/websocket"
 )
 
 // VMStatusBroadcaster manages WebSocket connections for VM status updates
@@ -89,7 +89,7 @@ func (b *VMStatusBroadcaster) Run() {
 				clients = append(clients, conn)
 			}
 			b.mu.RUnlock()
-			
+
 			// Write to all clients with optimized timeout
 			for _, conn := range clients {
 				// Use longer timeout for network stability (10 seconds)
@@ -117,7 +117,7 @@ func (b *VMStatusBroadcaster) BroadcastVMUpdate(vm models.VM) {
 	buf := utils.BufferPool.Get().(*bytes.Buffer)
 	defer utils.BufferPool.Put(buf)
 	defer buf.Reset()
-	
+
 	encoder := json.NewEncoder(buf)
 	if err := encoder.Encode(map[string]interface{}{
 		"type": "vm_update",
@@ -126,7 +126,7 @@ func (b *VMStatusBroadcaster) BroadcastVMUpdate(vm models.VM) {
 		logger.Log.Error("Failed to marshal VM update", zap.Error(err))
 		return
 	}
-	
+
 	// Copy buffer contents to avoid holding reference
 	message := make([]byte, buf.Len())
 	copy(message, buf.Bytes())
@@ -145,7 +145,7 @@ func (b *VMStatusBroadcaster) BroadcastVMList(vms []models.VM) {
 	buf := utils.BufferPool.Get().(*bytes.Buffer)
 	defer utils.BufferPool.Put(buf)
 	defer buf.Reset()
-	
+
 	encoder := json.NewEncoder(buf)
 	if err := encoder.Encode(map[string]interface{}{
 		"type": "vm_list",
@@ -154,7 +154,7 @@ func (b *VMStatusBroadcaster) BroadcastVMList(vms []models.VM) {
 		logger.Log.Error("Failed to marshal VM list", zap.Error(err))
 		return
 	}
-	
+
 	// Copy buffer contents to avoid holding reference
 	message := make([]byte, buf.Len())
 	copy(message, buf.Bytes())
@@ -183,7 +183,7 @@ func (h *Handler) HandleVMStatusWebSocket(w http.ResponseWriter, r *http.Request
 		zap.String("host", r.Host),
 		zap.String("referer", r.Header.Get("Referer")),
 		zap.Strings("allowed_origins", h.Config.AllowedOrigins))
-	
+
 	// Set CORS headers for WebSocket (before authentication)
 	if h.isOriginAllowed(origin) {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
@@ -236,7 +236,7 @@ func (h *Handler) HandleVMStatusWebSocket(w http.ResponseWriter, r *http.Request
 	logger.Log.Info("Attempting WebSocket upgrade for VM status",
 		zap.String("path", r.URL.Path),
 		zap.Uint("user_id", claims.UserID))
-	
+
 	conn, err := h.acceptWebSocket(w, r)
 	if err != nil {
 		logger.Log.Error("WebSocket upgrade failed for VM status - DETAILED",
@@ -258,7 +258,7 @@ func (h *Handler) HandleVMStatusWebSocket(w http.ResponseWriter, r *http.Request
 			zap.Uint("user_id", claims.UserID))
 		conn.Close(websocket.StatusNormalClosure, "")
 	}()
-	
+
 	logger.Log.Info("VM status WebSocket upgrade SUCCESS",
 		zap.String("path", r.URL.Path),
 		zap.Uint("user_id", claims.UserID),

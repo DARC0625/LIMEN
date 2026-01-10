@@ -11,7 +11,7 @@ func TestGenerateSessionID_Extended(t *testing.T) {
 	if err1 != nil {
 		t.Fatalf("GenerateSessionID failed: %v", err1)
 	}
-	
+
 	sessionID2, err2 := GenerateSessionID()
 	if err2 != nil {
 		t.Fatalf("GenerateSessionID failed: %v", err2)
@@ -38,7 +38,7 @@ func TestGenerateSessionID_Extended(t *testing.T) {
 func TestCreateSession_WithAllFields(t *testing.T) {
 	store := NewSessionStore()
 	defer store.Stop()
-	
+
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 	session, err := store.CreateSession("access-token", "refresh-token", "token-id", "csrf-token", 1, "testuser", "user", expiresAt)
 	if err != nil {
@@ -73,7 +73,7 @@ func TestCreateSession_WithAllFields(t *testing.T) {
 func TestGetSessionByRefreshToken_NotFound(t *testing.T) {
 	store := NewSessionStore()
 	defer store.Stop()
-	
+
 	_, exists := store.GetSessionByRefreshToken("non-existent-token")
 	if exists {
 		t.Error("GetSessionByRefreshToken should return false for non-existent token")
@@ -83,7 +83,7 @@ func TestGetSessionByRefreshToken_NotFound(t *testing.T) {
 func TestGetSessionByTokenID_NotFound(t *testing.T) {
 	store := NewSessionStore()
 	defer store.Stop()
-	
+
 	_, exists := store.GetSessionByTokenID("non-existent-token-id")
 	if exists {
 		t.Error("GetSessionByTokenID should return false for non-existent token ID")
@@ -93,7 +93,7 @@ func TestGetSessionByTokenID_NotFound(t *testing.T) {
 func TestGetSessionByRefreshToken_MultipleSessions(t *testing.T) {
 	store := NewSessionStore()
 	defer store.Stop()
-	
+
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 	// Create multiple sessions
 	session1, _ := store.CreateSession("access-1", "refresh-token-1", "token-id-1", "csrf-1", 1, "user1", "user", expiresAt)
@@ -120,7 +120,7 @@ func TestGetSessionByRefreshToken_MultipleSessions(t *testing.T) {
 func TestGetSessionByTokenID_MultipleSessions(t *testing.T) {
 	store := NewSessionStore()
 	defer store.Stop()
-	
+
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 	// Create multiple sessions
 	session1, _ := store.CreateSession("access-1", "refresh-token-1", "token-id-1", "csrf-1", 1, "user1", "user", expiresAt)
@@ -147,7 +147,7 @@ func TestGetSessionByTokenID_MultipleSessions(t *testing.T) {
 func TestUpdateSessionTokens_Extended(t *testing.T) {
 	store := NewSessionStore()
 	defer store.Stop()
-	
+
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 	session, _ := store.CreateSession("access", "old-refresh", "old-token-id", "csrf", 1, "testuser", "user", expiresAt)
 
@@ -175,7 +175,7 @@ func TestUpdateSessionTokens_Extended(t *testing.T) {
 func TestUpdateSessionTokens_NotFound(t *testing.T) {
 	store := NewSessionStore()
 	defer store.Stop()
-	
+
 	err := store.UpdateSessionTokens("non-existent-session-id", "new-access", "new-refresh", "new-token-id")
 	if err == nil {
 		t.Error("UpdateSessionTokens should fail for non-existent session")
@@ -185,7 +185,7 @@ func TestUpdateSessionTokens_NotFound(t *testing.T) {
 func TestValidateCSRFToken_Extended(t *testing.T) {
 	store := NewSessionStore()
 	defer store.Stop()
-	
+
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 	session, _ := store.CreateSession("access", "refresh-token", "token-id", "csrf-token", 1, "testuser", "user", expiresAt)
 
@@ -211,7 +211,7 @@ func TestValidateCSRFToken_Extended(t *testing.T) {
 func TestGetSessionByRefreshTokenCookie_Extended(t *testing.T) {
 	store := NewSessionStore()
 	defer store.Stop()
-	
+
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 	session, _ := store.CreateSession("access", "refresh-token", "token-id", "csrf-token", 1, "testuser", "user", expiresAt)
 
@@ -234,7 +234,7 @@ func TestGetSessionByRefreshTokenCookie_Extended(t *testing.T) {
 func TestSession_Expiration(t *testing.T) {
 	store := NewSessionStore()
 	defer store.Stop()
-	
+
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 	session, _ := store.CreateSession("access", "refresh-token", "token-id", "csrf-token", 1, "testuser", "user", expiresAt)
 
@@ -248,4 +248,3 @@ func TestSession_Expiration(t *testing.T) {
 		t.Error("Session ExpiresAt should be in the future")
 	}
 }
-

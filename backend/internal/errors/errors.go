@@ -25,10 +25,10 @@ const (
 	ErrCodeImageInvalid ErrorCode = "IMAGE_INVALID"
 
 	// 데이터베이스 관련 에러
-	ErrCodeDBError        ErrorCode = "DATABASE_ERROR"
-	ErrCodeDBConnection   ErrorCode = "DATABASE_CONNECTION_ERROR"
-	ErrCodeDBQueryFailed  ErrorCode = "DATABASE_QUERY_FAILED"
-	ErrCodeDBTransaction  ErrorCode = "DATABASE_TRANSACTION_ERROR"
+	ErrCodeDBError       ErrorCode = "DATABASE_ERROR"
+	ErrCodeDBConnection  ErrorCode = "DATABASE_CONNECTION_ERROR"
+	ErrCodeDBQueryFailed ErrorCode = "DATABASE_QUERY_FAILED"
+	ErrCodeDBTransaction ErrorCode = "DATABASE_TRANSACTION_ERROR"
 
 	// Libvirt 관련 에러
 	ErrCodeLibvirtError      ErrorCode = "LIBVIRT_ERROR"
@@ -36,10 +36,10 @@ const (
 	ErrCodeLibvirtOperation  ErrorCode = "LIBVIRT_OPERATION_ERROR"
 
 	// 인증/인가 관련 에러
-	ErrCodeUnauthorized     ErrorCode = "UNAUTHORIZED"
-	ErrCodeForbidden        ErrorCode = "FORBIDDEN"
-	ErrCodeInvalidToken     ErrorCode = "INVALID_TOKEN"
-	ErrCodeTokenExpired     ErrorCode = "TOKEN_EXPIRED"
+	ErrCodeUnauthorized       ErrorCode = "UNAUTHORIZED"
+	ErrCodeForbidden          ErrorCode = "FORBIDDEN"
+	ErrCodeInvalidToken       ErrorCode = "INVALID_TOKEN"
+	ErrCodeTokenExpired       ErrorCode = "TOKEN_EXPIRED"
 	ErrCodeInvalidCredentials ErrorCode = "INVALID_CREDENTIALS"
 
 	// 입력 검증 관련 에러
@@ -50,12 +50,12 @@ const (
 	// 리소스 관련 에러
 	ErrCodeQuotaExceeded    ErrorCode = "QUOTA_EXCEEDED"
 	ErrCodeResourceNotFound ErrorCode = "RESOURCE_NOT_FOUND"
-	ErrCodeResourceConflict  ErrorCode = "RESOURCE_CONFLICT"
+	ErrCodeResourceConflict ErrorCode = "RESOURCE_CONFLICT"
 
 	// 시스템 관련 에러
-	ErrCodeInternalError    ErrorCode = "INTERNAL_ERROR"
+	ErrCodeInternalError      ErrorCode = "INTERNAL_ERROR"
 	ErrCodeServiceUnavailable ErrorCode = "SERVICE_UNAVAILABLE"
-	ErrCodeTimeout          ErrorCode = "TIMEOUT"
+	ErrCodeTimeout            ErrorCode = "TIMEOUT"
 
 	// RAG 관련 에러
 	ErrCodeRAGError         ErrorCode = "RAG_ERROR"
@@ -65,19 +65,19 @@ const (
 
 // APIError represents a standardized API error response.
 type APIError struct {
-	Code    int       `json:"code"`
-	Message string    `json:"message"`
-	Error   string    `json:"error,omitempty"` // Internal error details (only in development)
-	ErrorCode ErrorCode `json:"error_code,omitempty"` // Structured error code
-	Context  map[string]interface{} `json:"context,omitempty"` // Additional context
+	Code      int                    `json:"code"`
+	Message   string                 `json:"message"`
+	Error     string                 `json:"error,omitempty"`      // Internal error details (only in development)
+	ErrorCode ErrorCode              `json:"error_code,omitempty"` // Structured error code
+	Context   map[string]interface{} `json:"context,omitempty"`    // Additional context
 }
 
 // AppError represents an application error with structured information.
 type AppError struct {
-	Code    ErrorCode
-	Message string
-	Context map[string]interface{}
-	Cause   error
+	Code     ErrorCode
+	Message  string
+	Context  map[string]interface{}
+	Cause    error
 	HTTPCode int
 }
 
@@ -122,10 +122,10 @@ func (e *AppError) WithContext(key string, value interface{}) *AppError {
 // ToAPIError converts AppError to APIError for HTTP response.
 func (e *AppError) ToAPIError(isDevelopment bool) APIError {
 	apiErr := APIError{
-		Code:     e.HTTPCode,
-		Message:  e.Message,
+		Code:      e.HTTPCode,
+		Message:   e.Message,
 		ErrorCode: e.Code,
-		Context:  e.Context,
+		Context:   e.Context,
 	}
 
 	// 개발 모드에서만 내부 에러 상세 정보 포함
@@ -148,8 +148,8 @@ func WriteErrorWithCode(w http.ResponseWriter, code int, message string, errorCo
 	w.WriteHeader(code)
 
 	apiErr := APIError{
-		Code:    code,
-		Message: message,
+		Code:      code,
+		Message:   message,
 		ErrorCode: errorCode,
 	}
 
@@ -169,7 +169,7 @@ func WriteAppError(w http.ResponseWriter, appErr *AppError, isDevelopment bool) 
 	apiErr := appErr.ToAPIError(isDevelopment)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(appErr.HTTPCode)
-	
+
 	if err := json.NewEncoder(w).Encode(apiErr); err != nil {
 		// Fallback if JSON encoding fails
 		http.Error(w, "An error occurred", appErr.HTTPCode)

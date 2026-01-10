@@ -233,7 +233,7 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 		refreshCookie.Secure = true
 	}
 	http.SetCookie(w, refreshCookie)
-	
+
 	logger.Log.Debug("Refresh token cookie set",
 		zap.String("username", user.Username),
 		zap.Bool("secure", isHTTPS))
@@ -242,7 +242,7 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 	csrfCookie := &http.Cookie{
 		Name:     "csrf_token",
 		Value:    csrfToken,
-		HttpOnly: false, // JavaScript needs access for X-CSRF-Token header
+		HttpOnly: false,                // JavaScript needs access for X-CSRF-Token header
 		SameSite: http.SameSiteLaxMode, // Changed to Lax for consistency
 		Path:     "/",
 		MaxAge:   604800, // 7 days
@@ -256,7 +256,7 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request, cfg *confi
 	// Prepare response (Refresh Token is sent via cookie, not in body)
 	response := LoginResponse{
 		AccessToken: accessToken,
-		ExpiresIn:   900,      // 15 minutes in seconds
+		ExpiresIn:   900, // 15 minutes in seconds
 		TokenType:   "Bearer",
 	}
 
@@ -420,7 +420,7 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 			csrfToken = cookie.Value
 		}
 	}
-	
+
 	// Log request for debugging (passive monitoring - no blocking)
 	hasRefreshToken := false
 	if _, err := r.Cookie("refresh_token"); err == nil {
@@ -495,7 +495,7 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 			zap.Uint("user_id", refreshClaims.UserID),
 			zap.String("username", refreshClaims.Username),
 			zap.String("token_id", refreshClaims.TokenID))
-		
+
 		// Generate new access token
 		newAccessToken, err := auth.GenerateAccessToken(refreshClaims.UserID, refreshClaims.Username, refreshClaims.Role, refreshClaims.Approved, cfg.JWTSecret)
 		if err != nil {
@@ -503,7 +503,7 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 			errors.WriteInternalError(w, err, false)
 			return
 		}
-		
+
 		// Generate new CSRF token
 		csrfToken, err := security.GenerateCSRFToken()
 		if err != nil {
@@ -511,7 +511,7 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 			errors.WriteInternalError(w, err, false)
 			return
 		}
-		
+
 		// Create new session with existing refresh token
 		var expiresAt time.Time
 		if refreshClaims.ExpiresAt != nil {
@@ -535,7 +535,7 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 			errors.WriteInternalError(w, err, false)
 			return
 		}
-		
+
 		logger.Log.Info("Session recovered successfully",
 			zap.String("session_id", session.ID),
 			zap.Uint("user_id", refreshClaims.UserID),

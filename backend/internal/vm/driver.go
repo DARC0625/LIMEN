@@ -35,7 +35,7 @@ type Domain interface {
 	SetMemoryFlags(memory uint64, flags uint32) error
 	GetVcpusFlags(flags uint32) (int, error)
 	GetMemoryStats(flags uint32) (map[string]uint64, error)
-	
+
 	// Snapshot operations (libvirt-specific, but needed for snapshot.go)
 	CreateSnapshotXML(xml string, flags uint32) (Snapshot, error)
 	SnapshotLookupByName(name string) (Snapshot, error)

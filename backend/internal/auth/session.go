@@ -15,10 +15,10 @@ import (
 // Session represents a user session.
 type Session struct {
 	ID           string
-	AccessToken  string    // Short-lived access token (15 minutes)
-	RefreshToken string    // Long-lived refresh token (7 days)
-	TokenID      string    // Unique token ID for refresh token rotation
-	CSRFToken    string    // CSRF token for state-changing requests
+	AccessToken  string // Short-lived access token (15 minutes)
+	RefreshToken string // Long-lived refresh token (7 days)
+	TokenID      string // Unique token ID for refresh token rotation
+	CSRFToken    string // CSRF token for state-changing requests
 	UserID       uint
 	Username     string
 	Role         string
@@ -233,4 +233,3 @@ func (s *SessionStore) cleanupExpiredSessionsNow() {
 func (s *SessionStore) Stop() {
 	// No periodic cleanup goroutine to stop
 }
-

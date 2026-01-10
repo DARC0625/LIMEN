@@ -42,9 +42,9 @@ func setupTestAuthHandler(t *testing.T) (*Handler, *config.Config) {
 	database.DB = db
 
 	cfg := &config.Config{
-		Env:           "test",
-		Port:          "18443",
-		JWTSecret:     "test-secret-key-for-testing-only-very-long-key",
+		Env:            "test",
+		Port:           "18443",
+		JWTSecret:      "test-secret-key-for-testing-only-very-long-key",
 		AllowedOrigins: []string{"http://localhost:3000"},
 	}
 
@@ -226,12 +226,12 @@ func TestHandleRegister_DuplicateUsername(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status 400, got %d. Body: %s", w.Code, w.Body.String())
 	}
-	
+
 	var response map[string]interface{}
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("Failed to parse response: %v", err)
 	}
-	
+
 	if response["message"] == nil || !strings.Contains(response["message"].(string), "already exists") {
 		t.Errorf("Expected error message about duplicate username, got: %v", response["message"])
 	}
@@ -426,4 +426,3 @@ func TestMin(t *testing.T) {
 		})
 	}
 }
-

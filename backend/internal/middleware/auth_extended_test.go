@@ -133,4 +133,3 @@ func TestAuth_PublicEndpoint(t *testing.T) {
 		})
 	}
 }
-

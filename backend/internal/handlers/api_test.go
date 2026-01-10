@@ -37,9 +37,9 @@ func setupTestDB(t *testing.T) *gorm.DB {
 func setupTestHandler(t *testing.T) (*Handler, *config.Config) {
 	db := setupTestDB(t)
 	cfg := &config.Config{
-		Env:          "test",
-		Port:         "18443",
-		JWTSecret:    "test-secret-key-for-testing-only",
+		Env:            "test",
+		Port:           "18443",
+		JWTSecret:      "test-secret-key-for-testing-only",
 		AllowedOrigins: []string{"http://localhost:3000"},
 	}
 
@@ -90,7 +90,7 @@ func TestHandleVMAction_InvalidAction(t *testing.T) {
 	}
 	h.DB.Create(&vm)
 
-	req := httptest.NewRequest("POST", "/api/vms/12345678-1234-1234-1234-123456789abc/action", 
+	req := httptest.NewRequest("POST", "/api/vms/12345678-1234-1234-1234-123456789abc/action",
 		bytes.NewBufferString(`{"action":"invalid-action"}`))
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("uuid", vm.UUID)
@@ -140,7 +140,7 @@ func TestHandleVMAction_MissingBody(t *testing.T) {
 func TestHandleVMMedia_InvalidUUID(t *testing.T) {
 	h, _ := setupTestHandler(t)
 
-	req := httptest.NewRequest("POST", "/api/vms/invalid-uuid/media", 
+	req := httptest.NewRequest("POST", "/api/vms/invalid-uuid/media",
 		bytes.NewBufferString(`{"action":"detach"}`))
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("uuid", "invalid-uuid")
@@ -164,7 +164,7 @@ func TestHandleVMMedia_InvalidAction(t *testing.T) {
 	}
 	h.DB.Create(&vm)
 
-	req := httptest.NewRequest("POST", "/api/vms/12345678-1234-1234-1234-123456789abc/media", 
+	req := httptest.NewRequest("POST", "/api/vms/12345678-1234-1234-1234-123456789abc/media",
 		bytes.NewBufferString(`{"action":"invalid"}`))
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("uuid", vm.UUID)
@@ -189,7 +189,7 @@ func TestHandleVMMedia_AttachMissingISOPath(t *testing.T) {
 	}
 	h.DB.Create(&vm)
 
-	req := httptest.NewRequest("POST", "/api/vms/12345678-1234-1234-1234-123456789abc/media", 
+	req := httptest.NewRequest("POST", "/api/vms/12345678-1234-1234-1234-123456789abc/media",
 		bytes.NewBufferString(`{"action":"attach"}`))
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("uuid", vm.UUID)
@@ -434,4 +434,3 @@ func TestHandleVMAction_ValidAction_WithoutVMService(t *testing.T) {
 		t.Errorf("Expected status 500 (VMService is nil), got %d", w.Code)
 	}
 }
-

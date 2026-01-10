@@ -322,4 +322,3 @@ func TestHandleUpdateQuota_MaxVMsIgnored(t *testing.T) {
 		t.Errorf("Expected MaxVMs to equal MaxCPU (20), got %d", updatedQuota.MaxVMs)
 	}
 }
-

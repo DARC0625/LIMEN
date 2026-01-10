@@ -368,4 +368,3 @@ func TestHandleDeleteSnapshot_InvalidSnapshotID(t *testing.T) {
 		t.Errorf("Expected status 400, got %d", w.Code)
 	}
 }
-

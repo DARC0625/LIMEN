@@ -34,7 +34,7 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *chi.Mux {
 	// http-swagger handles /swagger/doc.json automatically
 	r.Mount("/swagger/", httpSwagger.WrapHandler)
 	r.Get("/swagger", h.HandleSwaggerUI) // Swagger UI (outside /api prefix)
-	r.Get("/docs", h.HandleSwaggerUI)   // Alternative path for Swagger UI
+	r.Get("/docs", h.HandleSwaggerUI)    // Alternative path for Swagger UI
 
 	// Hardware specification endpoints (public for monitoring)
 	api.Get("/hardware/spec", func(w http.ResponseWriter, r *http.Request) {

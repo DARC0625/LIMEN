@@ -195,4 +195,3 @@ func TestHandler_HandleVNC_OriginNotAllowed(t *testing.T) {
 		t.Logf("Response code: %d (may be 0 or 403 for origin rejection)", w.Code)
 	}
 }
-

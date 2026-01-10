@@ -116,5 +116,3 @@ func TestValidateEd25519JWT_InvalidToken(t *testing.T) {
 		t.Error("ValidateEd25519JWT() should return error for invalid token")
 	}
 }
-
-

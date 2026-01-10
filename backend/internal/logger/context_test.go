@@ -9,16 +9,16 @@ import (
 
 func TestWithContext(t *testing.T) {
 	Init("debug")
-	
+
 	logCtx := LogContext{
 		RequestID: "test-request-id",
 		IP:        "192.168.1.1",
 		UserAgent: "test-user-agent",
 		Timestamp: time.Now(),
 	}
-	
+
 	logger := WithContext(logCtx)
-	
+
 	if logger == nil {
 		t.Error("WithContext() returned nil")
 	}
@@ -26,11 +26,11 @@ func TestWithContext(t *testing.T) {
 
 func TestLogRequest(t *testing.T) {
 	Init("debug")
-	
+
 	req := httptest.NewRequest("GET", "/api/test", nil)
 	req.RemoteAddr = "192.168.1.1:12345"
 	req.Header.Set("User-Agent", "test-agent")
-	
+
 	logCtx := ExtractContextFromRequest(req, 1, "testuser")
 	LogRequest(logCtx, "test request message")
 	// Should not panic
@@ -38,9 +38,9 @@ func TestLogRequest(t *testing.T) {
 
 func TestLogResponse(t *testing.T) {
 	Init("debug")
-	
+
 	req := httptest.NewRequest("GET", "/api/test", nil)
-	
+
 	logCtx := ExtractContextFromRequest(req, 1, "testuser")
 	logCtx.StatusCode = 200
 	logCtx.ResponseSize = 1024
@@ -50,9 +50,9 @@ func TestLogResponse(t *testing.T) {
 
 func TestLogError(t *testing.T) {
 	Init("debug")
-	
+
 	req := httptest.NewRequest("GET", "/api/test", nil)
-	
+
 	logCtx := ExtractContextFromRequest(req, 1, "testuser")
 	LogError(logCtx, "test error message", nil)
 	// Should not panic
@@ -60,11 +60,11 @@ func TestLogError(t *testing.T) {
 
 func TestExtractContextFromRequest(t *testing.T) {
 	Init("debug")
-	
+
 	tests := []struct {
-		name    string
-		request *http.Request
-		userID  uint
+		name     string
+		request  *http.Request
+		userID   uint
 		username string
 	}{
 		{
@@ -117,7 +117,7 @@ func TestExtractContextFromRequest(t *testing.T) {
 
 func TestGetClientIP(t *testing.T) {
 	Init("debug")
-	
+
 	tests := []struct {
 		name     string
 		request  *http.Request
@@ -161,4 +161,3 @@ func TestGetClientIP(t *testing.T) {
 		})
 	}
 }
-

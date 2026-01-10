@@ -138,4 +138,3 @@ func TestVM_BeforeCreate(t *testing.T) {
 		t.Errorf("Existing UUID should not be overwritten. Expected %s, got %s", existingUUID, vm2.UUID)
 	}
 }
-

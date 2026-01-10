@@ -90,7 +90,7 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 					refreshToken := cookie.Value
 					logger.Log.Debug("Attempting authentication via refresh token cookie",
 						zap.String("path", r.URL.Path))
-					
+
 					refreshClaims, refreshErr := auth.ValidateRefreshToken(refreshToken, cfg.JWTSecret)
 					if refreshErr != nil {
 						logger.Log.Debug("Refresh token validation failed",
@@ -180,15 +180,15 @@ func IsPublicEndpoint(path string) bool {
 		"/api/metrics",      // Prometheus metrics endpoint (public)
 		"/api/auth/login",
 		"/api/auth/register",
-		"/api/auth/session", // Session management endpoints (GET, POST, DELETE)
-		"/api/auth/refresh", // Token refresh endpoint
+		"/api/auth/session",    // Session management endpoints (GET, POST, DELETE)
+		"/api/auth/refresh",    // Token refresh endpoint
 		"/api/public/waitlist", // Public waitlist registration (no auth required)
-		"/agent",            // Agent reverse-proxy path (public metrics)
-		"/apiauth/login",    // Handle Envoy rewrite issue
-		"/apiauth/register", // Handle Envoy rewrite issue
-		"/ws/vnc",           // WebSocket endpoints need special handling
-		"/vnc",              // VNC WebSocket endpoint (with or without UUID)
-		"/vnc/",             // VNC WebSocket endpoint with UUID in path
+		"/agent",               // Agent reverse-proxy path (public metrics)
+		"/apiauth/login",       // Handle Envoy rewrite issue
+		"/apiauth/register",    // Handle Envoy rewrite issue
+		"/ws/vnc",              // WebSocket endpoints need special handling
+		"/vnc",                 // VNC WebSocket endpoint (with or without UUID)
+		"/vnc/",                // VNC WebSocket endpoint with UUID in path
 	}
 
 	for _, publicPath := range publicPaths {

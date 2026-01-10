@@ -263,8 +263,8 @@ func Init() {
 		"origin_not_allowed",
 		"accept_failed",
 		"invalid_request",
-		"missing_token",    // 토큰이 없는 경우
-		"invalid_token",    // 토큰이 유효하지 않은 경우
+		"missing_token", // 토큰이 없는 경우
+		"invalid_token", // 토큰이 유효하지 않은 경우
 	}
 	uaFamilies := []string{"chrome", "firefox", "safari", "edge", "opera", "unknown"}
 

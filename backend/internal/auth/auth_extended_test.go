@@ -26,7 +26,7 @@ func TestValidateToken_InvalidSigningMethod(t *testing.T) {
 
 func TestValidateToken_ExpiredToken(t *testing.T) {
 	secret := "test-secret-key-for-testing-only"
-	
+
 	// Create an expired token manually
 	claims := &Claims{
 		UserID:   1,
@@ -71,7 +71,7 @@ func TestValidateToken_InvalidTokenFormat(t *testing.T) {
 
 func TestGenerateRefreshToken_Extended(t *testing.T) {
 	secret := "test-secret-key-for-testing-only"
-	
+
 	token, tokenID, err := GenerateRefreshToken(1, "testuser", "user", true, secret)
 	if err != nil {
 		t.Fatalf("GenerateRefreshToken failed: %v", err)
@@ -118,7 +118,7 @@ func TestValidateRefreshToken_InvalidToken(t *testing.T) {
 
 func TestValidateRefreshToken_ExpiredToken(t *testing.T) {
 	secret := "test-secret-key-for-testing-only"
-	
+
 	// Create an expired refresh token
 	claims := &RefreshTokenClaims{
 		UserID:   1,
@@ -150,9 +150,9 @@ func TestValidateRefreshToken_ExpiredToken(t *testing.T) {
 
 func TestExtractTokenFromHeader_InvalidFormat(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		authHeader string
-		wantErr   error
+		wantErr    error
 	}{
 		{
 			name:       "empty header",
@@ -197,7 +197,7 @@ func TestExtractTokenFromHeader_InvalidFormat(t *testing.T) {
 
 func TestGenerateTokenWithApproval_Extended(t *testing.T) {
 	secret := "test-secret-key-for-testing-only"
-	
+
 	tests := []struct {
 		name     string
 		approved bool
@@ -227,7 +227,7 @@ func TestGenerateTokenWithApproval_Extended(t *testing.T) {
 
 func TestGenerateAccessToken_Extended(t *testing.T) {
 	secret := "test-secret-key-for-testing-only"
-	
+
 	token, err := GenerateAccessToken(1, "testuser", "user", true, secret)
 	if err != nil {
 		t.Fatalf("GenerateAccessToken failed: %v", err)
@@ -255,4 +255,3 @@ func TestGenerateAccessToken_Extended(t *testing.T) {
 		t.Errorf("Expected expiration around 15 minutes, got %v", expirationTime)
 	}
 }
-

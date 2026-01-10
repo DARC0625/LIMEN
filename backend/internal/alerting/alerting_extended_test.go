@@ -97,4 +97,3 @@ func TestManager_Send_Deduplication(t *testing.T) {
 		t.Errorf("Third Send() after window expired error = %v", err3)
 	}
 }
-
