@@ -1,6 +1,3 @@
-//go:build libvirt
-// +build libvirt
-
 package vm
 
 import (
@@ -18,13 +15,12 @@ import (
 
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
 	"github.com/DARC0625/LIMEN/backend/internal/models"
-	"github.com/libvirt/libvirt-go"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 type VMService struct {
-	conn   *libvirt.Connect
+	driver LibvirtDriver // libvirt driver interface (no direct libvirt import)
 	db     *gorm.DB
 	isoDir string
 	vmDir  string
@@ -50,11 +46,6 @@ func (s *VMService) GetVMDir() string {
 }
 
 func NewVMService(db *gorm.DB, libvirtURI, isoDir, vmDir string) (*VMService, error) {
-	conn, err := libvirt.NewConnect(libvirtURI)
-	if err != nil {
-		return nil, err
-	}
-
 	// Ensure directories exist with proper permissions
 	if err := os.MkdirAll(isoDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create ISO directory: %w", err)
@@ -63,8 +54,14 @@ func NewVMService(db *gorm.DB, libvirtURI, isoDir, vmDir string) (*VMService, er
 		return nil, fmt.Errorf("failed to create VM directory: %w", err)
 	}
 
+	// Create libvirt driver (implementation depends on build tags)
+	driver := NewLibvirtDriver()
+	if err := driver.Connect(libvirtURI); err != nil {
+		return nil, fmt.Errorf("failed to connect to libvirt: %w", err)
+	}
+
 	return &VMService{
-		conn:              conn,
+		driver:            driver,
 		db:                db,
 		isoDir:            isoDir,
 		vmDir:             vmDir,
@@ -74,20 +71,16 @@ func NewVMService(db *gorm.DB, libvirtURI, isoDir, vmDir string) (*VMService, er
 }
 
 func (s *VMService) Close() {
-	if s.conn != nil {
-		s.conn.Close()
+	if s.driver != nil {
+		s.driver.Close()
 	}
 }
 
 func (s *VMService) IsAlive() bool {
-	if s.conn == nil {
+	if s.driver == nil {
 		return false
 	}
-	res, err := s.conn.IsAlive()
-	if err != nil {
-		return false
-	}
-	return res
+	return s.driver.IsAlive()
 }
 
 func (s *VMService) EnsureISO(osType string) (string, error) {
@@ -156,11 +149,11 @@ func (s *VMService) CreateVM(name string, memoryMB int, vcpu int, osType string,
 func (s *VMService) createVMInternal(name string, memoryMB int, vcpu int, osType string, vmUUID string, graphicsType string, vncEnabled bool) error {
 	// 0. Cleanup existing resources (Libvirt domain and Disk)
 	// Check if domain exists in libvirt and cleanup
-	if dom, err := s.conn.LookupDomainByName(name); err == nil {
+	if dom, err := s.driver.LookupDomainByName(name); err == nil {
 		if active, _ := dom.IsActive(); active {
 			dom.Destroy()
 		}
-		dom.Undefine()
+		dom.UndefineFlags(0) // 0 = default flags
 		dom.Free()
 	}
 
@@ -341,7 +334,7 @@ func (s *VMService) createVMInternal(name string, memoryMB int, vcpu int, osType
 </domain>
 `, name, memoryMB*1024, vcpu, bootXML, vmDiskPath, isoPath, graphicsXML)
 
-	dom, err := s.conn.DomainDefineXML(vmXML)
+	dom, err := s.driver.DomainDefineXML(vmXML)
 	if err != nil {
 		return fmt.Errorf("failed to define domain: %w", err)
 	}
@@ -380,7 +373,7 @@ func (s *VMService) deleteVMInternal(name string) error {
 	}
 
 	// 1. Try to cleanup Libvirt Domain
-	dom, err := s.conn.LookupDomainByName(name)
+	dom, err := s.driver.LookupDomainByName(name)
 	if err == nil {
 		defer dom.Free()
 
@@ -391,7 +384,7 @@ func (s *VMService) deleteVMInternal(name string) error {
 			}
 		}
 
-		if err := dom.Undefine(); err != nil {
+		if err := dom.UndefineFlags(0); err != nil {
 			logger.Log.Warn("Failed to undefine domain", zap.String("vm_name", name), zap.Error(err))
 		}
 	} else {
@@ -507,7 +500,7 @@ func (s *VMService) deleteVMInternal(name string) error {
 
 func (s *VMService) StopVM(name string) error {
 	return s.withLibvirtGuard("StopVM", func() error {
-		dom, err := s.conn.LookupDomainByName(name)
+		dom, err := s.driver.LookupDomainByName(name)
 		if err != nil {
 			return err
 		}
@@ -524,7 +517,7 @@ func (s *VMService) StartVM(name string) error {
 }
 
 func (s *VMService) startVMInternal(name string) error {
-	dom, err := s.conn.LookupDomainByName(name)
+	dom, err := s.driver.LookupDomainByName(name)
 	if err != nil {
 		return fmt.Errorf("VM not found: %w", err)
 	}
@@ -543,7 +536,7 @@ func (s *VMService) startVMInternal(name string) error {
 		}
 		// Verify the VM is actually running and update DB status
 		state, _, err := dom.GetState()
-		if err == nil && state == libvirt.DOMAIN_RUNNING {
+		if err == nil && state == DomainStateRunning {
 			// Update DB to ensure status is synced
 			var vmRec models.VM
 			if err := s.db.Where("name = ?", name).First(&vmRec).Error; err == nil {
@@ -691,7 +684,7 @@ func (s *VMService) startVMInternal(name string) error {
 // SetBootOrder sets the boot order for a VM
 // AddTPMAndSecureBoot adds TPM 2.0 and Secure Boot to an existing Windows VM
 func (s *VMService) AddTPMAndSecureBoot(name string) error {
-	dom, err := s.conn.LookupDomainByName(name)
+	dom, err := s.driver.LookupDomainByName(name)
 	if err != nil {
 		return fmt.Errorf("VM not found: %w", err)
 	}
@@ -798,7 +791,7 @@ func (s *VMService) AddTPMAndSecureBoot(name string) error {
 		return fmt.Errorf("failed to undefine domain: %w", err)
 	}
 
-	if _, err := s.conn.DomainDefineXML(updatedXML); err != nil {
+	if _, err := s.driver.DomainDefineXML(updatedXML); err != nil {
 		return fmt.Errorf("failed to redefine domain with TPM and Secure Boot: %w", err)
 	}
 
@@ -811,7 +804,7 @@ func (s *VMService) SetBootOrder(name string, bootOrder models.BootOrder) error 
 		return fmt.Errorf("invalid boot order: %s", bootOrder)
 	}
 
-	dom, err := s.conn.LookupDomainByName(name)
+	dom, err := s.driver.LookupDomainByName(name)
 	if err != nil {
 		// Check if error is "Domain not found"
 		if strings.Contains(err.Error(), "Domain not found") || strings.Contains(err.Error(), "no domain with matching name") {
@@ -828,7 +821,7 @@ func (s *VMService) SetBootOrder(name string, bootOrder models.BootOrder) error 
 	xmlDesc, err := dom.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
 		// If VM is running, try to get active XML
-		xmlDesc, err = dom.GetXMLDesc(libvirt.DOMAIN_XML_SECURE)
+		xmlDesc, err = dom.GetXMLDescSecure()
 		if err != nil {
 			return fmt.Errorf("failed to get VM XML: %w", err)
 		}
@@ -853,7 +846,7 @@ func (s *VMService) SetBootOrder(name string, bootOrder models.BootOrder) error 
 	}
 
 	// Define updated domain
-	newDom, err := s.conn.DomainDefineXML(updatedXML)
+	newDom, err := s.driver.DomainDefineXML(updatedXML)
 	if err != nil {
 		return fmt.Errorf("failed to redefine domain with new boot order: %w", err)
 	}
@@ -868,7 +861,7 @@ func (s *VMService) SetBootOrder(name string, bootOrder models.BootOrder) error 
 // This is the standard way to transition from installation mode to normal operation
 // (equivalent to "Eject ISO" in VMware/VirtualBox, but boot order is user-configurable)
 func (s *VMService) FinalizeInstall(name string) error {
-	dom, err := s.conn.LookupDomainByName(name)
+	dom, err := s.driver.LookupDomainByName(name)
 	if err != nil {
 		return fmt.Errorf("VM not found: %w", err)
 	}
@@ -881,7 +874,7 @@ func (s *VMService) FinalizeInstall(name string) error {
 	}
 
 	// If VM is running, attempt graceful shutdown
-	if state == libvirt.DOMAIN_RUNNING {
+	if state == DomainStateRunning {
 		logger.Log.Warn("VM is running during finalize install, attempting graceful shutdown",
 			zap.String("vm_name", name))
 		if err := dom.Shutdown(); err != nil {
@@ -899,14 +892,14 @@ func (s *VMService) FinalizeInstall(name string) error {
 			for i := 0; i < 10; i++ {
 				time.Sleep(1 * time.Second)
 				state, _, _ := dom.GetState()
-				if state == libvirt.DOMAIN_SHUTOFF {
+				if state == DomainStateShutoff {
 					logger.Log.Info("VM shutdown completed", zap.String("vm_name", name))
 					break
 				}
 			}
 			// If still running after 10 seconds, force destroy
 			state, _, _ := dom.GetState()
-			if state == libvirt.DOMAIN_RUNNING {
+			if state == DomainStateRunning {
 				logger.Log.Warn("VM still running after graceful shutdown timeout, forcing destroy",
 					zap.String("vm_name", name))
 				if err := dom.Destroy(); err != nil {
@@ -970,7 +963,7 @@ func (s *VMService) FinalizeInstall(name string) error {
 	updatedXML = cdromDiskRegex.ReplaceAllString(updatedXML, "")
 
 	// 5. Update domain definition
-	_, err = s.conn.DomainDefineXML(updatedXML)
+	_, err = s.driver.DomainDefineXML(updatedXML)
 	if err != nil {
 		return fmt.Errorf("failed to update domain XML: %w", err)
 	}
@@ -1224,7 +1217,7 @@ func (s *VMService) updateCDROMSource(xmlDesc string, newSource string) (string,
 
 // DetachMedia removes ISO/CDROM media from a VM
 func (s *VMService) DetachMedia(name string) error {
-	dom, err := s.conn.LookupDomainByName(name)
+	dom, err := s.driver.LookupDomainByName(name)
 	if err != nil {
 		return fmt.Errorf("VM not found: %w", err)
 	}
@@ -1264,7 +1257,7 @@ func (s *VMService) DetachMedia(name string) error {
 	}
 
 	// Update domain definition
-	_, err = s.conn.DomainDefineXML(updatedXML)
+	_, err = s.driver.DomainDefineXML(updatedXML)
 	if err != nil {
 		return fmt.Errorf("failed to detach media: %w", err)
 	}
@@ -1283,7 +1276,7 @@ func (s *VMService) AttachMedia(name string, isoPath string) error {
 		return fmt.Errorf("Media file not found: %s", isoPath)
 	}
 
-	dom, err := s.conn.LookupDomainByName(name)
+	dom, err := s.driver.LookupDomainByName(name)
 	if err != nil {
 		// Check if error is "Domain not found"
 		if strings.Contains(err.Error(), "Domain not found") || strings.Contains(err.Error(), "no domain with matching name") {
@@ -1325,7 +1318,7 @@ func (s *VMService) AttachMedia(name string, isoPath string) error {
 	}
 
 	// Update domain definition
-	_, err = s.conn.DomainDefineXML(updatedXML)
+	_, err = s.driver.DomainDefineXML(updatedXML)
 	if err != nil {
 		return fmt.Errorf("failed to attach media: %w", err)
 	}
@@ -1339,7 +1332,7 @@ func (s *VMService) AttachMedia(name string, isoPath string) error {
 
 // GetCurrentMedia returns the currently attached media (ISO) path for a VM
 func (s *VMService) GetCurrentMedia(name string) (string, error) {
-	dom, err := s.conn.LookupDomainByName(name)
+	dom, err := s.driver.LookupDomainByName(name)
 	if err != nil {
 		return "", fmt.Errorf("VM not found: %w", err)
 	}
@@ -1420,7 +1413,7 @@ func (s *VMService) GetVNCPort(name string) (string, error) {
 	retryDelay := 200 * time.Millisecond
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		dom, err := s.conn.LookupDomainByName(name)
+		dom, err := s.driver.LookupDomainByName(name)
 		if err != nil {
 			return "", fmt.Errorf("VM not found: %w", err)
 		}
@@ -1523,7 +1516,7 @@ func (s *VMService) verifyVNCPort(port int) bool {
 // If VNC graphics is missing, it will be added automatically
 // Note: This function should be called before starting the VM, as DomainDefineXML cannot modify running VMs
 func (s *VMService) ensureVNCGraphics(name string) error {
-	dom, err := s.conn.LookupDomainByName(name)
+	dom, err := s.driver.LookupDomainByName(name)
 	if err != nil {
 		return fmt.Errorf("VM not found: %w", err)
 	}
@@ -1612,7 +1605,7 @@ func (s *VMService) ensureVNCGraphics(name string) error {
 	updatedXML := xmlDesc[:insertPos] + vncConfig + xmlDesc[insertPos:]
 
 	// Update domain definition
-	_, err = s.conn.DomainDefineXML(updatedXML)
+	_, err = s.driver.DomainDefineXML(updatedXML)
 	if err != nil {
 		return fmt.Errorf("failed to add VNC graphics to VM: %w", err)
 	}
@@ -1622,7 +1615,7 @@ func (s *VMService) ensureVNCGraphics(name string) error {
 }
 
 func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
-	dom, err := s.conn.LookupDomainByName(name)
+	dom, err := s.driver.LookupDomainByName(name)
 	if err != nil {
 		// Check if error is "Domain not found"
 		if strings.Contains(err.Error(), "Domain not found") || strings.Contains(err.Error(), "no domain with matching name") {
@@ -1680,7 +1673,7 @@ func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
 
 	// Update Memory (Config)
 	// DOMAIN_AFFECT_CONFIG = 2
-	memFlags := libvirt.DomainMemoryModFlags(2)
+	memFlags := uint32(2) // DOMAIN_MEM_CURRENT
 
 	if err := dom.SetMemoryFlags(uint64(memoryMB*1024), memFlags); err != nil {
 		return fmt.Errorf("failed to set memory: %w", err)
@@ -1688,7 +1681,7 @@ func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
 
 	// Update VCPU (Config)
 	// DOMAIN_VCPU_CONFIG = 2
-	vcpuFlags := libvirt.DomainVcpuFlags(2)
+	vcpuFlags := uint32(2) // DOMAIN_VCPU_LIVE
 	if err := dom.SetVcpusFlags(uint(vcpu), vcpuFlags); err != nil {
 		return fmt.Errorf("failed to set vcpus: %w", err)
 	}
