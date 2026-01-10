@@ -2,10 +2,6 @@
 // This file defines the interface for libvirt operations.
 package vm
 
-import (
-	"github.com/DARC0625/LIMEN/backend/internal/models"
-)
-
 // LibvirtDriver defines the interface for libvirt operations.
 // This allows service.go to work without directly importing libvirt types.
 type LibvirtDriver interface {
@@ -28,10 +24,13 @@ type Domain interface {
 	IsActive() (bool, error)
 	GetState() (DomainState, int, error) // Returns (state, reason, error)
 	GetXMLDesc(flags uint32) (string, error)
+	GetXMLDescInactive() (string, error)
+	GetXMLDescSecure() (string, error)
 	Create() error
 	Destroy() error
 	Shutdown() error
 	UndefineFlags(flags uint32) error
+	Undefine() error
 	SetVcpusFlags(vcpu uint, flags uint32) error
 	SetMemoryFlags(memory uint64, flags uint32) error
 	GetVcpusFlags(flags uint32) (int, error)

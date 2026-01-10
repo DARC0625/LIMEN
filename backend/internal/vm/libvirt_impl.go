@@ -128,13 +128,16 @@ func (d *libvirtDomain) GetVcpusFlags(flags uint32) (int, error) {
 }
 
 func (d *libvirtDomain) GetMemoryStats(flags uint32) (map[string]uint64, error) {
-	stats, err := d.dom.MemoryStats(uint(libvirt.DOMAIN_MEMORY_STAT_ACTUAL), 0)
+	// libvirt-go MemoryStats: MemoryStats(flags DomainMemoryStatFlags, nrStats uint) ([]DomainMemoryStat, error)
+	// DOMAIN_MEMORY_STAT_ACTUAL = 1
+	stats, err := d.dom.MemoryStats(1, 0)
 	if err != nil {
 		return nil, err
 	}
 	result := make(map[string]uint64)
 	for _, stat := range stats {
-		// libvirt returns Tag as int32, convert to string key
+		// libvirt DomainMemoryStat has Tag (int32) and Val (uint64)
+		// Use Tag as string key
 		result[fmt.Sprintf("tag_%d", stat.Tag)] = stat.Val
 	}
 	return result, nil
