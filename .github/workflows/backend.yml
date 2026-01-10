@@ -58,10 +58,24 @@ jobs:
             exit 1
           fi
 
-      - name: Run tests (CI-safe, no libvirt)
-        # Note: libvirt-dependent code is excluded via build tags
-        # CI runners don't have libvirt installed, so we test without -tags libvirt
-        run: go test -v -race -coverprofile=coverage.out ./internal/... ./cmd/...
+      - name: P0 Smoke Tests (1~3분, PR 필수)
+        # 핵심 기능 빠른 검증: health, auth 기본, validator
+        run: go test -tags smoke -short -v \
+          ./cmd/server/... \
+          ./internal/handlers/health_test.go \
+          ./internal/handlers/auth_test.go \
+          ./internal/validator/... || (echo "Smoke tests failed" && exit 1)
+
+      - name: Core Regression Tests (3~10분, PR/main merge)
+        # 핵심 비즈니스 로직: auth, VM lifecycle, DB, API 계약
+        # Note: libvirt-dependent tests are excluded via build tags
+        run: go test -tags regression -short -v -race -coverprofile=coverage.out \
+          ./internal/auth/... \
+          ./internal/middleware/... \
+          ./internal/handlers/... \
+          ./internal/models/... \
+          ./internal/database/... \
+          ./internal/errors/... || (echo "Regression tests failed" && exit 1)
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

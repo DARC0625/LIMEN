@@ -1,0 +1,63 @@
+name: Nightly Extended Tests
+
+on:
+  schedule:
+    # 매일 새벽 2시 (UTC) 실행
+    - cron: '0 2 * * *'
+  workflow_dispatch: # 수동 트리거 가능
+
+jobs:
+  extended-tests:
+    name: Extended/Flaky Tests (Nightly)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: ./backend/go.sum
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run Extended Tests (벤치마크 등)
+        # Extended/Flaky 테스트: 성능, 부하 테스트
+        run: go test -tags extended -v ./internal/handlers/api_bench_test.go || (echo "Extended tests failed" && exit 1)
+
+  libvirt-validation:
+    name: Libvirt Validation (Self-hosted)
+    runs-on: self-hosted
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Download dependencies
+        working-directory: ./backend
+        run: go mod download
+
+      - name: Run Libvirt Tests
+        # libvirt 의존 테스트는 self-hosted runner에서만 실행
+        working-directory: ./backend
+        run: go test -tags libvirt,extended -v ./internal/vm/... || (echo "Libvirt tests failed" && exit 1)
