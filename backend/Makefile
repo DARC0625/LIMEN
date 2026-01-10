@@ -17,16 +17,28 @@ lint:
 	@$(GOLANGCI_LINT) run ./internal/... ./cmd/... || (echo "Lint failed" && exit 1)
 	@echo "✓ Lint passed"
 
-# Test
+# Test (CI-safe, no libvirt)
 test:
-	@echo "=== Running tests ==="
+	@echo "=== Running tests (CI-safe, no libvirt) ==="
 	@$(GO) test -v -race -coverprofile=coverage.out ./internal/... ./cmd/... || (echo "Tests failed" && exit 1)
 	@echo "✓ Tests passed"
 
-# Build
+# Test with libvirt (for production/hypervisor environments)
+test-libvirt:
+	@echo "=== Running tests with libvirt ==="
+	@$(GO) test -v -race -tags libvirt -coverprofile=coverage.out ./internal/... ./cmd/... || (echo "Tests failed" && exit 1)
+	@echo "✓ Tests passed"
+
+# Build (CI-safe, no libvirt)
 build:
-	@echo "=== Building ==="
+	@echo "=== Building (CI-safe, no libvirt) ==="
 	@$(GO) build -o server ./cmd/server || (echo "Build failed" && exit 1)
+	@echo "✓ Build passed"
+
+# Build with libvirt (for production/hypervisor environments)
+build-libvirt:
+	@echo "=== Building with libvirt ==="
+	@$(GO) build -tags libvirt -o server ./cmd/server || (echo "Build failed" && exit 1)
 	@echo "✓ Build passed"
 
 # Smoke test (health + metrics)

@@ -55,7 +55,9 @@ jobs:
             exit 1
           fi
 
-      - name: Run tests
+      - name: Run tests (CI-safe, no libvirt)
+        # Note: libvirt-dependent code is excluded via build tags
+        # CI runners don't have libvirt installed, so we test without -tags libvirt
         run: go test -v -race -coverprofile=coverage.out ./...
 
       - name: Upload coverage to Codecov
@@ -66,7 +68,9 @@ jobs:
           name: backend-coverage
         continue-on-error: true
 
-      - name: Build backend
+      - name: Build backend (CI-safe, no libvirt)
+        # Note: Production builds should use: go build -tags libvirt
+        # CI builds exclude libvirt code via build tags
         run: go build -ldflags="-s -w" -trimpath -o server ./cmd/server
 
       - name: Upload build artifacts

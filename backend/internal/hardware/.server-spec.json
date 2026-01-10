@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-01-05T22:48:48.87101899+09:00",
+  "timestamp": "2026-01-11T00:09:04.027580433+09:00",
   "hostname": "DARC",
   "architecture": "amd64",
   "os": "linux",
@@ -10,7 +10,7 @@
     "architecture": "",
     "cores": 32,
     "threads": 32,
-    "frequency_mhz": 2995.198,
+    "frequency_mhz": 2995.201,
     "cache_l1": "",
     "cache_l2": "",
     "cache_l3": "36864 KB",
@@ -129,8 +129,8 @@
   },
   "memory": {
     "total_gb": 188.4648551940918,
-    "available_gb": 175.9743309020996,
-    "used_gb": 12.490524291992188,
+    "available_gb": 184.50746154785156,
+    "used_gb": 3.9573936462402344,
     "swap_total_gb": 32,
     "swap_used_gb": 0
   },
@@ -184,7 +184,7 @@
       "type": "UP",
       "mac": "",
       "ips": [
-        "10.2.0.2/32"
+        "10.0.0.100/24"
       ],
       "speed": "",
       "duplex": ""
@@ -201,16 +201,6 @@
     },
     {
       "name": "eth2",
-      "type": "UP",
-      "mac": "",
-      "ips": [
-        "10.0.0.100/24"
-      ],
-      "speed": "",
-      "duplex": ""
-    },
-    {
-      "name": "eth3",
       "type": "DOWN",
       "mac": "",
       "ips": null,
@@ -218,7 +208,7 @@
       "duplex": ""
     },
     {
-      "name": "eth4",
+      "name": "eth3",
       "type": "DOWN",
       "mac": "",
       "ips": null,
@@ -234,7 +224,7 @@
       "duplex": ""
     },
     {
-      "name": "eth5",
+      "name": "eth4",
       "type": "DOWN",
       "mac": "",
       "ips": null,
@@ -243,19 +233,11 @@
     },
     {
       "name": "virbr0",
-      "type": "UP",
+      "type": "DOWN",
       "mac": "",
       "ips": [
         "192.168.122.1/24"
       ],
-      "speed": "",
-      "duplex": ""
-    },
-    {
-      "name": "vnet0",
-      "type": "UNKNOWN",
-      "mac": "",
-      "ips": null,
       "speed": "",
       "duplex": ""
     }
