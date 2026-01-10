@@ -23,10 +23,16 @@ else
     cd repo
 fi
 
-# 3. Sparse checkout 설정
+# 3. Sparse checkout 설정 (Backend 서버 전용 정책)
+# backend/ - BACKEND ONLY (API, Auth, RBAC, libvirt 제어)
+# config/ - EDGE + BACK (공통 설정)
+# infra/ - EDGE + BACK (운영/배포)
+# scripts/ - EDGE + BACK (sync, gate)
+# RAG/ - EDGE + BACK (필수, 문서 = RAG)
+# ⚠️ .github/, .vscode/는 CI/DEV 전용이므로 포함하지 않음
 echo "[3/5] Setting up sparse checkout..."
 git sparse-checkout init --cone
-git sparse-checkout set apps/backend RAG docs packages/shared
+git sparse-checkout set backend config infra scripts RAG
 
 # 4. Main 브랜치 체크아웃
 echo "[4/5] Checking out main branch..."
@@ -42,6 +48,12 @@ set -euo pipefail
 cd /opt/limen/repo
 git fetch origin main
 git reset --hard origin/main
+
+# 게이트: backend/ 폴더가 없으면 실패 (Backend 서버 필수)
+if [ ! -d "backend" ]; then
+  echo "[FATAL][POLICY:BACKEND] backend/ folder is missing. This is required on BACKEND server."
+  exit 1
+fi
 
 # 게이트: edge 코드가 존재하면 즉시 실패
 if [ -d "apps/edge" ]; then
@@ -66,6 +78,17 @@ root_md_count=$(find . -maxdepth 1 -name "*.md" -type f ! -name "README.md" | wc
 if [ "$root_md_count" -gt 0 ]; then
   echo "[FATAL][POLICY:D0] Found $root_md_count .md file(s) in root. All documents must be moved to RAG/ (except README.md)."
   find . -maxdepth 1 -name "*.md" -type f ! -name "README.md"
+  exit 1
+fi
+
+# 게이트: CI/DEV 전용 폴더가 존재하면 실패 (서버 배포 금지)
+if [ -d ".github" ]; then
+  echo "[FATAL][POLICY:CI] .github/ exists on server. This is CI-only and must not be deployed."
+  exit 1
+fi
+
+if [ -d ".vscode" ]; then
+  echo "[FATAL][POLICY:DEV] .vscode/ exists on server. This is DEV-only and must not be deployed."
   exit 1
 fi
 

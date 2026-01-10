@@ -31,9 +31,15 @@ fi
 echo "[3/5] Initializing sparse checkout..."
 git sparse-checkout init --cone
 
-# 4. 필요한 경로만 설정
+# 4. 필요한 경로만 설정 (Backend 서버 전용 정책)
+# backend/ - BACKEND ONLY (API, Auth, RBAC, libvirt 제어)
+# config/ - EDGE + BACK (공통 설정)
+# infra/ - EDGE + BACK (운영/배포)
+# scripts/ - EDGE + BACK (sync, gate)
+# RAG/ - EDGE + BACK (필수, 문서 = RAG)
+# ⚠️ .github/, .vscode/는 CI/DEV 전용이므로 포함하지 않음
 echo "[4/5] Setting sparse checkout paths..."
-git sparse-checkout set backend config infra scripts RAG shared
+git sparse-checkout set backend config infra scripts RAG
 
 # 5. Main 브랜치 체크아웃
 echo "[5/5] Checking out main branch..."
