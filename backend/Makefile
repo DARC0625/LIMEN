@@ -23,6 +23,34 @@ test:
 	@$(GO) test -v -race -coverprofile=coverage.out ./internal/... ./cmd/... || (echo "Tests failed" && exit 1)
 	@echo "✓ Tests passed"
 
+# P0 Smoke tests (1~3분, PR 필수)
+test-smoke:
+	@echo "=== P0 Smoke Tests (1~3분) ==="
+	@$(GO) test -tags smoke -short -v \
+		./cmd/server/... \
+		./internal/handlers/health_test.go \
+		./internal/handlers/auth_test.go \
+		./internal/validator/... || (echo "Smoke tests failed" && exit 1)
+	@echo "✓ Smoke tests passed"
+
+# Core Regression tests (3~10분, PR/main merge)
+test-regression:
+	@echo "=== Core Regression Tests (3~10분) ==="
+	@$(GO) test -tags regression -short -v \
+		./internal/auth/... \
+		./internal/middleware/... \
+		./internal/handlers/... \
+		./internal/models/... \
+		./internal/database/... \
+		./internal/errors/... || (echo "Regression tests failed" && exit 1)
+	@echo "✓ Regression tests passed"
+
+# Extended/Flaky tests (nightly/manual)
+test-extended:
+	@echo "=== Extended/Flaky Tests (nightly/manual) ==="
+	@$(GO) test -tags extended -v ./internal/handlers/api_bench_test.go || (echo "Extended tests failed" && exit 1)
+	@echo "✓ Extended tests passed"
+
 # Test with libvirt (for production/hypervisor environments)
 test-libvirt:
 	@echo "=== Running tests with libvirt ==="

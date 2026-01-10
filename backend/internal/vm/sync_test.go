@@ -1,3 +1,6 @@
+//go:build libvirt && extended
+// +build libvirt,extended
+
 package vm
 
 import (

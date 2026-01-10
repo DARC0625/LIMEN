@@ -1,3 +1,6 @@
+//go:build smoke || regression
+// +build smoke regression
+
 package handlers
 
 import (
