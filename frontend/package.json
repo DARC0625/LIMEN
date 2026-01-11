@@ -2,6 +2,7 @@
   "name": "limen-frontend",
   "version": "0.1.0",
   "private": true,
+  "description": "LIMEN - VM Management Platform Frontend",
   "scripts": {
     "dev": "PORT=9444 next dev --turbo --port 9444",
     "build": "rm -rf .next node_modules/.cache && next build --turbo",
