@@ -443,7 +443,7 @@ describe('tokenManager', () => {
 
   it('handles clearTokens on server side', () => {
     const originalWindow = global.window
-    // @ts-ignore
+    // @ts-expect-error - intentional deletion of global.window for server-side test
     delete global.window
 
     expect(() => {
@@ -499,7 +499,7 @@ describe('tokenManager', () => {
 
   it('handles setTokens on server side with warning log', () => {
     const originalWindow = global.window
-    // @ts-ignore
+    // @ts-expect-error - intentional deletion of global.window for server-side test
     delete global.window
 
     jest.clearAllMocks()

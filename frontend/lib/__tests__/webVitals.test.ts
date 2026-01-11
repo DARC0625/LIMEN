@@ -84,7 +84,7 @@ describe('webVitals', () => {
   describe('initWebVitals', () => {
     it('does nothing on server side', () => {
       const originalWindow = global.window
-      // @ts-ignore
+      // @ts-expect-error - intentional deletion of global.window for server-side test
       delete global.window
 
       initWebVitals()
@@ -115,7 +115,7 @@ describe('webVitals', () => {
 
     it('handles missing PerformanceObserver', () => {
       const originalPerformanceObserver = global.PerformanceObserver
-      // @ts-ignore
+      // @ts-expect-error - intentional deletion of global.PerformanceObserver for test
       delete global.PerformanceObserver
 
       expect(() => initWebVitals()).not.toThrow()
@@ -129,7 +129,7 @@ describe('webVitals', () => {
         disconnect: jest.fn(),
       })) as any
 
-      // @ts-ignore
+      // @ts-expect-error - intentional deletion of PerformanceObserver.supportedEntryTypes for test
       delete (PerformanceObserver as any).supportedEntryTypes
 
       expect(() => initWebVitals()).not.toThrow()
