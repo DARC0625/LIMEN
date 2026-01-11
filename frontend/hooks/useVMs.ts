@@ -289,7 +289,6 @@ export function useCreateVM() {
           window.console.error('[useCreateVM] 500 Internal Server Error:', {
             errorMessage,
             errorDetails: error.details,
-            requestData: _variables,
           });
         }
         
