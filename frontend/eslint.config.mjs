@@ -28,4 +28,22 @@ export default [
       "coverage/**",
     ],
   },
+  // 프로덕션 소스: 강한 규칙 유지
+  {
+    files: ["src/**/*.{ts,tsx,js,jsx}"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "warn",
+    },
+  },
+  // 테스트 파일: 실용 우선 (규칙 완화)
+  {
+    files: ["__tests__/**/*.{ts,tsx,js,jsx}", "**/*.test.{ts,tsx,js,jsx}", "**/*.spec.{ts,tsx,js,jsx}"],
+    rules: {
+      // 테스트에서는 실용 우선
+      "@typescript-eslint/no-unused-vars": "off",
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
 ];
