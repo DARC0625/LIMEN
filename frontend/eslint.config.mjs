@@ -18,6 +18,8 @@ export default [
       "coverage/**",
       "playwright-report/**",
       "public/novnc/**", // 외부 번들: ESLint로 수정하지 않음
+      "public/sw.js", // Service Worker: 외부 번들 또는 자체 작성이면 override로 처리
+      "lib/novnc-browser-patch.js", // 외부 패치: ESLint로 수정하지 않음
     ],
   },
   // (A) Browser 환경 (기본): window/document/navigator 등 브라우저 글로벌 허용

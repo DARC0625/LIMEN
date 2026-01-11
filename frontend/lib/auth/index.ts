@@ -5,9 +5,7 @@
 
 import { tokenManager } from '../tokenManager';
 import { authAPI } from '../api/auth';
-import { validateTokenIntegrity } from '../security';
 import { getUserRoleFromToken, isUserApprovedFromToken, isTokenValid } from '../utils/token';
-import { AUTH_CONSTANTS } from '../constants';
 import type { SessionResponse } from '../types';
 import { logger } from '../utils/logger';
 

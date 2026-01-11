@@ -18,12 +18,12 @@ interface SentryInstance {
 }
 
 // Sentry 연동 (환경 변수로 활성화)
-let Sentry: SentryInstance | null = null;
+const Sentry: SentryInstance | null = null;
 if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_SENTRY_DSN) {
   try {
     // 동적 import로 Sentry 로드 (필요시 설치: npm install @sentry/nextjs)
     // Sentry = require('@sentry/nextjs');
-  } catch (e) {
+  } catch {
     // Sentry가 설치되지 않은 경우 무시
   }
 }
@@ -71,7 +71,7 @@ export function trackError(error: Error, context?: ErrorContext): void {
           action: context?.action || 'unknown',
         },
       });
-    } catch (e) {
+    } catch {
       // Sentry 에러는 무시하고 계속 진행
     }
   }
