@@ -151,9 +151,75 @@ LIMEN/
 - [RAG 워크플로우 가이드](../04-operations/rag-workflow.md)
 - [프로젝트 구조](../01-architecture/system-design.md)
 
+## TypeScript `any` 타입 사용 가이드라인
+
+### 원칙: `any` 대신 `unknown` + 타입 가드
+
+`any` 타입은 타입 안전성을 완전히 무시하므로, 보안/안정성 측면에서 위험합니다. 가능한 한 명시적 타입을 사용하고, 불가피한 경우 `unknown` + 타입 가드를 사용하세요.
+
+### 케이스 1: API 응답 데이터
+
+```typescript
+// ❌ 기존
+const users: any = await fetchUsers();
+
+// ✅ 권고
+interface AdminUser {
+  id: string;
+  email: string;
+  role: "admin" | "user";
+  createdAt: string;
+}
+
+const users: AdminUser[] = await fetchUsers();
+```
+
+### 케이스 2: map/handler 콜백 파라미터
+
+```typescript
+// ❌ 기존
+users.map((u: any) => { ... });
+
+// ✅ 권고
+users.map((u: AdminUser) => { ... });
+```
+
+### 케이스 3: 타입을 아직 확정 못 한 경우 (차선책)
+
+```typescript
+// ❌ any
+const data: any = response.data;
+
+// ✅ 최소한 unknown
+const data: unknown = response.data;
+
+// 이후 타입 가드
+if (Array.isArray(data)) {
+  // data: unknown[] → 좁혀짐
+}
+```
+
+**원칙**: `any` 대신 `unknown` + 타입 가드를 사용하면 보안/안정성 측면에서 훨씬 낫습니다.
+
+### 케이스 4: 정말 불가피한 경우 (최후 수단)
+
+```typescript
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const legacy: any = something; // TODO: 타입 정의 필요
+```
+
+**주의사항**:
+- `eslint-disable` 주석과 함께 사용
+- **TODO 주석 반드시 동반**하여 향후 개선 계획 명시
+- 가능한 한 빠른 시일 내에 명시적 타입으로 교체
+
+### ESLint 규칙
+
+프로덕션 소스(`src/**`)에서는 `@typescript-eslint/no-explicit-any`가 `warn`으로 설정되어 있습니다. 테스트 파일에서는 완화되어 있습니다.
+
 ---
 
-**마지막 업데이트**: 2025-01-02
+**마지막 업데이트**: 2025-01-10
 
 
 
