@@ -95,9 +95,16 @@ export default function VNCViewer({ id }: { id: string }) {
         });
 
         // Configure VNC scaling and sizing
-        rfb.scaleViewport = true; // Scale to fit container
-        rfb.resizeSession = false; // Disable server resize to prevent issues
-        rfb.background = 'black';
+        // noVNC RFB 객체는 외부 라이브러리이므로 타입 단언 필요
+        const rfbInstance = rfb as {
+          scaleViewport: boolean;
+          resizeSession: boolean;
+          background: string;
+          addEventListener: (event: string, handler: (e: unknown) => void) => void;
+        };
+        rfbInstance.scaleViewport = true; // Scale to fit container
+        rfbInstance.resizeSession = false; // Disable server resize to prevent issues
+        rfbInstance.background = 'black';
         
         // Initial resize with a small delay to ensure DOM is ready
         setTimeout(() => {
@@ -123,9 +130,9 @@ export default function VNCViewer({ id }: { id: string }) {
         };
         
         // Store cleanup function
-        (rfb as any)._resizeCleanup = cleanupResize;
+        (rfbInstance as { _resizeCleanup?: () => void })._resizeCleanup = cleanupResize;
 
-        rfb.addEventListener('connect', () => {
+        rfbInstance.addEventListener('connect', () => {
             setStatus('Connected');
             // Trigger resize after connection to ensure proper sizing (only once, no loop)
             setTimeout(() => {
@@ -139,7 +146,7 @@ export default function VNCViewer({ id }: { id: string }) {
             }, 200);
         });
 
-        rfb.addEventListener('disconnect', (e: unknown) => {
+        rfbInstance.addEventListener('disconnect', (e: unknown) => {
             const event = e as { detail?: { reason?: string; code?: string }; reason?: string; code?: string };
             const reason = event?.detail?.reason || event?.reason || 'Unknown reason';
             const code = event?.detail?.code || event?.code || '';
@@ -148,17 +155,17 @@ export default function VNCViewer({ id }: { id: string }) {
             console.error("VNC Disconnected", { reason, code, detail: event?.detail, event });
         });
         
-        rfb.addEventListener('securityfailure', (e: unknown) => {
+        rfbInstance.addEventListener('securityfailure', (e: unknown) => {
             setStatus('Security Failure');
             console.error("VNC Security Failure", e);
         });
 
-        rfb.addEventListener('credentialsrequired', () => {
+        rfbInstance.addEventListener('credentialsrequired', () => {
             setStatus('Credentials Required');
         });
 
         // Add error handler
-        rfb.addEventListener('error', (e: unknown) => {
+        rfbInstance.addEventListener('error', (e: unknown) => {
             const event = e as { detail?: { message?: string }; message?: string };
             const errorMsg = event?.detail?.message || event?.message || 'Connection error';
             setStatus(`Error: ${errorMsg}`);
