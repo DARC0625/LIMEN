@@ -152,6 +152,8 @@ export default function VMListSection({
   const startXRef = useRef(0);
   const dragOffsetRef = useRef(0);
   const vmsLengthRef = useRef(vms.length);
+  const [startX, setStartX] = useState(0);
+  const [currentX, setCurrentX] = useState(0);
   
   // vms.length 변경 시 ref 업데이트
   useEffect(() => {

@@ -204,12 +204,12 @@ export default function Home() {
           });
         } else if (isAPIError(apiError)) {
           // 백엔드에서 제공한 상세 에러 정보 확인
-          if (apiError.details) {
+          const errorDetails = (apiError as any).details;
+          if (errorDetails) {
             const isRecord = (v: unknown): v is Record<string, unknown> => 
               typeof v === 'object' && v !== null && !Array.isArray(v);
-            const details = apiError.details;
-            if (isRecord(details) && (typeof details.error === 'string' || typeof details.message === 'string')) {
-              errorMessage = `${error.message}\n${details.error || details.message || ''}`;
+            if (isRecord(errorDetails) && (typeof errorDetails.error === 'string' || typeof errorDetails.message === 'string')) {
+              errorMessage = `${error.message}\n${errorDetails.error || errorDetails.message || ''}`;
             }
           }
         }
@@ -318,12 +318,12 @@ export default function Home() {
         errorMessage = error.message;
         
         // 백엔드에서 제공한 상세 에러 정보 확인
-        if (apiError.details) {
+        const errorDetails = (apiError as any).details;
+        if (errorDetails) {
           const isRecord = (v: unknown): v is Record<string, unknown> => 
             typeof v === 'object' && v !== null && !Array.isArray(v);
-          const details = apiError.details;
-          if (isRecord(details) && (typeof details.error === 'string' || typeof details.message === 'string')) {
-            errorMessage = `${error.message}\n${details.error || details.message || ''}`;
+          if (isRecord(errorDetails) && (typeof errorDetails.error === 'string' || typeof errorDetails.message === 'string')) {
+            errorMessage = `${error.message}\n${errorDetails.error || errorDetails.message || ''}`;
           }
         }
       } else {
@@ -369,7 +369,7 @@ export default function Home() {
             setProcessingId(null);
           });
         },
-        onError: (error: Error) => {
+        onError: (error: unknown) => {
           window.console.error('[handleAction] Mutation error:', error);
           startTransition(() => {
             setProcessingId(null);

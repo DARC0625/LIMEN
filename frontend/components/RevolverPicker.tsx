@@ -26,6 +26,7 @@ export default function RevolverPicker({
   const [scrollOffset, setScrollOffset] = useState(0);
   const [lastY, setLastY] = useState(0);
   const [lastTime, setLastTime] = useState(0);
+  const [velocity, setVelocity] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const selectedIndexRef = useRef<number>(items.indexOf(value));
   const animationFrameRef = useRef<number | null>(null);
@@ -92,7 +93,7 @@ export default function RevolverPicker({
 
   // 키보드 네비게이션 (향후 사용 예정 - 현재 미사용)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _handleKeyDown = useCallback((_e: React.KeyboardEvent) => {
+  const _handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const currentIndex = items.indexOf(value);
     let newIndex = currentIndex;
     

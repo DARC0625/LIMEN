@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { authAPI } from '@/lib/api';
 import { useRouter } from 'next/navigation';
-import { useToast } from './ToastContainer';
+import { useToast } from '../../components/ToastContainer';
 
 export default function RegisterForm() {
   const [username, setUsername] = useState('');
