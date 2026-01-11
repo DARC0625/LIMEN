@@ -65,7 +65,7 @@ func TestHandleGetQuota_Success(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, user.ID))
 	w := httptest.NewRecorder()
 
-	h.HandleGetQuota(w, req)
+	h.HandleGetQuotaHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d. Body: %s", w.Code, w.Body.String())
@@ -93,7 +93,7 @@ func TestHandleGetQuota_Unauthorized(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/quota", nil)
 	w := httptest.NewRecorder()
 
-	h.HandleGetQuota(w, req)
+	h.HandleGetQuotaHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("Expected status 401, got %d", w.Code)
@@ -106,7 +106,7 @@ func TestHandleGetQuota_InvalidMethod(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/quota", nil)
 	w := httptest.NewRecorder()
 
-	h.HandleGetQuota(w, req)
+	h.HandleGetQuotaHTTP(w, req)
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("Expected status 405, got %d", w.Code)
