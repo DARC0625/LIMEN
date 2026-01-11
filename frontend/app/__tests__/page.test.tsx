@@ -25,8 +25,29 @@ describe('Home Page', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockUseRouter.mockReturnValue(mockRouter as any)
-    // fetch 모킹
-    global.fetch = jest.fn()
+    
+    // fetch 모킹: 기본적으로 성공 응답 (인증 문제 회피)
+    global.fetch = jest.fn((url: RequestInfo | URL) => {
+      const urlString = typeof url === 'string' ? url : url.toString()
+      
+      // waitlist API만 실패하도록 설정 (테스트 목적)
+      if (urlString.includes('/api/public/waitlist') || urlString.includes('/api/waitlist')) {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          json: async () => ({ error: '대기자 등록 실패' }),
+        } as Response)
+      }
+      
+      // 다른 API들(quota, vms, auth 등)은 성공 응답 (인증 에러 회피)
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+        headers: new Headers(),
+        getSetCookie: () => [],
+      } as Response)
+    })
   })
 
   it('renders main heading', () => {
@@ -56,9 +77,26 @@ describe('Home Page', () => {
   })
 
   it('handles form submission successfully', async () => {
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true }),
+    // waitlist API만 성공하도록 override
+    ;(global.fetch as jest.Mock).mockImplementation((url: RequestInfo | URL) => {
+      const urlString = typeof url === 'string' ? url : url.toString()
+      if (urlString.includes('/api/public/waitlist') || urlString.includes('/api/waitlist')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true }),
+          headers: new Headers(),
+          getSetCookie: () => [],
+        } as Response)
+      }
+      // 다른 API는 기본 mock 사용
+      return (global.fetch as jest.Mock).getMockImplementation()?.(url) || Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+        headers: new Headers(),
+        getSetCookie: () => [],
+      } as Response)
     })
 
     render(<Home />)
@@ -89,9 +127,26 @@ describe('Home Page', () => {
   })
 
   it('handles form submission error', async () => {
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: false,
-      status: 500,
+    // waitlist API만 실패하도록 override
+    ;(global.fetch as jest.Mock).mockImplementation((url: RequestInfo | URL) => {
+      const urlString = typeof url === 'string' ? url : url.toString()
+      if (urlString.includes('/api/public/waitlist') || urlString.includes('/api/waitlist')) {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          json: async () => ({ error: '대기자 등록 실패' }),
+          headers: new Headers(),
+          getSetCookie: () => [],
+        } as Response)
+      }
+      // 다른 API는 기본 mock 사용 (성공)
+      return (global.fetch as jest.Mock).getMockImplementation()?.(url) || Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+        headers: new Headers(),
+        getSetCookie: () => [],
+      } as Response)
     })
 
     render(<Home />)
@@ -112,9 +167,26 @@ describe('Home Page', () => {
   })
 
   it('handles form submission with purpose field', async () => {
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true }),
+    // waitlist API만 성공하도록 override
+    ;(global.fetch as jest.Mock).mockImplementation((url: RequestInfo | URL) => {
+      const urlString = typeof url === 'string' ? url : url.toString()
+      if (urlString.includes('/api/public/waitlist') || urlString.includes('/api/waitlist')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true }),
+          headers: new Headers(),
+          getSetCookie: () => [],
+        } as Response)
+      }
+      // 다른 API는 기본 mock 사용
+      return (global.fetch as jest.Mock).getMockImplementation()?.(url) || Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+        headers: new Headers(),
+        getSetCookie: () => [],
+      } as Response)
     })
 
     render(<Home />)
@@ -160,9 +232,26 @@ describe('Home Page', () => {
   })
 
   it('disables submit button while submitting', async () => {
-    ;(global.fetch as jest.Mock).mockImplementation(() => 
-      new Promise(resolve => setTimeout(() => resolve({ ok: true, json: async () => ({}) }), 100))
-    )
+    ;(global.fetch as jest.Mock).mockImplementation((url: RequestInfo | URL) => {
+      const urlString = typeof url === 'string' ? url : url.toString()
+      if (urlString.includes('/api/public/waitlist') || urlString.includes('/api/waitlist')) {
+        return new Promise(resolve => setTimeout(() => resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true }),
+          headers: new Headers(),
+          getSetCookie: () => [],
+        } as Response), 100))
+      }
+      // 다른 API는 기본 mock 사용
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+        headers: new Headers(),
+        getSetCookie: () => [],
+      } as Response)
+    })
 
     render(<Home />)
 
