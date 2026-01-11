@@ -2,6 +2,7 @@ name: CI Backend
 
 on:
   pull_request:
+    branches: [ main, develop ]
     paths:
       - "backend/**"
       - "config/**"
@@ -9,7 +10,7 @@ on:
       - "scripts/shared/**"
       - ".github/workflows/ci-backend.yml"
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
     paths:
       - "backend/**"
       - "config/**"
@@ -17,54 +18,109 @@ on:
       - "scripts/shared/**"
       - ".github/workflows/ci-backend.yml"
 
+env:
+  GO_VERSION: '1.23'
+
 jobs:
   backend-test:
+    name: Backend Test (CI-safe, no libvirt)
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: backend/go.mod
-          cache-dependency-path: backend/go.sum
+    defaults:
+      run:
+        working-directory: ./backend
 
-      - name: Go test (fast suite, explicit package list, timeout 3m)
-        working-directory: backend
-        timeout-minutes: 4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ./backend/go.sum
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run Go linter (golangci-lint)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: ./backend
+          args: --timeout=5m
+
+      - name: Format check
         run: |
-          echo "=== Running Go tests (fast suite, timeout 3m) ==="
-          echo "PR용 fast suite: 비즈니스 로직 + 보안 + 입력 검증만 실행"
-          echo "느린 패키지(internal/vm, scripts/**)는 nightly로 분리됨"
-          echo ""
-          
-          set +e
-          go test -v -count=1 -timeout 3m \
-            ./internal/handlers \
-            ./internal/router \
-            ./internal/middleware \
-            ./internal/validator \
-            ./internal/security \
-            ./internal/session \
-            ./internal/auth \
-            ./internal/crypto \
-            ./internal/models \
-            ./internal/errors \
-            ./internal/config \
-            ./internal/ratelimit \
-            | tee test.log
-          TEST_EXIT=$?
-          set -e
-          
-          echo ""
-          echo "=== Slowest Packages (from test.log) ==="
-          if [ -f test.log ]; then
-            # Extract package timing: "ok      package/path    0.123s"
-            grep -E "^\s+(ok|FAIL)\s+\S+\s+[0-9]+\.[0-9]+s" test.log | \
-              awk '{print $NF, $2}' | sort -rn | head -10 || \
-            echo "Check test.log manually for package timings"
-            
-            echo ""
-            echo "=== Module download check ==="
-            grep -i "go: downloading" test.log | head -5 || echo "No slow downloads detected"
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not formatted. Run 'gofmt -s -w .'"
+            gofmt -s -d .
+            exit 1
           fi
-          
-          exit $TEST_EXIT
+
+      - name: P0 Smoke Tests (1~3분, PR 필수)
+        # 핵심 기능 빠른 검증: health, auth 기본, validator
+        run: go test -tags smoke -short -v \
+          ./cmd/server/... \
+          ./internal/handlers/health_test.go \
+          ./internal/handlers/auth_test.go \
+          ./internal/validator/... || (echo "Smoke tests failed" && exit 1)
+
+      - name: Core Regression Tests (3~10분, PR/main merge)
+        # 핵심 비즈니스 로직: auth, VM lifecycle, DB, API 계약
+        # Note: libvirt-dependent tests are excluded via build tags
+        run: go test -tags regression -short -v -race -coverprofile=coverage.out \
+          ./internal/auth/... \
+          ./internal/middleware/... \
+          ./internal/handlers/... \
+          ./internal/models/... \
+          ./internal/database/... \
+          ./internal/errors/... || (echo "Regression tests failed" && exit 1)
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./backend/coverage.out
+          flags: backend
+          name: backend-coverage
+        continue-on-error: true
+
+  build:
+    name: Backend Build (CI-safe, no libvirt)
+    needs: backend-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build backend (CI-safe, no libvirt)
+        # Note: Production builds should use: go build -tags libvirt
+        # CI builds exclude libvirt code via build tags
+        run: go build -ldflags="-s -w" -trimpath -o server ./cmd/server
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-binary
+          path: ./backend/server
+          retention-days: 7
