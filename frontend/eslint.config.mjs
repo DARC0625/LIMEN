@@ -1,6 +1,7 @@
 // frontend/eslint.config.mjs
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
+import globals from "globals";
 
 // Note: next/core-web-vitals는 Next.js 16.1.1에서 FlatCompat과 호환성 문제가 있어
 // 일시적으로 제외. Next.js가 flat config를 완전히 지원하면 다시 활성화 가능.
@@ -19,7 +20,6 @@ export default [
       "playwright-report/**",
       "public/novnc/**", // 외부 번들: ESLint로 수정하지 않음
       "public/sw.js", // Service Worker: 외부 번들 또는 자체 작성이면 override로 처리
-      "lib/novnc-browser-patch.js", // 외부 패치: ESLint로 수정하지 않음
     ],
   },
   // (A) Browser 환경 (기본): window/document/navigator 등 브라우저 글로벌 허용
@@ -78,6 +78,20 @@ export default [
     rules: {
       "@typescript-eslint/no-require-imports": "off",
       "no-undef": "off",
+    },
+  },
+  // (D) novnc-browser-patch.js: Node + Browser 멀티타겟 패치
+  {
+    files: ["lib/novnc-browser-patch.js"],
+    languageOptions: {
+      globals: {
+        ...globals.node,     // module, exports, require, process 등
+        ...globals.browser,  // window, document 등
+      },
+    },
+    rules: {
+      // 필요하면 여기서만 no-undef 완화도 가능
+      // "no-undef": "off",
     },
   },
   // (C) Service Worker 환경
