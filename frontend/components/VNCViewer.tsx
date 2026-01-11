@@ -644,7 +644,6 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
         // noVNC 동적 import (1.7.0-beta: ESM 모듈)
         // package.json의 "exports": "./core/rfb.js"에 따라
         // @novnc/novnc를 import하면 자동으로 core/rfb.js가 로드됨
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let RFB: new (...args: unknown[]) => RFBInstance;
         try {
           // @ts-expect-error - noVNC 타입 정의 없음 (ESM 모듈 import)

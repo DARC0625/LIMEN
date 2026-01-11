@@ -192,10 +192,18 @@ export default function VNCViewer({ id }: { id: string }) {
       if (rfbRef.current) {
         try {
           // Cleanup resize listener from RFB
-          if ((rfbRef.current as any)._resizeCleanup) {
-            (rfbRef.current as any)._resizeCleanup();
+          // RFB 인스턴스는 외부 라이브러리이므로 타입 가드로 안전하게 접근
+          const isRFBInstance = (obj: unknown): obj is { _resizeCleanup?: () => void; disconnect: () => void } => {
+            return typeof obj === 'object' && obj !== null && 'disconnect' in obj && typeof (obj as { disconnect: unknown }).disconnect === 'function';
+          };
+          
+          if (isRFBInstance(rfbRef.current) && typeof rfbRef.current._resizeCleanup === 'function') {
+            rfbRef.current._resizeCleanup();
           }
-          rfbRef.current.disconnect();
+          
+          if (isRFBInstance(rfbRef.current)) {
+            rfbRef.current.disconnect();
+          }
         } catch {
           // ignore
         }

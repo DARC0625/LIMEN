@@ -273,14 +273,23 @@ async function handleResponse<T>(
   if (response.status === 500) {
     // 응답 본문을 읽어서 상세 에러 정보 확인
     let errorMessage = 'Internal server error';
-    let errorDetails: any = null;
+    let errorDetails: unknown = null;
+    
+    // 타입 가드: Record<string, unknown>인지 확인
+    const isRecord = (v: unknown): v is Record<string, unknown> => 
+      typeof v === 'object' && v !== null && !Array.isArray(v);
     
     try {
       const errorText = await response.text();
       if (errorText) {
         try {
-          errorDetails = JSON.parse(errorText);
-          errorMessage = errorDetails.message || errorDetails.error || errorMessage;
+          const parsed = JSON.parse(errorText);
+          errorDetails = parsed;
+          if (isRecord(parsed)) {
+            errorMessage = (typeof parsed.message === 'string' ? parsed.message : null) ||
+                          (typeof parsed.error === 'string' ? parsed.error : null) ||
+                          errorMessage;
+          }
         } catch {
           errorMessage = errorText.substring(0, 200);
         }
@@ -293,18 +302,18 @@ async function handleResponse<T>(
     const isWaitError = errorMessage.toLowerCase().includes('wait') || 
                         errorMessage.toLowerCase().includes('retry') ||
                         errorMessage.toLowerCase().includes('please wait') ||
-                        (errorDetails && typeof errorDetails === 'object' && errorDetails !== null && (
-                          (('error' in errorDetails && typeof errorDetails.error === 'string' && errorDetails.error.toLowerCase().includes('wait')) ||
-                          ('message' in errorDetails && typeof errorDetails.message === 'string' && errorDetails.message.toLowerCase().includes('wait')))
+                        (isRecord(errorDetails) && (
+                          (typeof errorDetails.error === 'string' && errorDetails.error.toLowerCase().includes('wait')) ||
+                          (typeof errorDetails.message === 'string' && errorDetails.message.toLowerCase().includes('wait'))
                         ));
     
     if (isWaitError) {
       // wait 관련 오류는 특별한 에러 타입으로 표시
       const waitError: APIError = new Error(errorMessage);
       waitError.status = 500;
-      (waitError as any).isWaitError = true;
+      waitError.isWaitError = true;
       if (errorDetails) {
-        (waitError as any).details = errorDetails;
+        waitError.details = errorDetails;
       }
       throw waitError;
     }
@@ -322,7 +331,7 @@ async function handleResponse<T>(
     const error: APIError = new Error(errorMessage);
     error.status = 500;
     if (errorDetails) {
-      (error as any).details = errorDetails;
+      error.details = errorDetails;
     }
     throw error;
   }
