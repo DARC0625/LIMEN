@@ -345,6 +345,14 @@ if (typeof window !== 'undefined') {
       const parsed: unknown = JSON.parse(stored);
       const now = Date.now();
       
+      // 타입 가드: ProtectedVMState인지 확인
+      interface ProtectedVMState {
+        status: string;
+        timestamp: number;
+      }
+      const isProtectedVMState = (v: unknown): v is ProtectedVMState =>
+        typeof v === 'object' && v !== null && 'status' in v && 'timestamp' in v;
+      
       if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
         Object.entries(parsed).forEach(([uuid, state]: [string, unknown]) => {
           // 30초 이내의 보호 상태만 복원
@@ -359,12 +367,12 @@ if (typeof window !== 'undefined') {
             validStates[uuid] = state;
           }
         });
-      localStorage.setItem('protectedVMStates', JSON.stringify(validStates));
+        localStorage.setItem('protectedVMStates', JSON.stringify(validStates));
+      }
+    } catch {
+      // localStorage 복원 실패는 무시
     }
-  } catch (e) {
-    // localStorage 복원 실패는 무시
   }
-}
 
 export function useVMAction() {
   const queryClient = useQueryClient();
