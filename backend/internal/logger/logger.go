@@ -58,7 +58,9 @@ func InitWithRotation(level string, dir string) error {
 // Sync flushes any buffered log entries.
 func Sync() {
 	if Log != nil {
-		_ = Log.Sync()
+		if err := Log.Sync(); err != nil {
+			// Ignore sync errors on close
+		}
 	}
 }
 
