@@ -12,6 +12,11 @@ const customJestConfig = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
   },
+  // E2E 테스트 제외 (Playwright 전용)
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/e2e/', // Playwright E2E 전부 제외
+  ],
 }
 
 // createJestConfig는 next/jest가 비동기적으로 Next.js 구성을 로드할 수 있도록 하는 함수를 내보냅니다
