@@ -12,6 +12,47 @@ jest.mock('../client', () => ({
 
 const mockApiRequest = apiRequest as jest.MockedFunction<typeof apiRequest>
 
+/**
+ * 테스트에서 fetch 요청의 JSON body를 안전하게 추출하는 유틸
+ * @param callIndex fetch 호출 인덱스 (기본값: 0)
+ * @returns 파싱된 JSON 객체
+ */
+function getFetchRequestJson(callIndex = 0): unknown {
+  const mockFetch = fetch as unknown as jest.Mock;
+  const call = mockFetch.mock.calls[callIndex];
+  if (!call) throw new Error(`fetch not called (callIndex=${callIndex})`);
+
+  const init = call[1] as RequestInit | undefined;
+  const body = init?.body;
+
+  // 테스트에서는 우리 코드가 JSON.stringify 해서 보내는 걸 기대하므로 string만 허용
+  if (typeof body !== 'string') {
+    throw new Error(`Expected fetch body to be string, got: ${typeof body}`);
+  }
+
+  return JSON.parse(body);
+}
+
+/**
+ * apiRequest 모킹에서 요청 body를 안전하게 추출하는 유틸
+ * @param callIndex apiRequest 호출 인덱스 (기본값: 0)
+ * @returns 파싱된 JSON 객체
+ */
+function getApiRequestJson(callIndex = 0): unknown {
+  const call = mockApiRequest.mock.calls[callIndex];
+  if (!call) throw new Error(`apiRequest not called (callIndex=${callIndex})`);
+
+  const init = call[1] as RequestInit | undefined;
+  const body = init?.body;
+
+  // 테스트에서는 우리 코드가 JSON.stringify 해서 보내는 걸 기대하므로 string만 허용
+  if (typeof body !== 'string') {
+    throw new Error(`Expected apiRequest body to be string, got: ${typeof body}`);
+  }
+
+  return JSON.parse(body);
+}
+
 describe('vmAPI', () => {
   beforeEach(() => {
     jest.clearAllMocks()
@@ -88,7 +129,7 @@ describe('vmAPI', () => {
 
     await vmAPI.create(vmData)
 
-    const callBody = JSON.parse(mockApiRequest.mock.calls[0][1].body)
+    const callBody = getApiRequestJson(0) as Record<string, unknown>
     expect(callBody.vnc_enabled).toBe(true)
     expect(callBody.graphics_type).toBe('vnc')
   })
@@ -106,7 +147,7 @@ describe('vmAPI', () => {
 
     await vmAPI.create(vmData)
 
-    const callBody = JSON.parse(mockApiRequest.mock.calls[0][1].body)
+    const callBody = getApiRequestJson(0) as Record<string, unknown>
     expect(callBody.vnc_enabled).toBe(true)
     expect(callBody.graphics_type).toBe('vnc')
   })
@@ -124,7 +165,7 @@ describe('vmAPI', () => {
 
     await vmAPI.create(vmData)
 
-    const callBody = JSON.parse(mockApiRequest.mock.calls[0][1].body)
+    const callBody = getApiRequestJson(0) as Record<string, unknown>
     expect(callBody.vnc_enabled).toBeUndefined()
     expect(callBody.graphics_type).toBeUndefined()
   })
@@ -142,7 +183,7 @@ describe('vmAPI', () => {
 
     await vmAPI.create(vmData)
 
-    const callBody = JSON.parse(mockApiRequest.mock.calls[0][1].body)
+    const callBody = getApiRequestJson(0) as Record<string, unknown>
     expect(callBody.graphics_type).toBe('spice')
   })
 
@@ -160,7 +201,7 @@ describe('vmAPI', () => {
 
     await vmAPI.create(vmData)
 
-    const callBody = JSON.parse(mockApiRequest.mock.calls[0][1].body)
+    const callBody = getApiRequestJson(0) as Record<string, unknown>
     expect(callBody.vnc_enabled).toBe(false)
   })
 
@@ -213,7 +254,7 @@ describe('vmAPI', () => {
 
     await vmAPI.action(uuid, action, options as any)
 
-    const callBody = JSON.parse(mockApiRequest.mock.calls[0][1].body)
+    const callBody = getApiRequestJson(0) as Record<string, unknown>
     expect(callBody.cpu).toBeUndefined()
     expect(callBody.memory).toBe(8192)
   })
@@ -228,7 +269,7 @@ describe('vmAPI', () => {
 
     await vmAPI.action(uuid, action, options)
 
-    const callBody = JSON.parse(mockApiRequest.mock.calls[0][1].body)
+    const callBody = getApiRequestJson(0) as Record<string, unknown>
     expect(callBody.name).toBeUndefined()
   })
 
@@ -242,7 +283,7 @@ describe('vmAPI', () => {
 
     await vmAPI.action(uuid, action, options)
 
-    const callBody = JSON.parse(mockApiRequest.mock.calls[0][1].body)
+    const callBody = getApiRequestJson(0) as Record<string, unknown>
     expect(callBody.name).toBeUndefined()
   })
 
@@ -256,7 +297,7 @@ describe('vmAPI', () => {
 
     await vmAPI.action(uuid, action, options)
 
-    const callBody = JSON.parse(mockApiRequest.mock.calls[0][1].body)
+    const callBody = getApiRequestJson(0) as Record<string, unknown>
     expect(callBody.name).toBe('New Name')
   })
 
@@ -270,7 +311,7 @@ describe('vmAPI', () => {
 
     await vmAPI.action(uuid, action, options)
 
-    const callBody = JSON.parse(mockApiRequest.mock.calls[0][1].body)
+    const callBody = getApiRequestJson(0) as Record<string, unknown>
     expect(callBody.vnc_enabled).toBe(true)
     expect(callBody.graphics_type).toBe('vnc')
   })
@@ -285,7 +326,7 @@ describe('vmAPI', () => {
 
     await vmAPI.action(uuid, action, options)
 
-    const callBody = JSON.parse(mockApiRequest.mock.calls[0][1].body)
+    const callBody = getApiRequestJson(0) as Record<string, unknown>
     expect(callBody.vnc_enabled).toBe(false)
   })
 
@@ -340,7 +381,7 @@ describe('vmAPI', () => {
 
     await vmAPI.media(uuid, 'attach', mediaPath)
 
-    const callBody = JSON.parse(mockApiRequest.mock.calls[0][1].body)
+    const callBody = getApiRequestJson(0) as Record<string, unknown>
     expect(callBody.media_path).toBe('/path/to/iso.iso')
     expect(callBody.iso_path).toBe('/path/to/iso.iso') // 하위 호환성
   })

@@ -77,10 +77,9 @@ describe('authAPI', () => {
   })
 
   it('handles login errors', async () => {
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: false,
-      json: async () => ({ message: 'Invalid credentials' }),
-    } as Response)
+    ;(global.fetch as jest.Mock).mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Invalid credentials' }), { status: 401 })
+    )
 
     await expect(
       authAPI.login({
@@ -206,12 +205,9 @@ describe('authAPI', () => {
   })
 
   it('handles login JSON parse error', async () => {
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: false,
-      json: async () => {
-        throw new Error('JSON parse error')
-      },
-    } as Response)
+    ;(global.fetch as jest.Mock).mockResolvedValue(
+      new Response(JSON.stringify({ message: 'fail' }), { status: 401 })
+    )
 
     await expect(
       authAPI.login({

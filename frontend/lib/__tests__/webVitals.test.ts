@@ -129,7 +129,7 @@ describe('webVitals', () => {
         disconnect: jest.fn(),
       })) as any
 
-      // @ts-expect-error - intentional deletion of PerformanceObserver.supportedEntryTypes for test
+      // NOTE: intentionally deleting PerformanceObserver.supportedEntryTypes for test
       delete (PerformanceObserver as any).supportedEntryTypes
 
       expect(() => initWebVitals()).not.toThrow()
