@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // 백엔드 API URL 가져오기
     const backendUrl = process.env.BACKEND_URL || 'http://10.0.0.100:18443';
