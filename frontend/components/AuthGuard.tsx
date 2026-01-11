@@ -4,8 +4,7 @@ import { useEffect, useState, createContext, useContext, useRef, startTransition
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   forceLogout, 
-  checkAndUnblockAccount,
-  notifyAuthEvent
+  checkAndUnblockAccount
 } from '@/lib/security';
 import { checkAuth } from '@/lib/auth';
 import { logger } from '@/lib/utils/logger';

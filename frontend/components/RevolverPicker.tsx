@@ -91,7 +91,6 @@ export default function RevolverPicker({
   }, [isDragging, items, itemHeight, onChange]);
 
   // 키보드 네비게이션 (향후 사용 예정 - 현재 미사용)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const currentIndex = items.indexOf(value);
     let newIndex = currentIndex;
