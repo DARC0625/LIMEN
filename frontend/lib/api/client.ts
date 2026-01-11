@@ -3,12 +3,12 @@
  * 에러 처리, 재시도, 토큰 관리 통합
  */
 
-import { trackAPIError } from '@/lib/errorTracking';
-import { trackPerformanceMetric } from '@/lib/analytics';
-import { tokenManager } from '@/lib/tokenManager';
-import { API_CONSTANTS } from '@/lib/constants';
-import type { APIError } from '@/lib/types';
-import { logger } from '@/lib/utils/logger';
+import { trackAPIError } from '../errorTracking';
+import { trackPerformanceMetric } from '../analytics';
+import { tokenManager } from '../tokenManager';
+import { API_CONSTANTS } from '../constants';
+import type { APIError } from '../types';
+import { logger } from '../utils/logger';
 
 /**
  * API URL 가져오기
@@ -133,7 +133,6 @@ export async function apiRequest<T>(
       logger.log('[executeRequest] Request details:', {
         url,
         method,
-        attempt,
         hasBody: !!requestBody,
         bodyLength: requestBody?.length || 0,
         bodyPreview: requestBody ? requestBody.substring(0, 200) : 'none',
@@ -193,19 +192,18 @@ export async function apiRequest<T>(
     let lastError: Error | null = null;
 
     // 재시도 로직
-    for (let _attempt = 1; _attempt <= (retry ? API_CONSTANTS.MAX_RETRIES : 1); _attempt++) {
+    for (let attempt = 1; attempt <= (retry ? API_CONSTANTS.MAX_RETRIES : 1); attempt++) {
       try {
-        response = await executeRequest(_attempt);
-        // attempt는 재시도 로직에서 사용 (로그/백오프 계산용)
+        response = await executeRequest(attempt);
         lastError = null;
         break;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         
         // 마지막 시도가 아니면 재시도
-        if (_attempt < (retry ? API_CONSTANTS.MAX_RETRIES : 1)) {
+        if (attempt < (retry ? API_CONSTANTS.MAX_RETRIES : 1)) {
           await new Promise(resolve => 
-            setTimeout(resolve, API_CONSTANTS.RETRY_DELAY * _attempt)
+            setTimeout(resolve, API_CONSTANTS.RETRY_DELAY * attempt)
           );
           continue;
         }
@@ -273,28 +271,19 @@ async function handleResponse<T>(
   if (response.status === 500) {
     // 응답 본문을 읽어서 상세 에러 정보 확인
     let errorMessage = 'Internal server error';
-    let errorDetails: unknown = null;
-    
-    // 타입 가드: Record<string, unknown>인지 확인
-    const isRecord = (v: unknown): v is Record<string, unknown> => 
-      typeof v === 'object' && v !== null && !Array.isArray(v);
+    let errorDetails: any = null;
     
     try {
       const errorText = await response.text();
       if (errorText) {
         try {
-          const parsed = JSON.parse(errorText);
-          errorDetails = parsed;
-          if (isRecord(parsed)) {
-            errorMessage = (typeof parsed.message === 'string' ? parsed.message : null) ||
-                          (typeof parsed.error === 'string' ? parsed.error : null) ||
-                          errorMessage;
-          }
+          errorDetails = JSON.parse(errorText);
+          errorMessage = errorDetails.message || errorDetails.error || errorMessage;
         } catch {
           errorMessage = errorText.substring(0, 200);
         }
       }
-    } catch {
+    } catch (e) {
       // 응답 본문 읽기 실패는 무시
     }
     
@@ -302,18 +291,18 @@ async function handleResponse<T>(
     const isWaitError = errorMessage.toLowerCase().includes('wait') || 
                         errorMessage.toLowerCase().includes('retry') ||
                         errorMessage.toLowerCase().includes('please wait') ||
-                        (isRecord(errorDetails) && (
-                          (typeof errorDetails.error === 'string' && errorDetails.error.toLowerCase().includes('wait')) ||
-                          (typeof errorDetails.message === 'string' && errorDetails.message.toLowerCase().includes('wait'))
+                        (errorDetails && (
+                          (errorDetails.error && typeof errorDetails.error === 'string' && errorDetails.error.toLowerCase().includes('wait')) ||
+                          (errorDetails.message && typeof errorDetails.message === 'string' && errorDetails.message.toLowerCase().includes('wait'))
                         ));
     
     if (isWaitError) {
       // wait 관련 오류는 특별한 에러 타입으로 표시
       const waitError: APIError = new Error(errorMessage);
       waitError.status = 500;
-      waitError.isWaitError = true;
+      (waitError as any).isWaitError = true;
       if (errorDetails) {
-        waitError.details = errorDetails;
+        (waitError as any).details = errorDetails;
       }
       throw waitError;
     }
@@ -331,7 +320,7 @@ async function handleResponse<T>(
     const error: APIError = new Error(errorMessage);
     error.status = 500;
     if (errorDetails) {
-      error.details = errorDetails;
+      (error as any).details = errorDetails;
     }
     throw error;
   }

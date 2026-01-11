@@ -1,0 +1,33 @@
+/**
+ * Debounce 훅
+ * 입력값의 변경을 지연시켜 불필요한 호출을 방지
+ */
+import { useEffect, useState } from 'react';
+
+/**
+ * 값을 debounce하는 훅
+ * @param value - debounce할 값
+ * @param delay - 지연 시간 (ms)
+ * @returns debounce된 값
+ */
+export function useDebounce<T>(value: T, delay: number = 300): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
+
+
+
+
+

@@ -1,0 +1,105 @@
+/**
+ * LIMEN RAG 클라이언트 (프론트엔드)
+ * 공통 RAG 폴더에서 문서를 검색하고 가져옵니다
+ */
+
+const RAG_PATH = process.env.NEXT_PUBLIC_RAG_PATH || '/home/darc0/LIMEN/RAG';
+
+export interface Document {
+  path: string;
+  title: string;
+  content: string;
+}
+
+export interface DocumentInfo {
+  path: string;
+  category: string;
+  size: number;
+  modified: string;
+}
+
+export class RAGClient {
+  private ragPath: string;
+  private docsPath: string;
+
+  constructor() {
+    this.ragPath = RAG_PATH;
+    this.docsPath = `${this.ragPath}/docs`;
+  }
+
+  /**
+   * 문서 검색
+   */
+  async searchDocuments(query: string, limit: number = 10): Promise<Document[]> {
+    // 백엔드 API를 통해 검색 (서버 사이드에서 RAG 폴더 접근)
+    const response = await fetch('/api/rag/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, limit }),
+    });
+
+    if (!response.ok) {
+      throw new Error('검색 실패');
+    }
+
+    return response.json();
+  }
+
+  /**
+   * 문서 가져오기
+   */
+  async getDocument(path: string): Promise<Document> {
+    const response = await fetch(`/api/rag/document?path=${encodeURIComponent(path)}`);
+
+    if (!response.ok) {
+      throw new Error('문서를 가져올 수 없습니다');
+    }
+
+    return response.json();
+  }
+
+  /**
+   * 문서 목록 가져오기
+   */
+  async listDocuments(category?: string): Promise<DocumentInfo[]> {
+    const url = category
+      ? `/api/rag/documents?category=${encodeURIComponent(category)}`
+      : '/api/rag/documents';
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error('문서 목록을 가져올 수 없습니다');
+    }
+
+    return response.json();
+  }
+
+  /**
+   * 카테고리 목록 가져오기
+   */
+  async getCategories(): Promise<string[]> {
+    const documents = await this.listDocuments();
+    const categories = new Set<string>();
+
+    documents.forEach((doc) => {
+      if (doc.category) {
+        categories.add(doc.category);
+      }
+    });
+
+    return Array.from(categories);
+  }
+}
+
+// 싱글톤 인스턴스
+export const ragClient = new RAGClient();
+
+
+
+
+
+
+

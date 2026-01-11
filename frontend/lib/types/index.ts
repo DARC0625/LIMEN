@@ -180,8 +180,6 @@ export interface APIError extends Error {
   status?: number;
   response?: Response;
   data?: unknown;
-  isWaitError?: boolean;
-  details?: unknown;
 }
 
 // ============================================================================

@@ -1,0 +1,105 @@
+// 에이전트 메트릭스 조회 훅 (React Query)
+import React from 'react';
+import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
+import { useAuth } from '../components/AuthGuard';
+import { useMounted } from './useMounted';
+
+interface AgentMetrics {
+  cpu_usage: number;
+  total_memory: number;
+  used_memory: number;
+  free_memory: number;
+  cpu_cores: number;
+}
+
+/**
+ * 에이전트 메트릭스 조회 훅
+ * 트리거 방식: 사용자가 대시보드에 있을 때만 활성화
+ */
+export function useAgentMetrics() {
+  const { isAuthenticated } = useAuth();
+  const mounted = useMounted();
+  
+  // 서버와 클라이언트 초기 렌더링에서 동일한 값 반환 (false)
+  // 마운트 후에만 인증 상태 확인
+  const enabled = mounted && isAuthenticated === true;
+  
+  // 대시보드 페이지에서만 사용되므로, 페이지 가시성 확인
+  const [isVisible, setIsVisible] = React.useState(true);
+  
+  React.useEffect(() => {
+    if (!enabled) return;
+    
+    const handleVisibilityChange = () => {
+      setIsVisible(!document.hidden);
+    };
+    
+    // 초기 가시성 설정
+    setIsVisible(!document.hidden);
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [enabled]);
+  
+  return useQuery({
+    queryKey: ['agent', 'metrics'],
+    queryFn: async () => {
+      // 상대 경로 사용 (Next.js rewrites를 통해 프록시)
+      // 모든 환경에서 동일하게 작동
+      const response = await fetch('/agent/metrics');
+      if (!response.ok) {
+        // 503 에러는 Agent 서비스가 다운된 것으로 간주하고 조용히 실패
+        if (response.status === 503) {
+          throw new Error('Agent service unavailable');
+        }
+        throw new Error(`Failed to fetch agent metrics: ${response.status}`);
+      }
+      return response.json() as Promise<AgentMetrics>;
+    },
+    // 인증 상태가 확인된 후에만 쿼리 활성화 (null이 아닐 때만)
+    // null이면 아직 인증 체크 중이므로 대기
+    // 페이지가 보일 때만 활성화 (탭이 비활성화되면 폴링 중지)
+    enabled: enabled && isVisible,
+    // 에이전트 메트릭스는 실시간성이 중요하지만, 과도한 폴링 방지
+    // 최후의 수단으로만 폴링 (30초마다) - 백그라운드 동기화용
+    staleTime: 10000, // 10초간 캐시 유지
+    refetchInterval: (enabled && isVisible) ? 30 * 1000 : false, // 30초마다 (최후의 수단, 탭이 보일 때만)
+    retry: (failureCount, error) => {
+      // 503 에러는 재시도하지 않음 (Agent 서비스가 다운된 경우)
+      if (error instanceof Error && (error.message.includes('503') || error.message.includes('Service Unavailable'))) {
+        return false;
+      }
+      return failureCount < 1; // 다른 에러는 1번만 재시도
+    },
+    // 503 에러는 조용히 처리 (에러로 표시하지 않음)
+    throwOnError: false,
+    // 창 포커스 시 재요청 (조건부: 탭이 비활성화된 시간이 길면만)
+    refetchOnWindowFocus: true,
+    // 네트워크 재연결 시 재요청
+    refetchOnReconnect: true,
+  });
+}
+
+/**
+ * 에이전트 메트릭스 조회 훅 (Suspense)
+ * Suspense와 완전 통합된 버전 - Streaming SSR 최적화
+ */
+export function useAgentMetricsSuspense() {
+  return useSuspenseQuery({
+    queryKey: ['agent', 'metrics'],
+    queryFn: async () => {
+      // 상대 경로 사용 (Next.js rewrites를 통해 프록시)
+      // 모든 환경에서 동일하게 작동
+      const response = await fetch('/agent/metrics');
+      if (!response.ok) {
+        throw new Error('Failed to fetch agent metrics');
+      }
+      return response.json() as Promise<AgentMetrics>;
+    },
+    staleTime: 10000, // 10초간 캐시 유지
+    refetchInterval: 30 * 1000, // 30초마다 (최후의 수단)
+    retry: 1, // 실패 시 1번만 재시도
+  });
+}
+
+
