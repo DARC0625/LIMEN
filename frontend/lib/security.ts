@@ -192,7 +192,7 @@ export function checkAndUnblockAccount(): void {
 }
 
 // 세션 초기화 (로그인 시 호출)
-export function initializeSession(_token: string): void {
+export function initializeSession(): void {
   if (typeof window === 'undefined') return;
   
   // 차단 플래그 제거 (로그인 시 자동 해제)

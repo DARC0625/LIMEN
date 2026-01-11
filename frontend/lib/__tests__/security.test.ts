@@ -325,9 +325,8 @@ describe('security', () => {
   describe('initializeSession', () => {
     it('initializes session on client side', () => {
       localStorage.setItem('account_blocked', 'true')
-      const token = 'test-token'
 
-      initializeSession(token)
+      initializeSession()
 
       // 차단 플래그가 제거되었는지 확인
       expect(localStorage.getItem('account_blocked')).toBeNull()
