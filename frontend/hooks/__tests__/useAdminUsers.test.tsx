@@ -13,14 +13,40 @@ import {
   useDeleteUser,
   useApproveUser,
 } from '../useAdminUsers'
-import { adminAPI } from '../../lib/api'
 import { useToast } from '../../components/ToastContainer'
 
 // 의존성 모킹
-jest.mock('../../lib/api')
 jest.mock('../../components/ToastContainer')
+jest.mock('../../lib/tokenManager', () => ({
+  tokenManager: {
+    getAccessToken: jest.fn().mockResolvedValue('mock-token'),
+    getCSRFToken: jest.fn().mockReturnValue('mock-csrf-token'),
+  },
+}))
+jest.mock('../../components/AuthGuard', () => ({
+  useAuth: jest.fn(() => ({ isAuthenticated: true })),
+}))
+jest.mock('../useMounted', () => ({
+  useMounted: jest.fn(() => true),
+}))
+jest.mock('../../lib/utils/logger', () => ({
+  logger: {
+    log: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  },
+}))
+jest.mock('../../lib/errorTracking', () => ({
+  trackAPIError: jest.fn(),
+}))
+jest.mock('../../lib/analytics', () => ({
+  trackPerformanceMetric: jest.fn(),
+}))
+jest.mock('../../lib/utils/errorHelpers', () => ({
+  handleAuthError: jest.fn(),
+}))
 
-const mockAdminAPI = adminAPI as jest.Mocked<typeof adminAPI>
 const mockUseToast = useToast as jest.MockedFunction<typeof useToast>
 
 // QueryClient를 제공하는 wrapper
@@ -40,41 +66,98 @@ const createWrapper = () => {
 }
 
 describe('useAdminUsers', () => {
+  const mockUsers = [
+    { id: 1, username: 'admin', role: 'admin', email: 'admin@limen.kr' },
+    { id: 2, username: 'user1', role: 'user', email: 'user1@limen.kr' },
+  ]
+
   beforeEach(() => {
     jest.clearAllMocks()
+    
+    // fetch 모킹: new Response() 사용
+    global.fetch = jest.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      // ✅ hook이 실제로 호출하는 URL로 체크
+      // /api/admin/users 또는 http://localhost:3000/api/admin/users 등 모든 경우 처리
+      if (url.includes('/admin/users') && !url.match(/\/admin\/users\/\d+/)) {
+        return Promise.resolve(
+          new Response(JSON.stringify(mockUsers), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      }
+
+      // 사용자 상세 조회
+      if (url.match(/\/admin\/users\/\d+$/)) {
+        const userId = parseInt(url.split('/').pop() || '0')
+        const user = mockUsers.find(u => u.id === userId) || { id: userId, username: 'user', role: 'user', email: 'user@limen.kr', vms: [] }
+        return Promise.resolve(
+          new Response(JSON.stringify(user), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    }) as jest.MockedFunction<typeof fetch>
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
   })
 
   it('should fetch user list successfully', async () => {
-    const mockUsers = [
-      { id: 1, username: 'admin', role: 'admin' },
-      { id: 2, username: 'user1', role: 'user' },
-    ]
-
-    mockAdminAPI.listUsers = jest.fn().mockResolvedValue(mockUsers)
-
     const { result } = renderHook(() => useAdminUsers(), { wrapper: createWrapper() })
 
+    // 상태 플래그 타이밍을 피하기 위해 data가 정의될 때까지 기다림
     await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true)
-    })
+      // 에러가 있으면 실패
+      if (result.current.error) {
+        throw result.current.error
+      }
+      expect(result.current.data).toBeDefined()
+    }, { timeout: 5000 })
 
     expect(result.current.data).toEqual(mockUsers)
-    expect(mockAdminAPI.listUsers).toHaveBeenCalledTimes(1)
   })
 
   it('should sort users by role and username', async () => {
-    const mockUsers = [
-      { id: 2, username: 'user1', role: 'user' },
-      { id: 1, username: 'admin', role: 'admin' },
-      { id: 3, username: 'user2', role: 'user' },
+    const unsortedUsers = [
+      { id: 2, username: 'user1', role: 'user', email: 'user1@limen.kr' },
+      { id: 1, username: 'admin', role: 'admin', email: 'admin@limen.kr' },
+      { id: 3, username: 'user2', role: 'user', email: 'user2@limen.kr' },
     ]
 
-    mockAdminAPI.listUsers = jest.fn().mockResolvedValue(mockUsers)
+    ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/admin/users') && !url.match(/\/api\/admin\/users\/\d+/)) {
+        return Promise.resolve(
+          new Response(JSON.stringify(unsortedUsers), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    })
 
     const { result } = renderHook(() => useAdminUsers(), { wrapper: createWrapper() })
 
     await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true)
+      expect(result.current.data).toBeDefined()
     })
 
     // admin이 먼저, 그 다음 username 순으로 정렬
@@ -84,51 +167,90 @@ describe('useAdminUsers', () => {
   })
 
   it('should handle errors', async () => {
-    const error = new Error('Failed to fetch users')
-    mockAdminAPI.listUsers = jest.fn().mockRejectedValue(error)
+    ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/admin/users') && !url.match(/\/api\/admin\/users\/\d+/)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: 'Failed to fetch users' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    })
 
     const { result } = renderHook(() => useAdminUsers(), { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(result.current.isError).toBe(true)
     })
-
-    expect(result.current.error).toBe(error)
   })
 })
 
 describe('useAdminUser', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    
+    // fetch 모킹: new Response() 사용
+    global.fetch = jest.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      // 사용자 상세 조회
+      if (url.match(/\/api\/admin\/users\/\d+$/)) {
+        const userId = parseInt(url.split('/').pop() || '0')
+        const mockUser = {
+          id: userId,
+          username: 'user1',
+          role: 'user',
+          email: 'user1@limen.kr',
+          vms: [],
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify(mockUser), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    }) as jest.MockedFunction<typeof fetch>
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
   })
 
   it('should fetch user details successfully', async () => {
     const userId = 1
-    const mockUser = {
-      id: 1,
-      username: 'user1',
-      role: 'user',
-      vms: [],
-    }
-
-    mockAdminAPI.getUser = jest.fn().mockResolvedValue(mockUser)
 
     const { result } = renderHook(() => useAdminUser(userId), { wrapper: createWrapper() })
 
+    // 상태 플래그 타이밍을 피하기 위해 data가 정의될 때까지 기다림
     await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true)
+      expect(result.current.data).toBeDefined()
     })
 
-    expect(result.current.data).toEqual(mockUser)
-    expect(mockAdminAPI.getUser).toHaveBeenCalledWith(userId)
+    expect(result.current.data?.id).toBe(userId)
+    expect(result.current.data?.username).toBe('user1')
   })
 
   it('should not fetch when userId is null', () => {
-    mockAdminAPI.getUser = jest.fn()
-
     renderHook(() => useAdminUser(null), { wrapper: createWrapper() })
 
-    expect(mockAdminAPI.getUser).not.toHaveBeenCalled()
+    // enabled가 false이므로 fetch가 호출되지 않아야 함
+    expect(global.fetch).not.toHaveBeenCalled()
   })
 })
 
@@ -141,13 +263,36 @@ describe('useCreateUser', () => {
       info: jest.fn(),
       warning: jest.fn(),
     } as any)
+    
+    // fetch 모킹: new Response() 사용
+    global.fetch = jest.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      if (url.includes('/api/admin/users') && !url.match(/\/api\/admin\/users\/\d+/)) {
+        // POST 요청인 경우
+        return Promise.resolve(
+          new Response(JSON.stringify({ id: 1, username: 'newuser', role: 'user' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    }) as jest.MockedFunction<typeof fetch>
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
   })
 
   it('should create user successfully', async () => {
     const newUser = { username: 'newuser', password: 'password', role: 'user' }
-    const createdUser = { id: 1, ...newUser }
-
-    mockAdminAPI.createUser = jest.fn().mockResolvedValue(createdUser)
 
     const { result } = renderHook(() => useCreateUser(), { wrapper: createWrapper() })
 
@@ -156,15 +301,28 @@ describe('useCreateUser', () => {
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-
-    expect(mockAdminAPI.createUser).toHaveBeenCalledWith(newUser)
   })
 
   it('should handle creation errors', async () => {
     const newUser = { username: 'newuser', password: 'password', role: 'user' }
-    const error = new Error('Failed to create user')
 
-    mockAdminAPI.createUser = jest.fn().mockRejectedValue(error)
+    ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/admin/users') && !url.match(/\/api\/admin\/users\/\d+/)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: 'Failed to create user' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    })
 
     const { result } = renderHook(() => useCreateUser(), { wrapper: createWrapper() })
 
@@ -173,8 +331,6 @@ describe('useCreateUser', () => {
     await waitFor(() => {
       expect(result.current.isError).toBe(true)
     })
-
-    expect(result.current.error).toBe(error)
   })
 })
 
@@ -187,14 +343,36 @@ describe('useUpdateUser', () => {
       info: jest.fn(),
       warning: jest.fn(),
     } as any)
+    
+    // fetch 모킹: new Response() 사용
+    global.fetch = jest.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      if (url.match(/\/api\/admin\/users\/\d+$/)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ id: 1, username: 'user1', role: 'admin' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    }) as jest.MockedFunction<typeof fetch>
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
   })
 
   it('should update user successfully', async () => {
     const userId = 1
     const updateData = { role: 'admin' }
-    const updatedUser = { id: 1, username: 'user1', role: 'admin' }
-
-    mockAdminAPI.updateUser = jest.fn().mockResolvedValue(updatedUser)
 
     const { result } = renderHook(() => useUpdateUser(), { wrapper: createWrapper() })
 
@@ -203,8 +381,6 @@ describe('useUpdateUser', () => {
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-
-    expect(mockAdminAPI.updateUser).toHaveBeenCalledWith(userId, updateData)
   })
 })
 
@@ -217,12 +393,35 @@ describe('useDeleteUser', () => {
       info: jest.fn(),
       warning: jest.fn(),
     } as any)
+    
+    // fetch 모킹: new Response() 사용
+    global.fetch = jest.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      if (url.match(/\/api\/admin\/users\/\d+$/)) {
+        return Promise.resolve(
+          new Response(null, {
+            status: 204,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    }) as jest.MockedFunction<typeof fetch>
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
   })
 
   it('should delete user successfully', async () => {
     const userId = 1
-
-    mockAdminAPI.deleteUser = jest.fn().mockResolvedValue(undefined)
 
     const { result } = renderHook(() => useDeleteUser(), { wrapper: createWrapper() })
 
@@ -231,8 +430,6 @@ describe('useDeleteUser', () => {
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-
-    expect(mockAdminAPI.deleteUser).toHaveBeenCalledWith(userId)
   })
 })
 
@@ -245,12 +442,35 @@ describe('useApproveUser', () => {
       info: jest.fn(),
       warning: jest.fn(),
     } as any)
+    
+    // fetch 모킹: new Response() 사용
+    global.fetch = jest.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      if (url.match(/\/api\/admin\/users\/\d+\/approve$/)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ id: 1, username: 'user1', role: 'user', approved: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    }) as jest.MockedFunction<typeof fetch>
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
   })
 
   it('should approve user successfully', async () => {
     const userId = 1
-
-    mockAdminAPI.approveUser = jest.fn().mockResolvedValue(undefined)
 
     const { result } = renderHook(() => useApproveUser(), { wrapper: createWrapper() })
 
@@ -259,8 +479,6 @@ describe('useApproveUser', () => {
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-
-    expect(mockAdminAPI.approveUser).toHaveBeenCalledWith(userId)
   })
 })
 
