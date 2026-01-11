@@ -188,21 +188,22 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     // 공개 경로가 아닐 때만 세션 확인 요청 전송
     verifyAuth();
     
-    // BroadcastChannel로 다른 탭과 통신
-    let authChannel: BroadcastChannel | null = null;
-    if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
-      try {
-        authChannel = new BroadcastChannel('auth_channel');
-        authChannel.onmessage = (event) => {
-          if (event.data?.type === 'FORCE_LOGOUT' || event.data?.type === 'AUTH_EVENT') {
-            if (event.data?.action === 'log') {
-              forceLogout(event.data?.reason || '인증 이벤트가 발생했습니다.');
-            }
-          }
-        };
-      } catch {
-        // ignore
+    // BroadcastChannel로 다른 탭과 통신 (동적 import로 Edge-safe)
+    // BroadcastChannel은 security.browser.ts에서만 사용하고, 여기서는 직접 사용하지 않음
+    // 메시지 수신은 window.addEventListener로 처리
+    const handleAuthMessage = (event: MessageEvent) => {
+      // 같은 origin에서 온 메시지만 처리
+      if (event.origin !== window.location.origin) return;
+      
+      if (event.data?.type === 'FORCE_LOGOUT' || event.data?.type === 'AUTH_EVENT') {
+        if (event.data?.action === 'log') {
+          forceLogout(event.data?.reason || '인증 이벤트가 발생했습니다.');
+        }
       }
+    };
+    
+    if (typeof window !== 'undefined') {
+      window.addEventListener('message', handleAuthMessage);
     }
     
     // StorageEvent로 다른 탭의 로그아웃 감지 - 백엔드 세션 확인 (비동기)
@@ -376,9 +377,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       }
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('authTokenUpdated', handleTokenUpdate);
-      if (authChannel) {
-        authChannel.close();
-      }
+      window.removeEventListener('message', handleAuthMessage);
     };
   }, []); // 보호된 경로에서만 사용되므로 의존성 단순화 - pathname 변경 시 재인증하지 않음 (세션 유지)
 
