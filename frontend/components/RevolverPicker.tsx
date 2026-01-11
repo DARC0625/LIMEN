@@ -26,7 +26,6 @@ export default function RevolverPicker({
   const [scrollOffset, setScrollOffset] = useState(0);
   const [lastY, setLastY] = useState(0);
   const [lastTime, setLastTime] = useState(0);
-  const [velocity, setVelocity] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const selectedIndexRef = useRef<number>(items.indexOf(value));
   const animationFrameRef = useRef<number | null>(null);
@@ -139,7 +138,6 @@ export default function RevolverPicker({
     setStartY(e.clientY);
     setLastY(e.clientY);
     setLastTime(Date.now());
-    setVelocity(0);
     momentumRef.current = 0;
     
     if (scrollContainerRef.current) {
@@ -165,7 +163,6 @@ export default function RevolverPicker({
     
     if (deltaTime > 0) {
       const newVelocity = (deltaY / deltaTime) * 16; // 프레임당 속도
-      setVelocity(newVelocity);
       momentumRef.current = newVelocity;
     }
     
@@ -216,7 +213,6 @@ export default function RevolverPicker({
     setStartY(touch.clientY);
     setLastY(touch.clientY);
     setLastTime(Date.now());
-    setVelocity(0);
     momentumRef.current = 0;
     
     if (scrollContainerRef.current) {
@@ -240,7 +236,6 @@ export default function RevolverPicker({
     
     if (deltaTime > 0) {
       const newVelocity = (deltaY / deltaTime) * 16;
-      setVelocity(newVelocity);
       momentumRef.current = newVelocity;
     }
     

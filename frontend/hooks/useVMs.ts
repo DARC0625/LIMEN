@@ -3,7 +3,7 @@
  * 통합된 API 클라이언트 사용
  */
 import { useQuery, useSuspenseQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { startTransition, useState, useEffect } from 'react';
+import { startTransition } from 'react';
 import { vmAPI } from '../lib/api/index';
 import type { VM, QuotaUsage } from '../lib/types';
 import { useToast } from '../components/ToastContainer';
@@ -152,7 +152,7 @@ export function useCreateVM() {
         try {
           const { tokenManager } = await import('../lib/tokenManager');
           token = await tokenManager.getAccessToken();
-        } catch (error) {
+        } catch {
           // tokenManager 사용 실패 시 null 반환
           token = null;
         }
@@ -203,7 +203,7 @@ export function useCreateVM() {
     },
     
     // 서버 응답 성공: 임시 VM을 실제 VM으로 교체
-    onSuccess: (newVM, variables, context) => {
+    onSuccess: (newVM, _variables, context) => {
       // React Error #321 완전 해결: 비동기 처리로 렌더링 중 업데이트 방지
       queueMicrotask(() => {
         startTransition(() => {
@@ -242,25 +242,33 @@ export function useCreateVM() {
       queueMicrotask(() => {
         let errorMessage = error instanceof Error ? error.message : String(error);
         
+        // 타입 가드: APIError인지 확인
+        const isAPIError = (e: unknown): e is Error & { status?: number; details?: unknown } => 
+          e instanceof Error && 'status' in e;
+        
         // 500 에러인 경우 상세 정보 확인
-        if (error instanceof Error && (error as any).status === 500) {
-          const apiError = error as any;
-          
+        if (isAPIError(error) && error.status === 500) {
           // errorDetails에서 실제 에러 메시지 추출
-          if (apiError.details) {
-            const details = apiError.details;
+          if (error.details) {
+            const details = error.details;
             
-            // 다양한 구조에서 에러 메시지 추출 시도
-            if (details.error) {
-              if (typeof details.error === 'string') {
-                errorMessage = details.error;
-              } else if (typeof details.error === 'object' && details.error.message) {
-                errorMessage = details.error.message;
+            // 타입 가드: Record<string, unknown>인지 확인
+            const isRecord = (v: unknown): v is Record<string, unknown> => 
+              typeof v === 'object' && v !== null && !Array.isArray(v);
+            
+            if (isRecord(details)) {
+              // 다양한 구조에서 에러 메시지 추출 시도
+              if (details.error) {
+                if (typeof details.error === 'string') {
+                  errorMessage = details.error;
+                } else if (isRecord(details.error) && typeof details.error.message === 'string') {
+                  errorMessage = details.error.message;
+                }
+              } else if (typeof details.message === 'string') {
+                errorMessage = details.message;
+              } else if (typeof details.detail === 'string') {
+                errorMessage = details.detail;
               }
-            } else if (details.message) {
-              errorMessage = details.message;
-            } else if (details.detail) {
-              errorMessage = details.detail;
             } else if (typeof details === 'string') {
               errorMessage = details;
             }
@@ -326,21 +334,31 @@ if (typeof window !== 'undefined') {
   try {
     const stored = localStorage.getItem('protectedVMStates');
     if (stored) {
-      const parsed = JSON.parse(stored);
+      // 타입 가드: ProtectedVMState인지 확인
+      interface ProtectedVMState {
+        status: string;
+        timestamp: number;
+      }
+      const isProtectedVMState = (v: unknown): v is ProtectedVMState =>
+        typeof v === 'object' && v !== null && 'status' in v && 'timestamp' in v;
+      
+      const parsed: unknown = JSON.parse(stored);
       const now = Date.now();
-      Object.entries(parsed).forEach(([uuid, state]: [string, any]) => {
-        // 30초 이내의 보호 상태만 복원
-        if (state && state.timestamp && (now - state.timestamp) < 30000) {
-          protectedVMStates.set(uuid, { status: state.status, timestamp: state.timestamp });
-        }
-      });
-      // 만료된 항목 제거
-      const validStates: Record<string, any> = {};
-      Object.entries(parsed).forEach(([uuid, state]: [string, any]) => {
-        if (state && state.timestamp && (now - state.timestamp) < 30000) {
-          validStates[uuid] = state;
-        }
-      });
+      
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        Object.entries(parsed).forEach(([uuid, state]: [string, unknown]) => {
+          // 30초 이내의 보호 상태만 복원
+          if (isProtectedVMState(state) && (now - state.timestamp) < 30000) {
+            protectedVMStates.set(uuid, { status: state.status, timestamp: state.timestamp });
+          }
+        });
+        // 만료된 항목 제거
+        const validStates: Record<string, ProtectedVMState> = {};
+        Object.entries(parsed).forEach(([uuid, state]: [string, unknown]) => {
+          if (isProtectedVMState(state) && (now - state.timestamp) < 30000) {
+            validStates[uuid] = state;
+          }
+        });
       localStorage.setItem('protectedVMStates', JSON.stringify(validStates));
     }
   } catch (e) {

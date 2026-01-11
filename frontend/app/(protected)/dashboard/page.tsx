@@ -204,10 +204,11 @@ export default function Home() {
           });
         } else if (isAPIError(apiError)) {
           // 백엔드에서 제공한 상세 에러 정보 확인
-          const errorDetails = (apiError as any).details;
-          if (errorDetails) {
+          const apiErrorWithDetails = apiError as Error & { details?: unknown };
+          if (apiErrorWithDetails.details) {
             const isRecord = (v: unknown): v is Record<string, unknown> => 
               typeof v === 'object' && v !== null && !Array.isArray(v);
+            const errorDetails = apiErrorWithDetails.details;
             if (isRecord(errorDetails) && (typeof errorDetails.error === 'string' || typeof errorDetails.message === 'string')) {
               errorMessage = `${error.message}\n${errorDetails.error || errorDetails.message || ''}`;
             }
@@ -318,10 +319,11 @@ export default function Home() {
         errorMessage = error.message;
         
         // 백엔드에서 제공한 상세 에러 정보 확인
-        const errorDetails = (apiError as any).details;
-        if (errorDetails) {
+        const apiErrorWithDetails = apiError as Error & { details?: unknown };
+        if (apiErrorWithDetails.details) {
           const isRecord = (v: unknown): v is Record<string, unknown> => 
             typeof v === 'object' && v !== null && !Array.isArray(v);
+          const errorDetails = apiErrorWithDetails.details;
           if (isRecord(errorDetails) && (typeof errorDetails.error === 'string' || typeof errorDetails.message === 'string')) {
             errorMessage = `${error.message}\n${errorDetails.error || errorDetails.message || ''}`;
           }

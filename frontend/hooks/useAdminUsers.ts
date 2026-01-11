@@ -2,7 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { startTransition } from 'react';
 import { adminAPI } from '../lib/api';
-import type { UserWithStats, User, VM, CreateUserRequest, UpdateUserRequest } from '../lib/types';
+import type { UserWithStats, CreateUserRequest, UpdateUserRequest } from '../lib/types';
 import { useToast } from '../components/ToastContainer';
 import { getErrorMessage } from '../lib/types/errors';
 import { useAuth } from '../components/AuthGuard';

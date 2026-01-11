@@ -152,8 +152,7 @@ export default function VMListSection({
   const startXRef = useRef(0);
   const dragOffsetRef = useRef(0);
   const vmsLengthRef = useRef(vms.length);
-  const [startX, setStartX] = useState(0);
-  const [currentX, setCurrentX] = useState(0);
+  // TODO: 드래그/스와이프 기능 구현 시 startX, currentX state 필요
   
   // vms.length 변경 시 ref 업데이트
   useEffect(() => {
@@ -165,8 +164,6 @@ export default function VMListSection({
     isDraggingRef.current = true;
     startXRef.current = clientX;
     setIsDragging(true);
-    setStartX(clientX);
-    setCurrentX(clientX);
     setDragOffset(0);
     dragOffsetRef.current = 0;
   };
@@ -176,7 +173,6 @@ export default function VMListSection({
     if (!isDraggingRef.current) return;
     
     const diff = clientX - startXRef.current;
-    setCurrentX(clientX);
     setDragOffset(diff);
     dragOffsetRef.current = diff;
     
