@@ -29,6 +29,12 @@ type QuotaUsage struct {
 	} `json:"usage"`
 }
 
+// HandleGetQuotaHTTP is the standard HTTP handler wrapper for HandleGetQuota.
+// This maintains compatibility with router and test code that expects standard HTTP handler signature.
+func (h *Handler) HandleGetQuotaHTTP(w http.ResponseWriter, r *http.Request) {
+	h.HandleGetQuota(w, r, h.Config)
+}
+
 // HandleGetQuota handles getting quota information for the current user.
 // Uses session-based authentication (refresh_token cookie) similar to /api/auth/session
 func (h *Handler) HandleGetQuota(w http.ResponseWriter, r *http.Request, cfg *config.Config) {

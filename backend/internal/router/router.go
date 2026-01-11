@@ -163,9 +163,7 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *chi.Mux {
 
 	// Quota endpoints (system-wide, shared by all users)
 	// Uses session-based authentication (refresh_token cookie)
-	api.Get("/quota", func(w http.ResponseWriter, r *http.Request) {
-		h.HandleGetQuota(w, r, cfg)
-	})
+	api.Get("/quota", h.HandleGetQuotaHTTP)
 	// Admin-only endpoint for updating quota
 	api.With(adminMiddleware).Put("/quota", h.HandleUpdateQuota)
 
