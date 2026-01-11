@@ -109,7 +109,7 @@ export async function apiRequest<T>(
   });
 
   // 요청 실행 (재시도 포함)
-  const executeRequest = async (attempt: number = 1): Promise<Response> => {
+  const executeRequest = async (_attempt: number = 1): Promise<Response> => {
     // 타임아웃 처리
     const controller = typeof AbortController !== 'undefined'
       ? new AbortController()
@@ -192,18 +192,18 @@ export async function apiRequest<T>(
     let lastError: Error | null = null;
 
     // 재시도 로직
-    for (let attempt = 1; attempt <= (retry ? API_CONSTANTS.MAX_RETRIES : 1); attempt++) {
+    for (let _attempt = 1; _attempt <= (retry ? API_CONSTANTS.MAX_RETRIES : 1); _attempt++) {
       try {
-        response = await executeRequest(attempt);
+        response = await executeRequest(_attempt);
         lastError = null;
         break;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         
         // 마지막 시도가 아니면 재시도
-        if (attempt < (retry ? API_CONSTANTS.MAX_RETRIES : 1)) {
+        if (_attempt < (retry ? API_CONSTANTS.MAX_RETRIES : 1)) {
           await new Promise(resolve => 
-            setTimeout(resolve, API_CONSTANTS.RETRY_DELAY * attempt)
+            setTimeout(resolve, API_CONSTANTS.RETRY_DELAY * _attempt)
           );
           continue;
         }
@@ -283,7 +283,7 @@ async function handleResponse<T>(
           errorMessage = errorText.substring(0, 200);
         }
       }
-    } catch (e) {
+    } catch {
       // 응답 본문 읽기 실패는 무시
     }
     

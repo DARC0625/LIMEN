@@ -1,16 +1,12 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
-const path = require('path');
 
 async function extractPayload(tracePath) {
-  const traceDir = path.dirname(tracePath);
-  const traceFile = path.basename(tracePath);
-  
   console.log(`Extracting payload from: ${tracePath}`);
   
   // Playwright trace를 읽기 위해 브라우저 컨텍스트 생성
   const browser = await chromium.launch();
-  const context = await browser.newContext();
+  const _context = await browser.newContext();
   
   // Trace 파일에서 네트워크 요청 추출
   // Note: Playwright의 trace API는 직접 네트워크 요청을 추출하는 기능이 제한적이므로

@@ -83,7 +83,7 @@ export default function VNCViewer({ id }: { id: string }) {
         if (typeof window === 'undefined') return;
 
         // Dynamic import for client-side only
-        // @ts-ignore
+        // @ts-expect-error - noVNC 타입 정의 없음 (ESM 모듈 import)
         const rfbModule = await import('@novnc/novnc/lib/rfb');
         const RFB = rfbModule.default || rfbModule;
 

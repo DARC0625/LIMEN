@@ -415,7 +415,6 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
     // Construct WebSocket URL
     // 환경에 따라 올바른 URL 결정 (프로덕션은 상대 경로, 개발은 환경 변수 또는 localhost)
     let wsUrl: string;
-    let urlSource: string;
     
     // 프로덕션 환경 감지
     const isProduction = typeof window !== 'undefined' && 
@@ -427,7 +426,6 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
       // 백엔드가 /vnc/{uuid}를 지원하므로 path parameter 형식 사용
       wsUrl = `${protocol}://${window.location.host}/vnc/${uuid}`;
-      urlSource = 'production-relative-path-vnc-uuid';
       
       // 프로덕션에서 환경 변수가 설정되어 있으면 개발 환경에서만 로그로 표시
       if (process.env.NEXT_PUBLIC_BACKEND_URL && process.env.NODE_ENV === 'development') {
@@ -444,7 +442,6 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
           // ⚠️ 중요: 백엔드는 다른 서버이므로 내부망 IP 사용
           // 백엔드가 /vnc/{uuid}를 지원하므로 path parameter 형식 사용
           wsUrl = `ws://10.0.0.100:18443/vnc/${uuid}`;
-          urlSource = 'fallback-internal-network-vnc-uuid';
         } else {
           // 유효한 환경 변수 사용
           const protocol = backendUrl.startsWith('https') ? 'wss' : 'ws';
@@ -454,16 +451,13 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
             // 포트가 포함된 호스트 (예: localhost:18443, 10.0.0.100:18443)
             // 백엔드가 /vnc/{uuid}를 지원하므로 path parameter 형식 사용
             wsUrl = `${protocol}://${backendHost}/vnc/${uuid}`;
-            urlSource = 'env-var-with-port-vnc-uuid';
           } else if (backendHost) {
             // 호스트만 있는 경우 (포트는 프로토콜에 따라 기본값 사용)
             // 백엔드가 /vnc/{uuid}를 지원하므로 path parameter 형식 사용
             wsUrl = `${protocol}://${backendHost}/vnc/${uuid}`;
-            urlSource = 'env-var-host-only-vnc-uuid';
           } else {
             logger.error(new Error(`Could not parse NEXT_PUBLIC_BACKEND_URL: ${backendUrl}`), { component: 'VNCViewer', action: 'parse_backend_url' });
             wsUrl = `ws://localhost:18443/vnc/${uuid}`;
-            urlSource = 'fallback-localhost-vnc-uuid';
           }
         }
       } else {

@@ -55,7 +55,6 @@ export default function VMListSection({
   
   // 드래그/스와이프 상태
   const [isDragging, setIsDragging] = useState(false);
-  const [currentX, setCurrentX] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
   const animationFrameRef = useRef<number | null>(null);
 

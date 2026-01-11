@@ -190,7 +190,9 @@ async function expectCreateVmFormOpen(page: Page, timeout = 10000) {
   try {
     const title = await page.title();
     console.log('title=', title);
-  } catch {}
+  } catch {
+    // 페이지 타이틀 가져오기 실패 시 무시
+  }
 
   // 클릭 가능한 후보 덤프
   const clickable = page.locator('button, a, [role="button"], [onclick]');
@@ -253,7 +255,7 @@ async function setCpuByButtons(page: Page, target: number) {
     
     // React 컴포넌트에서 직접 찾기
     const findReactComponent = (element: any) => {
-      for (let key in element) {
+      for (const key in element) {
         if (key.startsWith('__reactInternalInstance') || key.startsWith('__reactFiber')) {
           return element[key];
         }
@@ -340,7 +342,7 @@ async function setMemGBByButtons(page: Page, targetGB: number) {
     
     // React 컴포넌트에서 직접 찾기
     const findReactComponent = (element: any) => {
-      for (let key in element) {
+      for (const key in element) {
         if (key.startsWith('__reactInternalInstance') || key.startsWith('__reactFiber')) {
           return element[key];
         }
@@ -702,7 +704,7 @@ async function openConsoleFromVm(page: Page, vmName: string) {
   });
 
   // WebSocket 리스너 설정 (페이지 이동 전에 설정해야 함)
-  let forceWsTestStarted = false; // F-2 강제 연결 테스트 시작 여부
+  const forceWsTestStarted = false; // F-2 강제 연결 테스트 시작 여부
   page.on("websocket", (ws) => {
     const url = ws.url();
     console.log(`=== [E2E] WebSocket event: ${url} ===`);

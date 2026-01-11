@@ -2,7 +2,6 @@
 
 import { useState, useEffect, startTransition } from 'react';
 import dynamicImport from 'next/dynamic';
-import { useRouter } from 'next/navigation';
 import { removeToken, isAdmin, vmAPI } from '../../../lib/api';
 import { isUserApproved } from '../../../lib/auth';
 import { useToast } from '../../../components/ToastContainer';
@@ -19,13 +18,9 @@ const VMListSection = dynamicImport(() => import('../../../components/VMListSect
 const HealthStatus = dynamicImport(() => import('../../../components/HealthStatus').then(mod => mod.default), { ssr: false });
 const AgentMetricsCard = dynamicImport(() => import('../../../components/AgentMetricsCard').then(mod => mod.default), { ssr: false });
 
-// Loading and Skeleton are small components, load immediately for better UX
-import Loading from '../../../components/Loading';
-
 // VM type is now imported from api.ts
 
 export default function Home() {
-  const router = useRouter();
   const { isAuthenticated } = useAuth();
   const toast = useToast();
   
