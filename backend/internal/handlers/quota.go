@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/DARC0625/LIMEN/backend/internal/auth"
 	"github.com/DARC0625/LIMEN/backend/internal/config"
@@ -41,24 +42,41 @@ func (h *Handler) HandleGetQuota(w http.ResponseWriter, r *http.Request, cfg *co
 	if !ok {
 		// Fallback: Authenticate via refresh_token cookie (session-based)
 		// Use common function to ensure consistent security checks
-		refreshToken := ""
-		if cookie, err := r.Cookie("refresh_token"); err == nil {
-			refreshToken = cookie.Value
-		}
-
-		var authErr error
-		var refreshClaims *auth.RefreshTokenClaims
-		userID, refreshClaims, ok, authErr = auth.ResolveUserFromRefreshToken(refreshToken, cfg.JWTSecret)
-		if !ok {
-			// Security: Log authentication failures for monitoring
+		cookie, err := r.Cookie("refresh_token")
+		if err != nil {
+			// No cookie
 			logger.Log.Debug("Quota endpoint authentication failed",
 				zap.String("path", r.URL.Path),
 				zap.String("remote_addr", r.RemoteAddr),
+				zap.String("reason", string(auth.ReasonMissingCookie)),
+				zap.Error(err))
+			errors.WriteUnauthorized(w, "Authentication required")
+			return
+		}
+
+		refreshToken := strings.TrimSpace(cookie.Value)
+		if refreshToken == "" {
+			// Empty token
+			logger.Log.Debug("Quota endpoint authentication failed",
+				zap.String("path", r.URL.Path),
+				zap.String("remote_addr", r.RemoteAddr),
+				zap.String("reason", string(auth.ReasonEmptyToken)))
+			errors.WriteUnauthorized(w, "Authentication required")
+			return
+		}
+
+		var authErr error
+		userID, _, ok, authErr = auth.ResolveUserFromRefreshToken(refreshToken, cfg.JWTSecret)
+		if !ok {
+			// Security: Log authentication failures with reason for monitoring
+			logger.Log.Debug("Quota endpoint authentication failed",
+				zap.String("path", r.URL.Path),
+				zap.String("remote_addr", r.RemoteAddr),
+				zap.String("reason", string(auth.Reason(authErr))),
 				zap.Error(authErr))
 			errors.WriteUnauthorized(w, "Authentication required")
 			return
 		}
-		_ = refreshClaims // Not used in quota handler, but available if needed
 
 		logger.Log.Debug("Authenticated quota request via refresh token cookie",
 			zap.String("path", r.URL.Path),
