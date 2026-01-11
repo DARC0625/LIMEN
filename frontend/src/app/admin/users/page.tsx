@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminAPI, UserWithStats, User, VM, isAdmin } from '../../../lib/api';
+import type { UpdateUserRequest } from '../../../lib/types';
 import { useToast } from '../../../components/ToastContainer';
 import { removeToken } from '../../../lib/api';
 
@@ -49,12 +50,13 @@ export default function UserManagementPage() {
         return a.username.localeCompare(b.username);
       });
       setUsers(sortedData);
-    } catch (err: any) {
-      if (err.message?.includes('403') || err.message?.includes('Forbidden')) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
         toast.error('Admin access required');
         router.push('/');
       } else {
-        toast.error(`Failed to fetch users: ${err.message}`);
+        toast.error(`Failed to fetch users: ${errorMessage}`);
       }
     } finally {
       setLoading(false);
@@ -65,8 +67,9 @@ export default function UserManagementPage() {
     try {
       const data = await adminAPI.getUser(userId);
       setExpandedUserVMs(data.vms);
-    } catch (err: any) {
-      toast.error(`Failed to fetch user details: ${err.message}`);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to fetch user details: ${errorMessage}`);
     }
   };
 
@@ -92,8 +95,9 @@ export default function UserManagementPage() {
       toast.success('User created successfully');
       setShowCreateModal(false);
       fetchUsers();
-    } catch (err: any) {
-      toast.error(`Failed to create user: ${err.message}`);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to create user: ${errorMessage}`);
     }
   };
 
@@ -106,7 +110,7 @@ export default function UserManagementPage() {
     const password = formData.get('password') as string;
     const role = formData.get('role') as string;
 
-    const updateData: any = {};
+    const updateData: Partial<UpdateUserRequest> = {};
     if (username && username !== editingUser.username) updateData.username = username;
     if (password) updateData.password = password;
     if (role && role !== editingUser.role) updateData.role = role;
@@ -119,8 +123,9 @@ export default function UserManagementPage() {
       if (expandedUser === editingUser.id) {
         await fetchUserDetails(editingUser.id);
       }
-    } catch (err: any) {
-      toast.error(`Failed to update user: ${err.message}`);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to update user: ${errorMessage}`);
     }
   };
 
@@ -135,8 +140,9 @@ export default function UserManagementPage() {
         setExpandedUserVMs([]);
       }
       fetchUsers();
-    } catch (err: any) {
-      toast.error(`Failed to delete user: ${err.message}`);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to delete user: ${errorMessage}`);
     }
   };
 
@@ -145,8 +151,9 @@ export default function UserManagementPage() {
       await adminAPI.approveUser(userId);
       toast.success('User approved successfully');
       fetchUsers();
-    } catch (err: any) {
-      toast.error(`Failed to approve user: ${err.message}`);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to approve user: ${errorMessage}`);
     }
   };
 
