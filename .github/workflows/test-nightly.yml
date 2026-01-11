@@ -1,0 +1,78 @@
+name: Nightly Extended Tests
+
+on:
+  schedule:
+    # 매일 새벽 2시 (UTC) 실행
+    - cron: '0 2 * * *'
+  workflow_dispatch: # 수동 트리거 가능
+
+jobs:
+  extended-tests:
+    name: Extended/Flaky Tests (Nightly)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ./backend/go.mod
+          cache-dependency-path: ./backend/go.sum
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run Extended Tests (integration + extended)
+        timeout-minutes: 25
+        run: |
+          echo "=== Running Extended Tests (integration + extended tags, timeout 20m) ==="
+          set +e
+          go test -v -count=1 -timeout 20m -tags=integration,extended ./... | tee test-nightly.log
+          TEST_EXIT=$?
+          set -e
+          
+          echo ""
+          echo "=== Slowest Packages ==="
+          if [ -f test-nightly.log ]; then
+            grep -E "^\s+(ok|FAIL)\s+\S+\s+[0-9]+\.[0-9]+s" test-nightly.log | \
+              awk '{print $NF, $2}' | sort -rn | head -10 || true
+          fi
+          
+          exit $TEST_EXIT
+
+  libvirt-validation:
+    name: Libvirt Validation (Self-hosted)
+    runs-on: self-hosted
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ./backend/go.mod
+          cache-dependency-path: ./backend/go.sum
+
+      - name: Download dependencies
+        working-directory: ./backend
+        run: go mod download
+
+      - name: Run Libvirt Tests
+        # libvirt 의존 테스트는 self-hosted runner에서만 실행
+        working-directory: ./backend
+        run: go test -tags libvirt,extended -v ./internal/vm/... || (echo "Libvirt tests failed" && exit 1)

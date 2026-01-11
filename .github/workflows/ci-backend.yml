@@ -27,6 +27,30 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
-      - name: Go test (CI-safe)
+      - name: Go test (fast suite, timeout 5m)
         working-directory: backend
-        run: go test ./...
+        timeout-minutes: 6
+        run: |
+          echo "=== Running Go tests (fast suite, timeout 5m) ==="
+          echo "This runs unit tests only (integration tests excluded via build tags)"
+          echo ""
+          
+          set +e
+          go test -v -count=1 -timeout 5m ./... | tee test.log
+          TEST_EXIT=$?
+          set -e
+          
+          echo ""
+          echo "=== Slowest Packages (from test.log) ==="
+          if [ -f test.log ]; then
+            # Extract package timing: "ok      package/path    0.123s"
+            grep -E "^\s+(ok|FAIL)\s+\S+\s+[0-9]+\.[0-9]+s" test.log | \
+              awk '{print $NF, $2}' | sort -rn | head -10 || \
+            echo "Check test.log manually for package timings"
+            
+            echo ""
+            echo "=== Module download check ==="
+            grep -i "go: downloading" test.log | head -5 || echo "No slow downloads detected"
+          fi
+          
+          exit $TEST_EXIT
