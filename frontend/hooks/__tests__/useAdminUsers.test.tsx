@@ -77,9 +77,12 @@ describe('useAdminUsers', () => {
     // fetch 모킹: new Response() 사용
     global.fetch = jest.fn((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
+      
+      // 디버깅: 실제 호출되는 URL 확인
+      // console.log('[TEST] Fetch called with URL:', url)
 
-      // ✅ hook이 실제로 호출하는 URL로 체크
-      // /api/admin/users 또는 http://localhost:3000/api/admin/users 등 모든 경우 처리
+      // ✅ hook이 실제로 호출하는 URL로 체크 (조건을 넓혀서 쿼리 파라미터 등 처리)
+      // /api/admin/users 또는 /admin/users 등 모든 경우 처리
       if (url.includes('/admin/users') && !url.match(/\/admin\/users\/\d+/)) {
         return Promise.resolve(
           new Response(JSON.stringify(mockUsers), {
@@ -138,7 +141,8 @@ describe('useAdminUsers', () => {
 
     ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
-      if (url.includes('/api/admin/users') && !url.match(/\/api\/admin\/users\/\d+/)) {
+      // URL 조건을 넓혀서 쿼리 파라미터 등 처리
+      if (url.includes('/admin/users') && !url.match(/\/admin\/users\/\d+/)) {
         return Promise.resolve(
           new Response(JSON.stringify(unsortedUsers), {
             status: 200,
@@ -169,7 +173,8 @@ describe('useAdminUsers', () => {
   it('should handle errors', async () => {
     ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
-      if (url.includes('/api/admin/users') && !url.match(/\/api\/admin\/users\/\d+/)) {
+      // URL 조건을 넓혀서 쿼리 파라미터 등 처리
+      if (url.includes('/admin/users') && !url.match(/\/admin\/users\/\d+/)) {
         return Promise.resolve(
           new Response(JSON.stringify({ error: 'Failed to fetch users' }), {
             status: 500,
@@ -201,8 +206,8 @@ describe('useAdminUser', () => {
     global.fetch = jest.fn((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
 
-      // 사용자 상세 조회
-      if (url.match(/\/api\/admin\/users\/\d+$/)) {
+      // 사용자 상세 조회 (URL 조건을 넓혀서 쿼리 파라미터 등 처리)
+      if (url.match(/\/admin\/users\/\d+$/)) {
         const userId = parseInt(url.split('/').pop() || '0')
         const mockUser = {
           id: userId,
@@ -268,7 +273,8 @@ describe('useCreateUser', () => {
     global.fetch = jest.fn((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
 
-      if (url.includes('/api/admin/users') && !url.match(/\/api\/admin\/users\/\d+/)) {
+      // URL 조건을 넓혀서 쿼리 파라미터 등 처리
+      if (url.includes('/admin/users') && !url.match(/\/admin\/users\/\d+/)) {
         // POST 요청인 경우
         return Promise.resolve(
           new Response(JSON.stringify({ id: 1, username: 'newuser', role: 'user' }), {
@@ -308,7 +314,8 @@ describe('useCreateUser', () => {
 
     ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
-      if (url.includes('/api/admin/users') && !url.match(/\/api\/admin\/users\/\d+/)) {
+      // URL 조건을 넓혀서 쿼리 파라미터 등 처리
+      if (url.includes('/admin/users') && !url.match(/\/admin\/users\/\d+/)) {
         return Promise.resolve(
           new Response(JSON.stringify({ error: 'Failed to create user' }), {
             status: 500,
@@ -348,7 +355,8 @@ describe('useUpdateUser', () => {
     global.fetch = jest.fn((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
 
-      if (url.match(/\/api\/admin\/users\/\d+$/)) {
+      // URL 조건을 넓혀서 쿼리 파라미터 등 처리
+      if (url.match(/\/admin\/users\/\d+$/)) {
         return Promise.resolve(
           new Response(JSON.stringify({ id: 1, username: 'user1', role: 'admin' }), {
             status: 200,
