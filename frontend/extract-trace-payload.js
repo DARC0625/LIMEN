@@ -6,7 +6,8 @@ async function extractPayload(tracePath) {
   
   // Playwright trace를 읽기 위해 브라우저 컨텍스트 생성
   const browser = await chromium.launch();
-  const _context = await browser.newContext();
+  // Note: context는 현재 사용하지 않지만 향후 trace API 사용 시 필요할 수 있음
+  await browser.newContext();
   
   // Trace 파일에서 네트워크 요청 추출
   // Note: Playwright의 trace API는 직접 네트워크 요청을 추출하는 기능이 제한적이므로

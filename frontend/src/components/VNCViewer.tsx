@@ -196,7 +196,7 @@ export default function VNCViewer({ id }: { id: string }) {
             (rfbRef.current as any)._resizeCleanup();
           }
           rfbRef.current.disconnect();
-        } catch (e) {
+        } catch {
           // ignore
         }
         rfbRef.current = null;

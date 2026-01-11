@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { authAPI, setToken } from '../lib/api';
+import { authAPI } from '../lib/api';
 import { useRouter } from 'next/navigation';
 import { useToast } from './ToastContainer';
 
@@ -35,7 +35,7 @@ export default function RegisterForm() {
     setLoading(true);
 
     try {
-      const response = await authAPI.register({ username, password });
+      await authAPI.register({ username, password });
       toast.success('Account created successfully! Please wait for admin approval.');
       
       // Redirect to login after a short delay

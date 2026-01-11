@@ -109,7 +109,7 @@ export async function apiRequest<T>(
   });
 
   // 요청 실행 (재시도 포함)
-  const executeRequest = async (_attempt: number = 1): Promise<Response> => {
+  const executeRequest = async (attempt: number = 1): Promise<Response> => {
     // 타임아웃 처리
     const controller = typeof AbortController !== 'undefined'
       ? new AbortController()
@@ -133,6 +133,7 @@ export async function apiRequest<T>(
       logger.log('[executeRequest] Request details:', {
         url,
         method,
+        attempt,
         hasBody: !!requestBody,
         bodyLength: requestBody?.length || 0,
         bodyPreview: requestBody ? requestBody.substring(0, 200) : 'none',
@@ -195,6 +196,7 @@ export async function apiRequest<T>(
     for (let _attempt = 1; _attempt <= (retry ? API_CONSTANTS.MAX_RETRIES : 1); _attempt++) {
       try {
         response = await executeRequest(_attempt);
+        // attempt는 재시도 로직에서 사용 (로그/백오프 계산용)
         lastError = null;
         break;
       } catch (error) {

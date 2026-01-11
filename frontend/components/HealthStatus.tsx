@@ -27,7 +27,6 @@ export default function HealthStatus() {
   const mountedRef = useRef(true);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
     let retryTimeout: NodeJS.Timeout | null = null;
     const MAX_CONSECUTIVE_ERRORS = 5;
     const BASE_RETRY_DELAY = 500; // 0.5초 - 빠른 재시도
@@ -208,7 +207,7 @@ export default function HealthStatus() {
     
     // 30초마다 자동 갱신 (로그인 페이지 깜빡임 방지)
     // 오프라인 상태에서도 계속 시도하되, 연속 에러가 많으면 retryTimeout이 처리
-    interval = setInterval(() => {
+    const interval = setInterval(() => {
       // 연속 에러가 많으면 간격을 늘림 (retryTimeout이 처리)
       if (consecutiveErrorsRef.current > MAX_CONSECUTIVE_ERRORS) {
         return; // retryTimeout이 처리
