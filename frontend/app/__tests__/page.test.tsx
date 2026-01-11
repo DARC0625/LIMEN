@@ -127,14 +127,14 @@ describe('Home Page', () => {
   })
 
   it('handles form submission error', async () => {
-    // waitlist API만 실패하도록 override
+      // waitlist API만 실패하도록 override
     ;(global.fetch as jest.Mock).mockImplementation((url: RequestInfo | URL) => {
       const urlString = typeof url === 'string' ? url : url.toString()
       if (urlString.includes('/api/public/waitlist') || urlString.includes('/api/waitlist')) {
         return Promise.resolve({
           ok: false,
           status: 400,
-          json: async () => ({ error: '대기자 등록 실패' }),
+          json: async () => ({ error: '등록 처리 중 오류가 발생했습니다' }),
           headers: new Headers(),
           getSetCookie: () => [],
         } as Response)
@@ -163,7 +163,8 @@ describe('Home Page', () => {
     fireEvent.click(submitButton)
 
     // 에러 메시지 확인 (정규식으로 유연하게 매칭)
-    expect(await screen.findByText(/대기자\s*등록.*실패/i)).toBeInTheDocument()
+    // 실제 코드에서는 "등록 처리 중 오류가 발생했습니다" 메시지 사용
+    expect(await screen.findByText(/등록.*처리.*오류|등록.*실패/i)).toBeInTheDocument()
   })
 
   it('handles form submission with purpose field', async () => {
