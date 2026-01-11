@@ -27,27 +27,33 @@ describe('Home Page', () => {
     mockUseRouter.mockReturnValue(mockRouter as any)
     
     // fetch 모킹: 기본적으로 성공 응답 (인증 문제 회피)
-    global.fetch = jest.fn((url: RequestInfo | URL) => {
-      const urlString = typeof url === 'string' ? url : url.toString()
+    global.fetch = jest.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
       
       // waitlist API만 실패하도록 설정 (테스트 목적)
-      if (urlString.includes('/api/public/waitlist') || urlString.includes('/api/waitlist')) {
-        return Promise.resolve({
-          ok: false,
-          status: 400,
-          json: async () => ({ error: '대기자 등록 실패' }),
-        } as Response)
+      if (url.includes('/api/public/waitlist') || url.includes('/api/waitlist')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ error: '대기자 등록 실패' }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        )
       }
       
       // 다른 API들(quota, vms, auth 등)은 성공 응답 (인증 에러 회피)
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: async () => ({}),
-        headers: new Headers(),
-        getSetCookie: () => [],
-      } as Response)
-    })
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({}),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    }) as jest.MockedFunction<typeof fetch>
   })
 
   it('renders main heading', () => {
@@ -78,25 +84,29 @@ describe('Home Page', () => {
 
   it('handles form submission successfully', async () => {
     // waitlist API만 성공하도록 override
-    ;(global.fetch as jest.Mock).mockImplementation((url: RequestInfo | URL) => {
-      const urlString = typeof url === 'string' ? url : url.toString()
-      if (urlString.includes('/api/public/waitlist') || urlString.includes('/api/waitlist')) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: async () => ({ success: true }),
-          headers: new Headers(),
-          getSetCookie: () => [],
-        } as Response)
+    ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/public/waitlist') || url.includes('/api/waitlist')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ success: true }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        )
       }
       // 다른 API는 기본 mock 사용
-      return (global.fetch as jest.Mock).getMockImplementation()?.(url) || Promise.resolve({
-        ok: true,
-        status: 200,
-        json: async () => ({}),
-        headers: new Headers(),
-        getSetCookie: () => [],
-      } as Response)
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({}),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
     })
 
     render(<Home />)
@@ -128,25 +138,29 @@ describe('Home Page', () => {
 
   it('handles form submission error', async () => {
       // waitlist API만 실패하도록 override
-    ;(global.fetch as jest.Mock).mockImplementation((url: RequestInfo | URL) => {
-      const urlString = typeof url === 'string' ? url : url.toString()
-      if (urlString.includes('/api/public/waitlist') || urlString.includes('/api/waitlist')) {
-        return Promise.resolve({
-          ok: false,
-          status: 400,
-          json: async () => ({ error: '등록 처리 중 오류가 발생했습니다' }),
-          headers: new Headers(),
-          getSetCookie: () => [],
-        } as Response)
+    ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/public/waitlist') || url.includes('/api/waitlist')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ error: '등록 처리 중 오류가 발생했습니다' }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        )
       }
       // 다른 API는 기본 mock 사용 (성공)
-      return (global.fetch as jest.Mock).getMockImplementation()?.(url) || Promise.resolve({
-        ok: true,
-        status: 200,
-        json: async () => ({}),
-        headers: new Headers(),
-        getSetCookie: () => [],
-      } as Response)
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({}),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
     })
 
     render(<Home />)
@@ -169,25 +183,29 @@ describe('Home Page', () => {
 
   it('handles form submission with purpose field', async () => {
     // waitlist API만 성공하도록 override
-    ;(global.fetch as jest.Mock).mockImplementation((url: RequestInfo | URL) => {
-      const urlString = typeof url === 'string' ? url : url.toString()
-      if (urlString.includes('/api/public/waitlist') || urlString.includes('/api/waitlist')) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: async () => ({ success: true }),
-          headers: new Headers(),
-          getSetCookie: () => [],
-        } as Response)
+    ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/public/waitlist') || url.includes('/api/waitlist')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ success: true }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        )
       }
       // 다른 API는 기본 mock 사용
-      return (global.fetch as jest.Mock).getMockImplementation()?.(url) || Promise.resolve({
-        ok: true,
-        status: 200,
-        json: async () => ({}),
-        headers: new Headers(),
-        getSetCookie: () => [],
-      } as Response)
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({}),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
     })
 
     render(<Home />)
@@ -233,25 +251,29 @@ describe('Home Page', () => {
   })
 
   it('disables submit button while submitting', async () => {
-    ;(global.fetch as jest.Mock).mockImplementation((url: RequestInfo | URL) => {
-      const urlString = typeof url === 'string' ? url : url.toString()
-      if (urlString.includes('/api/public/waitlist') || urlString.includes('/api/waitlist')) {
-        return new Promise(resolve => setTimeout(() => resolve({
-          ok: true,
-          status: 200,
-          json: async () => ({ success: true }),
-          headers: new Headers(),
-          getSetCookie: () => [],
-        } as Response), 100))
+    ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/public/waitlist') || url.includes('/api/waitlist')) {
+        return new Promise(resolve => setTimeout(() => resolve(
+          new Response(
+            JSON.stringify({ success: true }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        ), 100))
       }
       // 다른 API는 기본 mock 사용
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: async () => ({}),
-        headers: new Headers(),
-        getSetCookie: () => [],
-      } as Response)
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({}),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
     })
 
     render(<Home />)

@@ -26,7 +26,31 @@ describe('Home Page', () => {
     jest.clearAllMocks()
     mockUseRouter.mockReturnValue(mockRouter as any)
     // fetch 모킹
-    global.fetch = jest.fn()
+    global.fetch = jest.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      if (url.includes('/api/waitlist')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ error: '대기자 등록 실패' }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        )
+      }
+
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({}),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    }) as jest.MockedFunction<typeof fetch>
   })
 
   it('renders main heading', () => {
@@ -56,9 +80,28 @@ describe('Home Page', () => {
   })
 
   it('handles form submission successfully', async () => {
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true }),
+    ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/public/waitlist') || url.includes('/api/waitlist')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ success: true }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        )
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({}),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
     })
 
     render(<Home />)
@@ -90,9 +133,28 @@ describe('Home Page', () => {
   })
 
   it('handles form submission error', async () => {
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: false,
-      status: 500,
+    ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/public/waitlist') || url.includes('/api/waitlist')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ error: '등록 처리 중 오류가 발생했습니다' }),
+            {
+              status: 500,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        )
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({}),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
     })
 
     render(<Home />)
@@ -118,9 +180,28 @@ describe('Home Page', () => {
   })
 
   it('handles form submission with purpose field', async () => {
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true }),
+    ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/public/waitlist') || url.includes('/api/waitlist')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ success: true }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        )
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({}),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
     })
 
     render(<Home />)
@@ -166,9 +247,29 @@ describe('Home Page', () => {
   })
 
   it('disables submit button while submitting', async () => {
-    ;(global.fetch as jest.Mock).mockImplementation(() => 
-      new Promise(resolve => setTimeout(() => resolve({ ok: true, json: async () => ({}) }), 100))
-    )
+    ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/public/waitlist') || url.includes('/api/waitlist')) {
+        return new Promise(resolve => setTimeout(() => resolve(
+          new Response(
+            JSON.stringify({ success: true }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        ), 100))
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({}),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    })
 
     render(<Home />)
 
