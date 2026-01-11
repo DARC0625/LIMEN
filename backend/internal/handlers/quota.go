@@ -31,6 +31,7 @@ type QuotaUsage struct {
 
 // HandleGetQuotaHTTP is the standard HTTP handler wrapper for HandleGetQuota.
 // This maintains compatibility with router and test code that expects standard HTTP handler signature.
+// Updated for workflow testing.
 func (h *Handler) HandleGetQuotaHTTP(w http.ResponseWriter, r *http.Request) {
 	h.HandleGetQuota(w, r, h.Config)
 }
