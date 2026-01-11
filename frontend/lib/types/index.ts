@@ -13,11 +13,13 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  token_type: string;
+  success: boolean;
+  access_token?: string; // 쿠키 기반 인증에서는 선택적
+  refresh_token?: string; // 쿠키 기반 인증에서는 선택적
+  expires_in?: number;
+  token_type?: string;
   token?: string; // 하위 호환성
+  message?: string;
 }
 
 export interface TokenRefreshResponse {

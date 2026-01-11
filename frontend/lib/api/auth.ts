@@ -40,7 +40,7 @@ export const authAPI = {
     const response = await fetch(url, {
       method: 'POST',
       headers,
-      credentials: 'include',
+      credentials: 'include', // 중요: 쿠키 인증이면 필수
       body: JSON.stringify(credentials),
     });
     
@@ -56,74 +56,72 @@ export const authAPI = {
       headers: setCookieHeaders.map(h => h.substring(0, 200)), // 처음 200자
     });
     
-    const data = await response.json();
+    // JSON이 없을 수도 있으니 안전 파싱
+    const data = await response.json().catch(() => ({}));
     
-    // 쿠키에서 refresh_token 추출 시도 (HttpOnly가 아니면 가능)
-    // 백엔드가 refresh_token을 쿠키로만 전송하는 경우를 대비
-    let refreshTokenFromCookie: string | null = null;
-    if (typeof window !== 'undefined') {
-      // document.cookie에서 refresh_token 찾기
-      const cookies = document.cookie.split(';');
-      for (const cookie of cookies) {
-        const [name, value] = cookie.trim().split('=');
-        if (name === 'refresh_token' && value) {
-          refreshTokenFromCookie = value;
-          logger.log('[authAPI.login] Found refresh_token in cookie');
-          break;
-        }
-      }
-    }
+    // 기존 토큰 바디 기반 (하위 호환성)
+    const accessToken = data?.token ?? data?.access_token ?? data?.accessToken ?? null;
+    const refreshToken = data?.refresh_token ?? data?.refreshToken ?? null;
     
-    // 응답 데이터 상세 로깅
-    logger.log('[authAPI.login] Response data:', {
-      hasAccessToken: !!data.access_token,
-      hasRefreshToken: !!data.refresh_token,
-      hasRefreshTokenFromCookie: !!refreshTokenFromCookie,
-      accessTokenLength: data.access_token?.length || 0,
-      refreshTokenLength: data.refresh_token?.length || 0,
-      refreshTokenFromCookieLength: refreshTokenFromCookie?.length || 0,
-      expiresIn: data.expires_in,
-      allKeys: Object.keys(data),
-      dataPreview: JSON.stringify(data).substring(0, 200),
-    });
-    
-    // refresh_token 소스 결정: JSON 응답 > 쿠키
-    const refreshToken = data.refresh_token || refreshTokenFromCookie;
-    
-    // 최신 방식: Access Token + Refresh Token 분리
-    if (data.access_token && refreshToken) {
+    // 토큰이 JSON 응답에 있으면 기존 로직대로 저장
+    if (accessToken && refreshToken) {
       const expiresIn = data.expires_in || AUTH_CONSTANTS.ACCESS_TOKEN_EXPIRY;
-      logger.log('[authAPI.login] Saving tokens to tokenManager', {
-        hasAccessToken: !!data.access_token,
+      logger.log('[authAPI.login] Tokens found in JSON response, saving to tokenManager', {
+        hasAccessToken: !!accessToken,
         hasRefreshToken: !!refreshToken,
-        refreshTokenSource: data.refresh_token ? 'JSON' : 'Cookie',
         expiresIn,
       });
-      tokenManager.setTokens(data.access_token, refreshToken, expiresIn);
-      logger.log('[authAPI.login] Tokens saved, verifying...', {
-        hasValidToken: tokenManager.hasValidToken(),
-        refreshTokenInStorage: typeof window !== 'undefined' ? !!localStorage.getItem('refresh_token') : false,
-      });
-    } else {
-      // refresh_token이 없는 경우 에러 로깅
-      logger.error(new Error('[authAPI.login] Missing tokens in response!'), {
-        hasAccessToken: !!data.access_token,
-        hasRefreshTokenInJSON: !!data.refresh_token,
-        hasRefreshTokenInCookie: !!refreshTokenFromCookie,
-        dataKeys: Object.keys(data),
-        data: data,
-      });
+      tokenManager.setTokens(accessToken, refreshToken, expiresIn);
+      
+      return {
+        success: true,
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_in: expiresIn,
+        ...data,
+      } as LoginResponse;
     }
     
-    if (data.token) {
-      // 하위 호환성: 단일 토큰
-      // localStorage에 저장 (하위 호환성)
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('auth_token', data.token);
+    // ✅ cookie-only 모드: 토큰이 JSON에 없으면 /session으로 로그인 성공 확인
+    logger.log('[authAPI.login] No tokens in JSON response, checking session (cookie-based auth)', {
+      status: response.status,
+      hasSetCookie: setCookieHeaders.length > 0,
+      responseKeys: Object.keys(data),
+    });
+    
+    // 세션 확인으로 로그인 성공 여부 검증
+    try {
+      const sessionCheck = await fetch(`${apiUrl}/auth/session`, {
+        method: 'GET',
+        credentials: 'include', // 쿠키 포함 필수
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (sessionCheck.ok) {
+        const sessionData = await sessionCheck.json();
+        if (sessionData.valid === true) {
+          logger.log('[authAPI.login] Session verified successfully (cookie-based auth)');
+          return {
+            success: true,
+            ...data, // 기타 응답 데이터는 그대로 전달 (메시지 등)
+          } as LoginResponse;
+        }
       }
+      
+      // 세션 확인 실패는 로그인 실패로 간주하지 않음 (쿠키가 설정되었을 수 있음)
+      logger.warn('[authAPI.login] Session check failed, but login response was 200 (cookie may be set)');
+    } catch (sessionError) {
+      // 세션 확인 실패는 무시 (쿠키가 설정되었을 수 있음)
+      logger.warn('[authAPI.login] Session check error (ignored):', sessionError);
     }
     
-    return data;
+    // 응답이 200이면 성공으로 간주 (쿠키 기반 인증)
+    return {
+      success: true,
+      ...data, // 기타 응답 데이터는 그대로 전달 (메시지 등)
+    } as LoginResponse;
   },
 
   /**

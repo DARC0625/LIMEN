@@ -41,12 +41,13 @@ export default function DashboardInner() {
         const approved = await isUserApproved();
         if (!approved) {
           // 승인되지 않은 사용자는 대기 페이지로 이동
-          router.replace('/waiting');
+          // 승인되지 않은 사용자는 대시보드에 머물면서 승인 상태 표시
+          // router.replace('/waiting'); // /waiting 페이지가 없으므로 제거
         }
       } catch (error) {
         console.error('Approval check failed:', error);
-        // 에러 발생 시에도 대기 페이지로 이동 (안전하게)
-        router.replace('/waiting');
+        // 에러 발생 시에도 대시보드에 머물면서 승인 상태 표시
+        // /waiting 페이지가 없으므로 리다이렉트하지 않음
       }
     };
     
