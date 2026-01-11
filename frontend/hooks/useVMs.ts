@@ -724,7 +724,6 @@ export function useVMAction() {
     
     // 에러 발생: 롤백
     onError: (error: unknown, variables, context) => {
-      const errorMessage = error instanceof Error ? error.message : String(error);
       queueMicrotask(() => {
         startTransition(() => {
         // 이전 상태로 롤백

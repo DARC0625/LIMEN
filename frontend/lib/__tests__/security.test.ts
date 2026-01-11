@@ -65,9 +65,9 @@ describe('security', () => {
     })
 
     it('returns false for non-string token', () => {
-      // @ts-ignore
+      // @ts-expect-error - intentional invalid payload for negative test (null)
       expect(validateTokenIntegrity(null)).toBe(false)
-      // @ts-ignore
+      // @ts-expect-error - intentional invalid payload for negative test (number)
       expect(validateTokenIntegrity(123)).toBe(false)
     })
 
@@ -173,7 +173,7 @@ describe('security', () => {
 
     it('does nothing on server side', () => {
       const originalWindow = global.window
-      // @ts-ignore
+      // @ts-expect-error - intentional deletion of global.window for server-side test
       delete global.window
 
       expect(() => forceLogout('test reason')).not.toThrow()
@@ -294,7 +294,7 @@ describe('security', () => {
 
     it('returns false on server side', () => {
       const originalWindow = global.window
-      // @ts-ignore
+      // @ts-expect-error - intentional deletion of global.window for server-side test
       delete global.window
 
       const result = detectAbnormalActivity()
