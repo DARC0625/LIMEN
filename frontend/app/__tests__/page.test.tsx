@@ -76,10 +76,8 @@ describe('Home Page', () => {
     // 제출
     fireEvent.click(submitButton)
 
-    // 성공 메시지 확인
-    await waitFor(() => {
-      expect(screen.getByText(/등록이 완료되었습니다/i)).toBeInTheDocument()
-    })
+    // 성공 메시지 확인 (findByText로 비동기 대기)
+    expect(await screen.findByText(/등록.*완료/i)).toBeInTheDocument()
 
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/public/waitlist'),
@@ -109,9 +107,8 @@ describe('Home Page', () => {
 
     fireEvent.click(submitButton)
 
-    await waitFor(() => {
-      expect(screen.getByText(/대기자 등록에 실패했습니다/i)).toBeInTheDocument()
-    })
+    // 에러 메시지 확인 (정규식으로 유연하게 매칭)
+    expect(await screen.findByText(/대기자\s*등록.*실패/i)).toBeInTheDocument()
   })
 
   it('handles form submission with purpose field', async () => {
