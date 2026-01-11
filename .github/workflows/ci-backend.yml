@@ -17,6 +17,7 @@ on:
       - "infra/**"
       - "scripts/shared/**"
       - ".github/workflows/ci-backend.yml"
+  workflow_dispatch:  # 수동 실행 가능
 
 env:
   GO_VERSION: '1.23'
