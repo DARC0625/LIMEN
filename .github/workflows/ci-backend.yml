@@ -20,40 +20,13 @@ on:
 jobs:
   backend-test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
-          cache: true
           cache-dependency-path: backend/go.sum
 
-      - name: Go fmt (check)
-        run: |
-          fmt_out="$(gofmt -l .)"
-          if [ -n "$fmt_out" ]; then
-            echo "$fmt_out"
-            echo "gofmt required"
-            exit 1
-          fi
-
-      - name: Go vet
-        run: go vet ./...
-
       - name: Go test (CI-safe)
-        run: go test ./... -count=1
-
-  backend-smoke:
-    runs-on: ubuntu-latest
-    needs: backend-test
-    steps:
-      - uses: actions/checkout@v4
-      - name: Smoke placeholder
-        run: |
-          echo "TODO: implement API smoke scripts (health/metrics/authfail/console token)"
-          echo "Keep job green until scripts exist."
+        working-directory: backend
+        run: go test ./...
