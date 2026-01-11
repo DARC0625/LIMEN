@@ -464,33 +464,23 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 		return
 	}
 
-	// Use common function for consistent security checks
-	userID, refreshClaims, ok, authErr := auth.ResolveUserFromRefreshToken(refreshToken, cfg.JWTSecret)
-	if !ok {
-		// Check if token is valid but session not found (recovery scenario)
-		if refreshClaims != nil && authErr == auth.ErrInvalidRefreshToken {
-			// Token is valid but session not found - attempt recovery
-			logger.Log.Info("Session not found in store, but refresh token is valid - recovering session",
-				zap.String("remote_addr", r.RemoteAddr),
-				zap.String("origin", r.Header.Get("Origin")),
-				zap.Uint("user_id", userID),
-				zap.String("username", refreshClaims.Username),
-				zap.String("token_id", refreshClaims.TokenID))
-		} else {
-			// Passive monitoring: Log invalid refresh token attempts (for security awareness)
-			logger.Log.Warn("Invalid refresh token in session check",
-				zap.Error(authErr),
-				zap.String("remote_addr", r.RemoteAddr),
-				zap.String("origin", r.Header.Get("Origin")),
-				zap.String("user_agent", r.Header.Get("User-Agent")))
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(SessionResponse{
-				Valid:  false,
-				Reason: "세션이 만료되었습니다.",
-			})
-			return
-		}
+	// Parse refresh token for session recovery (allows recovery if session not found)
+	refreshClaims, err := auth.ParseRefreshTokenForRecovery(refreshToken, cfg.JWTSecret)
+	if err != nil {
+		// Token validation failed - log and return 401
+		logger.Log.Warn("Invalid refresh token in session check",
+			zap.String("reason", string(auth.Reason(err))),
+			zap.Error(err),
+			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("origin", r.Header.Get("Origin")),
+			zap.String("user_agent", r.Header.Get("User-Agent")))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(SessionResponse{
+			Valid:  false,
+			Reason: "세션이 만료되었습니다.",
+		})
+		return
 	}
 
 	// Get session from store by refresh token (for session recovery if needed)
@@ -500,12 +490,6 @@ func (h *Handler) HandleGetSession(w http.ResponseWriter, r *http.Request, cfg *
 		// Session not found in store, but refresh token is valid
 		// This can happen after server restart (memory session store was cleared)
 		// Auto-recover session from valid refresh token
-		if refreshClaims == nil {
-			// This should not happen, but handle gracefully
-			logger.Log.Error("Session recovery failed: refreshClaims is nil")
-			errors.WriteInternalError(w, fmt.Errorf("session recovery failed"), false)
-			return
-		}
 
 		// Generate new access token
 		newAccessToken, err := auth.GenerateAccessToken(refreshClaims.UserID, refreshClaims.Username, refreshClaims.Role, refreshClaims.Approved, cfg.JWTSecret)
@@ -826,7 +810,10 @@ func (h *Handler) HandleDeleteSession(w http.ResponseWriter, r *http.Request, cf
 	}
 	http.SetCookie(w, csrfCookie)
 
-	logger.Log.Info("Session deleted", zap.String("refresh_token", refreshToken[:min(10, len(refreshToken))]+"..."))
+	// Security: Do not log token values, even partially
+	logger.Log.Info("Session deleted",
+		zap.String("remote_addr", r.RemoteAddr),
+		zap.String("path", r.URL.Path))
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
