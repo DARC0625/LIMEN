@@ -40,6 +40,29 @@ const (
 	DefaultLibvirtTimeout = 30 * time.Second
 )
 
+// safeFreeDomain safely frees a libvirt domain, logging any errors.
+// This helper is used to satisfy errcheck linter requirements.
+func safeFreeDomain(dom Domain) {
+	if dom == nil {
+		return
+	}
+	if err := dom.Free(); err != nil {
+		logger.Log.Warn("domain.Free failed", zap.Error(err))
+	}
+}
+
+// safeDestroyDomain safely destroys a libvirt domain, logging any errors.
+// This helper is used to satisfy errcheck linter requirements.
+func safeDestroyDomain(dom Domain, vmName string) {
+	if dom == nil {
+		return
+	}
+	if err := dom.Destroy(); err != nil {
+		logger.Log.Warn("domain.Destroy failed", zap.String("vm_name", vmName), zap.Error(err))
+		// Continue anyway - domain might already be destroyed
+	}
+}
+
 // GetVMDir returns the VM directory path
 func (s *VMService) GetVMDir() string {
 	return s.vmDir
@@ -151,10 +174,12 @@ func (s *VMService) createVMInternal(name string, memoryMB int, vcpu int, osType
 	// Check if domain exists in libvirt and cleanup
 	if dom, err := s.driver.LookupDomainByName(name); err == nil {
 		if active, err := dom.IsActive(); err == nil && active {
-			_ = dom.Destroy()
+			safeDestroyDomain(dom, name)
 		}
-		_ = dom.UndefineFlags(0) // 0 = default flags
-		_ = dom.Free()
+		if err := dom.UndefineFlags(0); err != nil {
+			logger.Log.Warn("domain.UndefineFlags failed", zap.String("vm_name", name), zap.Error(err))
+		}
+		safeFreeDomain(dom)
 	}
 
 	// 1. Create empty disk for VM in vmDir using UUID instead of name
@@ -338,7 +363,7 @@ func (s *VMService) createVMInternal(name string, memoryMB int, vcpu int, osType
 	if err != nil {
 		return fmt.Errorf("failed to define domain: %w", err)
 	}
-	defer func() { _ = dom.Free() }()
+	defer safeFreeDomain(dom)
 
 	if err := dom.Create(); err != nil {
 		return fmt.Errorf("failed to start domain: %w", err)
@@ -375,7 +400,7 @@ func (s *VMService) deleteVMInternal(name string) error {
 	// 1. Try to cleanup Libvirt Domain
 	dom, err := s.driver.LookupDomainByName(name)
 	if err == nil {
-		defer func() { _ = dom.Free() }()
+		defer safeFreeDomain(dom)
 
 		active, err := dom.IsActive()
 		if err == nil && active {
@@ -504,9 +529,13 @@ func (s *VMService) StopVM(name string) error {
 		if err != nil {
 		return err
 	}
-	defer func() { _ = dom.Free() }()
+	defer safeFreeDomain(dom)
 
-	return dom.Destroy()
+	if err := dom.Destroy(); err != nil {
+		logger.Log.Warn("domain.Destroy failed", zap.String("vm_name", name), zap.Error(err))
+		return fmt.Errorf("failed to destroy domain: %w", err)
+	}
+	return nil
 	})
 }
 
@@ -521,7 +550,7 @@ func (s *VMService) startVMInternal(name string) error {
 	if err != nil {
 		return fmt.Errorf("VM not found: %w", err)
 	}
-	defer func() { _ = dom.Free() }()
+	defer safeFreeDomain(dom)
 
 	// Check if VM is already running
 	active, err := dom.IsActive()
@@ -688,7 +717,7 @@ func (s *VMService) AddTPMAndSecureBoot(name string) error {
 	if err != nil {
 		return fmt.Errorf("VM not found: %w", err)
 	}
-	defer func() { _ = dom.Free() }()
+	defer safeFreeDomain(dom)
 
 	// Check if VM is running - need to stop it first
 	active, err := dom.IsActive()
@@ -817,7 +846,7 @@ func (s *VMService) SetBootOrder(name string, bootOrder models.BootOrder) error 
 		}
 		return fmt.Errorf("failed to lookup domain: %w", err)
 	}
-	defer func() { _ = dom.Free() }()
+	defer safeFreeDomain(dom)
 
 	// Get current XML
 	xmlDesc, err := dom.GetXMLDescInactive()
@@ -844,7 +873,10 @@ func (s *VMService) SetBootOrder(name string, bootOrder models.BootOrder) error 
 	if active {
 		// VM is running - need to undefine and redefine
 		// Save current state
-		dom.UndefineFlags(1)
+		if err := dom.UndefineFlags(1); err != nil {
+			logger.Log.Warn("domain.UndefineFlags failed during update", zap.String("vm_name", name), zap.Error(err))
+			return fmt.Errorf("failed to undefine domain for update: %w", err)
+		}
 	}
 
 	// Define updated domain
@@ -867,7 +899,7 @@ func (s *VMService) FinalizeInstall(name string) error {
 	if err != nil {
 		return fmt.Errorf("VM not found: %w", err)
 	}
-	defer func() { _ = dom.Free() }()
+	defer safeFreeDomain(dom)
 
 	// 1. Check VM state - should be shutoff for safe transition
 	state, _, err := dom.GetState()
@@ -1223,7 +1255,7 @@ func (s *VMService) DetachMedia(name string) error {
 	if err != nil {
 		return fmt.Errorf("VM not found: %w", err)
 	}
-	defer func() { _ = dom.Free() }()
+	defer safeFreeDomain(dom)
 
 	// Get current XML
 	xmlDesc, err := dom.GetXMLDesc(0)
@@ -1286,7 +1318,7 @@ func (s *VMService) AttachMedia(name string, isoPath string) error {
 		}
 		return fmt.Errorf("VM not found: %w", err)
 	}
-	defer func() { _ = dom.Free() }()
+	defer safeFreeDomain(dom)
 
 	// Get current XML
 	xmlDesc, err := dom.GetXMLDesc(0)
@@ -1338,7 +1370,7 @@ func (s *VMService) GetCurrentMedia(name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("VM not found: %w", err)
 	}
-	defer func() { _ = dom.Free() }()
+	defer safeFreeDomain(dom)
 
 	// Get current XML
 	xmlDesc, err := dom.GetXMLDesc(0)
@@ -1423,20 +1455,20 @@ func (s *VMService) GetVNCPort(name string) (string, error) {
 		// Check if VM is running
 		active, err := dom.IsActive()
 		if err != nil {
-			_ = dom.Free()
+			safeFreeDomain(dom)
 			return "", fmt.Errorf("failed to check VM status: %w", err)
 		}
 		if !active {
-			_ = dom.Free()
+			safeFreeDomain(dom)
 			return "", fmt.Errorf("VM is not running")
 		}
 
 		xmlDesc, err := dom.GetXMLDesc(0)
 		if err != nil {
-			_ = dom.Free()
+			safeFreeDomain(dom)
 			return "", fmt.Errorf("failed to get VM XML: %w", err)
 		}
-		_ = dom.Free()
+		safeFreeDomain(dom)
 
 		var domainXML struct {
 			Devices struct {
@@ -1522,7 +1554,7 @@ func (s *VMService) ensureVNCGraphics(name string) error {
 	if err != nil {
 		return fmt.Errorf("VM not found: %w", err)
 	}
-	defer func() { _ = dom.Free() }()
+	defer safeFreeDomain(dom)
 
 	// Check if VM is running - if so, we cannot modify the domain definition
 	active, err := dom.IsActive()
@@ -1628,7 +1660,7 @@ func (s *VMService) UpdateVM(name string, memoryMB int, vcpu int) error {
 		}
 		return fmt.Errorf("failed to lookup domain: %w", err)
 	}
-	defer func() { _ = dom.Free() }()
+	defer safeFreeDomain(dom)
 
 	active, err := dom.IsActive()
 	if err == nil && active {
