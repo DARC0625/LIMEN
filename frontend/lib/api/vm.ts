@@ -5,7 +5,6 @@
 import { apiRequest } from './client';
 import type {
   VM,
-  VMSnapshot,
   VMStats,
   VMMedia,
   ISOList,

@@ -757,7 +757,7 @@ describe('authAPI', () => {
 
   it('handles login on server side (window undefined)', async () => {
     const originalWindow = global.window
-    // @ts-ignore
+    // @ts-expect-error - intentional deletion of global.window for server-side test
     delete global.window
 
     const mockResponse = {
@@ -787,7 +787,7 @@ describe('authAPI', () => {
 
   it('handles login with refreshTokenInStorage check on server side', async () => {
     const originalWindow = global.window
-    // @ts-ignore
+    // @ts-expect-error - intentional deletion of global.window for server-side test
     delete global.window
 
     const mockResponse = {
@@ -817,7 +817,7 @@ describe('authAPI', () => {
 
   it('handles login with legacy token on server side', async () => {
     const originalWindow = global.window
-    // @ts-ignore
+    // @ts-expect-error - intentional deletion of global.window for server-side test
     delete global.window
 
     const mockResponse = {
@@ -888,7 +888,7 @@ describe('authAPI', () => {
 
   it('handles refreshToken on server side (window undefined)', async () => {
     const originalWindow = global.window
-    // @ts-ignore
+    // @ts-expect-error - intentional deletion of global.window for server-side test
     delete global.window
 
     const mockResponse = {

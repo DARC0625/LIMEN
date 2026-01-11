@@ -524,7 +524,7 @@ describe('apiRequest', () => {
   it('should handle AbortController not available', async () => {
     // AbortController가 없는 환경 시뮬레이션
     const originalAbortController = global.AbortController
-    // @ts-ignore
+    // @ts-expect-error - intentional deletion of global.AbortController for test
     delete global.AbortController
 
     const mockData = { id: 1 }

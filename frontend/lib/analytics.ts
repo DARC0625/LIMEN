@@ -133,7 +133,7 @@ export function trackPerformanceMetric(
   if (typeof window !== 'undefined' && 'performance' in window && 'mark' in window.performance) {
     try {
       window.performance.mark(`${name}-${Date.now()}`);
-    } catch (e) {
+    } catch {
       // Performance API 에러는 무시
     }
   }
