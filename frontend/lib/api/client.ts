@@ -133,6 +133,7 @@ export async function apiRequest<T>(
       logger.log('[executeRequest] Request details:', {
         url,
         method,
+        attempt,
         hasBody: !!requestBody,
         bodyLength: requestBody?.length || 0,
         bodyPreview: requestBody ? requestBody.substring(0, 200) : 'none',

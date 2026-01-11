@@ -65,7 +65,7 @@ describe('checkAuth', () => {
 
   it('returns false on server side', async () => {
     const originalWindow = global.window
-    // @ts-ignore
+    // @ts-expect-error - intentional deletion of global.window for server-side test
     delete global.window
 
     const result = await checkAuth()
@@ -292,7 +292,7 @@ describe('isUserApproved', () => {
 
   it('returns false on server side', async () => {
     const originalWindow = global.window
-    // @ts-ignore
+    // @ts-expect-error - intentional deletion of global.window for server-side test
     delete global.window
 
     const result = await isUserApproved()
@@ -408,7 +408,7 @@ describe('logout', () => {
 
   it('does not throw on server side', () => {
     const originalWindow = global.window
-    // @ts-ignore
+    // @ts-expect-error - intentional deletion of global.window for server-side test
     delete global.window
 
     expect(() => logout()).not.toThrow()
