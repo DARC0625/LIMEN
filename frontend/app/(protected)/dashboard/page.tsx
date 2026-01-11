@@ -2,25 +2,27 @@
 
 import { useState, useEffect, startTransition } from 'react';
 import dynamicImport from 'next/dynamic';
-import { removeToken, isAdmin, vmAPI } from '../../../lib/api';
-import { isUserApproved } from '../../../lib/auth';
-import { useToast } from '../../../components/ToastContainer';
-import { useCreateVM, useVMAction } from '../../../hooks/useVMs';
-import { useAuth } from '../../../components/AuthGuard';
+import { useRouter } from 'next/navigation';
+import { removeToken, isAdmin, vmAPI } from '@/lib/api';
+import { isUserApproved } from '@/lib/auth';
+import { useToast } from '@/components/ToastContainer';
+import { useCreateVM, useVMAction } from '@/hooks/useVMs';
+import { useAuth } from '@/components/AuthGuard';
 import { useQueryClient } from '@tanstack/react-query';
-import RevolverPicker from '../../../components/RevolverPicker';
-import BootOrderSelector from '../../../components/BootOrderSelector';
-import type { VM, BootOrder } from '../../../lib/types';
+import RevolverPicker from '@/components/RevolverPicker';
+import BootOrderSelector from '@/components/BootOrderSelector';
+import type { VM, BootOrder } from '@/lib/types';
 
 // Dynamic import: Client-side only rendering for authenticated components (prevents hydration mismatch)
-const QuotaDisplay = dynamicImport(() => import('../../../components/QuotaDisplay').then(mod => mod.default), { ssr: false });
-const VMListSection = dynamicImport(() => import('../../../components/VMListSection').then(mod => mod.default), { ssr: false });
-const HealthStatus = dynamicImport(() => import('../../../components/HealthStatus').then(mod => mod.default), { ssr: false });
-const AgentMetricsCard = dynamicImport(() => import('../../../components/AgentMetricsCard').then(mod => mod.default), { ssr: false });
+const QuotaDisplay = dynamicImport(() => import('@/components/QuotaDisplay').then(mod => mod.default), { ssr: false });
+const VMListSection = dynamicImport(() => import('@/components/VMListSection').then(mod => mod.default), { ssr: false });
+const HealthStatus = dynamicImport(() => import('@/components/HealthStatus').then(mod => mod.default), { ssr: false });
+const AgentMetricsCard = dynamicImport(() => import('@/components/AgentMetricsCard').then(mod => mod.default), { ssr: false });
 
 // VM type is now imported from api.ts
 
 export default function Home() {
+  const router = useRouter();
   const { isAuthenticated } = useAuth();
   const toast = useToast();
   

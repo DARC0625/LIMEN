@@ -6,8 +6,8 @@ export const runtime = 'edge';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '../../../../components/ToastContainer';
-import { useMounted } from '../../../../hooks/useMounted';
+import { useToast } from '@/components/ToastContainer';
+import { useMounted } from '@/hooks/useMounted';
 import { 
   useAdminUsers, 
   useAdminUser, 
@@ -15,9 +15,9 @@ import {
   useUpdateUser, 
   useDeleteUser, 
   useApproveUser 
-} from '../../../../hooks/useAdminUsers';
-import type { UpdateUserRequest } from '../../../../lib/types';
-import Loading from '../../../../components/Loading';
+} from '@/hooks/useAdminUsers';
+import type { UpdateUserRequest, UserWithStats, VM } from '@/lib/types';
+import Loading from '@/components/Loading';
 
 export default function UserManagementPage() {
   // 클라이언트 마운트 확인
@@ -110,7 +110,7 @@ export default function UserManagementPage() {
     const password = formData.get('password') as string;
     const role = formData.get('role') as string;
 
-    const currentUser = users.find(u => u.id === editingUser);
+    const currentUser = users.find((u: UserWithStats) => u.id === editingUser);
     if (!currentUser) return;
 
     const updateData: UpdateUserRequest = {};
@@ -284,7 +284,7 @@ export default function UserManagementPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {users.map((user) => (
+              {users.map((user: UserWithStats) => (
                 <React.Fragment key={user.id}>
                   <tr className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
@@ -395,7 +395,7 @@ export default function UserManagementPage() {
                             <div>
                               <strong className="text-gray-700">VMs ({expandedUserData.vms.length}):</strong>
                               <ul className="list-disc list-inside mt-2 space-y-1">
-                                {expandedUserData.vms.map((vm) => (
+                                {expandedUserData.vms.map((vm: VM) => (
                                   <li key={vm.uuid} className="text-sm text-gray-600">
                                     {vm.name} ({vm.status}) - {vm.cpu} CPU, {formatBytes(vm.memory * 1024)}
                                   </li>
