@@ -77,7 +77,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       
       // 루트 경로를 포함한 모든 경로에서 인증 확인
       // 토큰이 없으면 세션 확인 요청을 보내지 않고 바로 false 반환
-      const { tokenManager } = await import('../lib/tokenManager');
+      const { tokenManager } = await import('@/lib/tokenManager');
       
       // 토큰 확인 (Refresh Token이 있으면 유효한 것으로 간주)
       const hasRefreshToken = tokenManager.hasValidToken();

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { StatusCard, StatusRow } from './StatusCard';
+// import { StatusCard, StatusRow } from './StatusCard'; // TODO: StatusCard 컴포넌트 생성 필요
 import { formatDateKR } from '@/lib/utils/format';
 import { logger } from '@/lib/utils/logger';
 

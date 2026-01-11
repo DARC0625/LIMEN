@@ -482,7 +482,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
       let accessToken: string | null = null;
       if (typeof window !== 'undefined') {
         try {
-          const { tokenManager } = await import('../lib/tokenManager');
+          const { tokenManager } = await import('@/lib/tokenManager');
           accessToken = await tokenManager.getAccessToken();
         } catch (error) {
           logger.warn(`[VNCViewer] Failed to get access token: ${error instanceof Error ? error.message : String(error)}`);

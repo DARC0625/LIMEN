@@ -130,7 +130,7 @@ export default function LoginForm() {
         
         // 1. TokenManager에 토큰 저장 (authAPI.login() 내부에서도 저장하지만, 여기서도 명시적으로 저장)
         // authAPI.login()에서 이미 저장했지만, 확실히 하기 위해 다시 저장
-        const { tokenManager } = await import('../lib/tokenManager');
+        const { tokenManager } = await import('@/lib/tokenManager');
         logger.log('[LoginForm] Saving tokens to tokenManager...', {
           accessTokenLength: response.access_token.length,
           refreshTokenLength: response.refresh_token.length,
@@ -189,7 +189,7 @@ export default function LoginForm() {
         // 3. 백엔드 세션 생성 (명시적으로 호출)
         let sessionCreationSuccess = false;
         try {
-          const { authAPI } = await import('../lib/api/auth');
+          const { authAPI } = await import('@/lib/api/auth');
           logger.log('[LoginForm] Creating session with tokens...');
           await authAPI.createSession(response.access_token, response.refresh_token);
           sessionCreationSuccess = true;
@@ -289,7 +289,7 @@ export default function LoginForm() {
       // 대시보드는 /dashboard 경로 사용
       if (typeof window !== 'undefined') {
         // tokenManager 다시 가져오기 (스코프 문제 해결)
-        const { tokenManager: tm } = await import('../lib/tokenManager');
+        const { tokenManager: tm } = await import('@/lib/tokenManager');
         
         // Storage 이벤트를 트리거하여 AuthGuard가 인증 상태를 업데이트하도록 함
         window.dispatchEvent(new Event('authTokenUpdated'));
@@ -320,7 +320,7 @@ export default function LoginForm() {
         
         // 승인 여부 확인 후 적절한 페이지로 이동
         try {
-          const { isUserApproved } = await import('../lib/auth');
+          const { isUserApproved } = await import('@/lib/auth');
           const approved = await isUserApproved();
           
           if (approved) {

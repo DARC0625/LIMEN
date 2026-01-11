@@ -11,7 +11,7 @@ import { useAuth } from '@/components/AuthGuard';
 import { useQueryClient } from '@tanstack/react-query';
 import RevolverPicker from '@/components/RevolverPicker';
 import BootOrderSelector from '@/components/BootOrderSelector';
-import type { VM, BootOrder } from '@/lib/types';
+import type { VM, BootOrder, APIError } from '@/lib/types';
 
 // Dynamic import: Client-side only rendering for authenticated components (prevents hydration mismatch)
 const QuotaDisplay = dynamicImport(() => import('@/components/QuotaDisplay').then(mod => mod.default), { ssr: false });
@@ -190,15 +190,19 @@ export default function Home() {
       if (error instanceof Error) {
         errorMessage = error.message;
         
+        // APIError 타입 확인
+        const isAPIError = (e: unknown): e is APIError => 
+          e instanceof Error && 'status' in e;
+        
         // 404 오류인 경우 특별 처리
-        if (apiError.status === 404) {
+        if (isAPIError(apiError) && apiError.status === 404) {
           errorMessage = '부팅 순서 API 엔드포인트를 찾을 수 없습니다. 백엔드 서버를 확인해주세요.';
           window.console.error('[handleBootOrderChange] 404 Not Found - API endpoint not found:', {
             uuid,
             bootOrder,
             endpoint: `/api/vms/${uuid}/boot-order`
           });
-        } else {
+        } else if (isAPIError(apiError)) {
           // 백엔드에서 제공한 상세 에러 정보 확인
           if (apiError.details) {
             const isRecord = (v: unknown): v is Record<string, unknown> => 
