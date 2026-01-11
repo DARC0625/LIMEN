@@ -63,7 +63,8 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "typescript-eslint": "^8.52.0",
-    "undici": "^7.18.2"
+    "undici": "^7.18.2",
+    "web-streams-polyfill": "^4.2.0"
   },
   "engines": {
     "node": ">=18.0.0",

@@ -49,21 +49,22 @@ jest.mock('../../lib/utils/errorHelpers', () => ({
 
 const mockUseToast = useToast as jest.MockedFunction<typeof useToast>
 
-// QueryClient를 제공하는 wrapper
-const createWrapper = () => {
-  const queryClient = new QueryClient({
-    defaultOptions: {
+// QueryClient를 제공하는 wrapper (반드시 사용)
+const makeWrapper = () => {
+  const qc = new QueryClient({
+    defaultOptions: { 
       queries: { retry: false },
       mutations: { retry: false },
     },
   })
-  
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>
-      {children}
-    </QueryClientProvider>
+    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   )
 }
+
+// 하위 호환성을 위해 createWrapper도 유지
+const createWrapper = makeWrapper
 
 describe('useAdminUsers', () => {
   const mockUsers = [
@@ -81,9 +82,9 @@ describe('useAdminUsers', () => {
       // 디버깅: 실제 호출되는 URL 확인
       // console.log('[TEST] Fetch called with URL:', url)
 
-      // ✅ hook이 실제로 호출하는 URL로 체크 (조건을 넓혀서 쿼리 파라미터 등 처리)
-      // /api/admin/users 또는 /admin/users 등 모든 경우 처리
-      if (url.includes('/admin/users') && !url.match(/\/admin\/users\/\d+/)) {
+      // ✅ hook이 실제로 호출하는 URL로 체크 (넓게 잡기)
+      // /api/admin 또는 /admin 등 모든 경우 처리
+      if (url.includes('/api/admin') && !url.match(/\/admin\/users\/\d+/)) {
         return Promise.resolve(
           new Response(JSON.stringify(mockUsers), {
             status: 200,
@@ -118,7 +119,7 @@ describe('useAdminUsers', () => {
   })
 
   it('should fetch user list successfully', async () => {
-    const { result } = renderHook(() => useAdminUsers(), { wrapper: createWrapper() })
+    const { result } = renderHook(() => useAdminUsers(), { wrapper: makeWrapper() })
 
     // 상태 플래그 타이밍을 피하기 위해 data가 정의될 때까지 기다림
     await waitFor(() => {
@@ -141,8 +142,8 @@ describe('useAdminUsers', () => {
 
     ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
-      // URL 조건을 넓혀서 쿼리 파라미터 등 처리
-      if (url.includes('/admin/users') && !url.match(/\/admin\/users\/\d+/)) {
+      // URL 조건을 넓혀서 쿼리 파라미터 등 처리 (넓게 잡기)
+      if (url.includes('/api/admin') && !url.match(/\/admin\/users\/\d+/)) {
         return Promise.resolve(
           new Response(JSON.stringify(unsortedUsers), {
             status: 200,
@@ -158,7 +159,7 @@ describe('useAdminUsers', () => {
       )
     })
 
-    const { result } = renderHook(() => useAdminUsers(), { wrapper: createWrapper() })
+    const { result } = renderHook(() => useAdminUsers(), { wrapper: makeWrapper() })
 
     await waitFor(() => {
       expect(result.current.data).toBeDefined()
@@ -173,8 +174,8 @@ describe('useAdminUsers', () => {
   it('should handle errors', async () => {
     ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
-      // URL 조건을 넓혀서 쿼리 파라미터 등 처리
-      if (url.includes('/admin/users') && !url.match(/\/admin\/users\/\d+/)) {
+      // URL 조건을 넓혀서 쿼리 파라미터 등 처리 (넓게 잡기)
+      if (url.includes('/api/admin') && !url.match(/\/admin\/users\/\d+/)) {
         return Promise.resolve(
           new Response(JSON.stringify({ error: 'Failed to fetch users' }), {
             status: 500,
@@ -190,7 +191,7 @@ describe('useAdminUsers', () => {
       )
     })
 
-    const { result } = renderHook(() => useAdminUsers(), { wrapper: createWrapper() })
+    const { result } = renderHook(() => useAdminUsers(), { wrapper: makeWrapper() })
 
     await waitFor(() => {
       expect(result.current.error).toBeDefined()
@@ -240,7 +241,7 @@ describe('useAdminUser', () => {
   it('should fetch user details successfully', async () => {
     const userId = 1
 
-    const { result } = renderHook(() => useAdminUser(userId), { wrapper: createWrapper() })
+    const { result } = renderHook(() => useAdminUser(userId), { wrapper: makeWrapper() })
 
     // 상태 플래그 타이밍을 피하기 위해 data가 정의될 때까지 기다림
     await waitFor(() => {
@@ -252,7 +253,7 @@ describe('useAdminUser', () => {
   })
 
   it('should not fetch when userId is null', () => {
-    renderHook(() => useAdminUser(null), { wrapper: createWrapper() })
+    renderHook(() => useAdminUser(null), { wrapper: makeWrapper() })
 
     // enabled가 false이므로 fetch가 호출되지 않아야 함
     expect(global.fetch).not.toHaveBeenCalled()
@@ -273,8 +274,8 @@ describe('useCreateUser', () => {
     global.fetch = jest.fn((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
 
-      // URL 조건을 넓혀서 쿼리 파라미터 등 처리
-      if (url.includes('/admin/users') && !url.match(/\/admin\/users\/\d+/)) {
+      // URL 조건을 넓혀서 쿼리 파라미터 등 처리 (넓게 잡기)
+      if (url.includes('/api/admin') && !url.match(/\/admin\/users\/\d+/)) {
         // POST 요청인 경우
         return Promise.resolve(
           new Response(JSON.stringify({ id: 1, username: 'newuser', role: 'user' }), {
@@ -300,7 +301,7 @@ describe('useCreateUser', () => {
   it('should create user successfully', async () => {
     const newUser = { username: 'newuser', password: 'password', role: 'user' }
 
-    const { result } = renderHook(() => useCreateUser(), { wrapper: createWrapper() })
+    const { result } = renderHook(() => useCreateUser(), { wrapper: makeWrapper() })
 
     result.current.mutate(newUser)
 
@@ -314,8 +315,8 @@ describe('useCreateUser', () => {
 
     ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
-      // URL 조건을 넓혀서 쿼리 파라미터 등 처리
-      if (url.includes('/admin/users') && !url.match(/\/admin\/users\/\d+/)) {
+      // URL 조건을 넓혀서 쿼리 파라미터 등 처리 (넓게 잡기)
+      if (url.includes('/api/admin') && !url.match(/\/admin\/users\/\d+/)) {
         return Promise.resolve(
           new Response(JSON.stringify({ error: 'Failed to create user' }), {
             status: 500,
@@ -331,7 +332,7 @@ describe('useCreateUser', () => {
       )
     })
 
-    const { result } = renderHook(() => useCreateUser(), { wrapper: createWrapper() })
+    const { result } = renderHook(() => useCreateUser(), { wrapper: makeWrapper() })
 
     result.current.mutate(newUser)
 
@@ -382,7 +383,7 @@ describe('useUpdateUser', () => {
     const userId = 1
     const updateData = { role: 'admin' }
 
-    const { result } = renderHook(() => useUpdateUser(), { wrapper: createWrapper() })
+    const { result } = renderHook(() => useUpdateUser(), { wrapper: makeWrapper() })
 
     result.current.mutate({ id: userId, data: updateData })
 
@@ -431,7 +432,7 @@ describe('useDeleteUser', () => {
   it('should delete user successfully', async () => {
     const userId = 1
 
-    const { result } = renderHook(() => useDeleteUser(), { wrapper: createWrapper() })
+    const { result } = renderHook(() => useDeleteUser(), { wrapper: makeWrapper() })
 
     result.current.mutate(userId)
 
@@ -482,7 +483,7 @@ describe('useApproveUser', () => {
   it('should approve user successfully', async () => {
     const userId = 1
 
-    const { result } = renderHook(() => useApproveUser(), { wrapper: createWrapper() })
+    const { result } = renderHook(() => useApproveUser(), { wrapper: makeWrapper() })
 
     result.current.mutate(userId)
 

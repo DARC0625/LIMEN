@@ -1,72 +1,29 @@
 import '@testing-library/jest-dom';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import { TextEncoder, TextDecoder } from 'util';
 
-// Response is not defined 해결
-// jest-environment-jsdom에서 Response가 없을 수 있으므로 폴리필 제공
-// 간단한 Response 클래스 구현 (테스트용)
-if (typeof globalThis.Response === 'undefined') {
-  class ResponsePolyfill {
-    body: ReadableStream | null;
-    bodyUsed: boolean;
-    headers: Headers;
-    ok: boolean;
-    redirected: boolean;
-    status: number;
-    statusText: string;
-    type: ResponseType;
-    url: string;
+// jsdom/Node 환경에서 일부 누락될 수 있음
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+if (!globalThis.TextEncoder) globalThis.TextEncoder = TextEncoder as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+if (!globalThis.TextDecoder) globalThis.TextDecoder = TextDecoder as any;
 
-    constructor(body?: BodyInit | null, init?: ResponseInit) {
-      this.body = body ? new ReadableStream() : null;
-      this.bodyUsed = false;
-      this.headers = new Headers(init?.headers);
-      this.ok = (init?.status ?? 200) >= 200 && (init?.status ?? 200) < 300;
-      this.redirected = false;
-      this.status = init?.status ?? 200;
-      this.statusText = init?.statusText ?? '';
-      this.type = 'default';
-      this.url = '';
-      
-      // body를 저장
-      if (body) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (this as any)._body = body;
-      }
-    }
+// ✅ fetch/Response/Request/Headers/ReadableStream까지 한 번에 제공
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { fetch, Headers, Request, Response } = require('undici');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+globalThis.fetch = fetch as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+globalThis.Headers = Headers as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+globalThis.Request = Request as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+globalThis.Response = Response as any;
 
-    async text(): Promise<string> {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const body = (this as any)._body;
-      if (typeof body === 'string') return body;
-      if (body instanceof ArrayBuffer) return new TextDecoder().decode(body);
-      return JSON.stringify(body);
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async json(): Promise<any> {
-      const text = await this.text();
-      return JSON.parse(text);
-    }
-
-    async blob(): Promise<Blob> {
-      return new Blob([await this.text()]);
-    }
-
-    async arrayBuffer(): Promise<ArrayBuffer> {
-      const text = await this.text();
-      return new TextEncoder().encode(text).buffer;
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    clone(): any {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return new ResponsePolyfill((this as any)._body, {
-        status: this.status,
-        statusText: this.statusText,
-        headers: this.headers,
-      });
-    }
-  }
-
+// ReadableStream은 Node 18+에서 기본 제공이지만, 혹시 없으면 polyfill
+if (typeof globalThis.ReadableStream === 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { ReadableStream } = require('web-streams-polyfill/ponyfill/es6');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  globalThis.Response = ResponsePolyfill as any;
+  globalThis.ReadableStream = ReadableStream as any;
 }
