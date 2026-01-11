@@ -183,9 +183,10 @@ func IsPublicEndpoint(path string) bool {
 		"/api/auth/session",    // Session management endpoints (GET, POST, DELETE)
 		"/api/auth/refresh",    // Token refresh endpoint
 		"/api/public/waitlist", // Public waitlist registration (no auth required)
+		"/api/quota",           // Quota endpoint (session-based auth via refresh_token cookie)
 		"/agent",               // Agent reverse-proxy path (public metrics)
 		"/apiauth/login",       // Handle Envoy rewrite issue
-		"/apiauth/register",    // Handle Envoy rewrite issue
+		"/apiauth/register",   // Handle Envoy rewrite issue
 		"/ws/vnc",              // WebSocket endpoints need special handling
 		"/vnc",                 // VNC WebSocket endpoint (with or without UUID)
 		"/vnc/",                // VNC WebSocket endpoint with UUID in path

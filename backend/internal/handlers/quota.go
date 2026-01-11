@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/DARC0625/LIMEN/backend/internal/auth"
+	"github.com/DARC0625/LIMEN/backend/internal/config"
 	"github.com/DARC0625/LIMEN/backend/internal/errors"
 	"github.com/DARC0625/LIMEN/backend/internal/logger"
 	"github.com/DARC0625/LIMEN/backend/internal/middleware"
@@ -27,17 +29,52 @@ type QuotaUsage struct {
 }
 
 // HandleGetQuota handles getting quota information for the current user.
-func (h *Handler) HandleGetQuota(w http.ResponseWriter, r *http.Request) {
+// Uses session-based authentication (refresh_token cookie) similar to /api/auth/session
+func (h *Handler) HandleGetQuota(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
 	if r.Method != "GET" {
 		errors.WriteError(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
 		return
 	}
 
-	// Get user ID from context (for authentication, but quota is system-wide)
-	_, ok := middleware.GetUserID(r.Context())
+	// Try to get user ID from context first (if Auth middleware already authenticated)
+	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
-		errors.WriteUnauthorized(w, "Authentication required")
-		return
+		// Fallback: Try to authenticate via refresh_token cookie (session-based)
+		refreshToken := ""
+		if cookie, err := r.Cookie("refresh_token"); err == nil {
+			refreshToken = cookie.Value
+		}
+
+		if refreshToken == "" {
+			errors.WriteUnauthorized(w, "Authentication required")
+			return
+		}
+
+		// Validate refresh token
+		refreshClaims, err := auth.ValidateRefreshToken(refreshToken, cfg.JWTSecret)
+		if err != nil {
+			logger.Log.Debug("Refresh token validation failed for quota endpoint",
+				zap.String("path", r.URL.Path),
+				zap.Error(err))
+			errors.WriteUnauthorized(w, "Invalid or expired session")
+			return
+		}
+
+		// Verify session exists
+		sessionStore := auth.GetSessionStore()
+		_, exists := sessionStore.GetSessionByRefreshToken(refreshToken)
+		if !exists {
+			logger.Log.Debug("Refresh token not found in session store for quota endpoint",
+				zap.String("path", r.URL.Path),
+				zap.Uint("user_id", refreshClaims.UserID))
+			errors.WriteUnauthorized(w, "Session not found")
+			return
+		}
+
+		userID = refreshClaims.UserID
+		logger.Log.Debug("Authenticated quota request via refresh token cookie",
+			zap.String("path", r.URL.Path),
+			zap.Uint("user_id", userID))
 	}
 
 	// Get or create system-wide quota (shared by all users)

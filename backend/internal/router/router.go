@@ -162,7 +162,10 @@ func SetupRoutes(h *handlers.Handler, cfg *config.Config) *chi.Mux {
 	api.Delete("/snapshots/{snapshot_id}", h.HandleDeleteSnapshot)
 
 	// Quota endpoints (system-wide, shared by all users)
-	api.Get("/quota", h.HandleGetQuota)
+	// Uses session-based authentication (refresh_token cookie)
+	api.Get("/quota", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleGetQuota(w, r, cfg)
+	})
 	// Admin-only endpoint for updating quota
 	api.With(adminMiddleware).Put("/quota", h.HandleUpdateQuota)
 
