@@ -4,7 +4,8 @@ import { useEffect, useState, createContext, useContext, useRef, startTransition
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   forceLogout, 
-  checkAndUnblockAccount
+  checkAndUnblockAccount,
+  notifyAuthEvent
 } from '@/lib/security';
 import { checkAuth } from '@/lib/auth';
 import { logger } from '@/lib/utils/logger';
@@ -190,17 +191,19 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     
     // BroadcastChannel로 다른 탭과 통신
     let authChannel: BroadcastChannel | null = null;
-    try {
-      authChannel = new BroadcastChannel('auth_channel');
-      authChannel.onmessage = (event) => {
-        if (event.data.type === 'FORCE_LOGOUT' || event.data.type === 'AUTH_EVENT') {
-          if (event.data.action === 'log') {
-            forceLogout(event.data.reason || '인증 이벤트가 발생했습니다.');
+    if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
+      try {
+        authChannel = new BroadcastChannel('auth_channel');
+        authChannel.onmessage = (event) => {
+          if (event.data.type === 'FORCE_LOGOUT' || event.data.type === 'AUTH_EVENT') {
+            if (event.data.action === 'log') {
+              forceLogout(event.data.reason || '인증 이벤트가 발생했습니다.');
+            }
           }
-        }
-      };
-    } catch {
-      // BroadcastChannel을 지원하지 않는 경우 무시
+        };
+      } catch {
+        // BroadcastChannel을 지원하지 않는 경우 무시
+      }
     }
     
     // StorageEvent로 다른 탭의 로그아웃 감지 - 백엔드 세션 확인 (비동기)

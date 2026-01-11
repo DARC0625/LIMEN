@@ -64,6 +64,23 @@ export function validateTokenIntegrity(token: string): boolean {
   }
 }
 
+// 다른 탭에 인증 이벤트 알림 전송 (클라이언트 전용)
+export function notifyAuthEvent(reason?: string): void {
+  // ✅ 서버/Edge에서는 아무 것도 하지 않음
+  if (typeof window === 'undefined') return;
+
+  // ✅ 브라우저에서도 지원 여부 확인
+  if (typeof BroadcastChannel === 'undefined') return;
+
+  try {
+    const channel = new BroadcastChannel('auth_channel');
+    channel.postMessage({ type: 'AUTH_EVENT', reason, action: 'log' });
+    channel.close();
+  } catch {
+    // noop
+  }
+}
+
 // 비정상 활동 감지 및 로깅 (차단 없음, 패시브 모니터링만)
 export function forceLogout(reason: string = '보안상의 이유로 로그아웃되었습니다.'): void {
   if (typeof window === 'undefined') return;
@@ -84,13 +101,7 @@ export function forceLogout(reason: string = '보안상의 이유로 로그아�
   }
   
   // 다른 탭에 알림만 전송 (차단하지 않음)
-  try {
-    const channel = new BroadcastChannel('auth_channel');
-    channel.postMessage({ type: 'AUTH_EVENT', reason, action: 'log' });
-    channel.close();
-  } catch {
-    // BroadcastChannel을 지원하지 않는 경우 무시
-  }
+  notifyAuthEvent(reason);
 }
 
 // 세션 ID 생성 (탭별 고유 ID)
