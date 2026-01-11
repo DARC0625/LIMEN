@@ -380,7 +380,7 @@ func detectSecurity() (*SecurityInfo, error) {
 		// Try to read SecureBoot variable
 		files, err := os.ReadDir("/sys/firmware/efi/efivars")
 		if err != nil {
-			return spec, fmt.Errorf("failed to read efivars: %w", err)
+			return sec, fmt.Errorf("failed to read efivars: %w", err)
 		}
 		for _, file := range files {
 			if strings.Contains(file.Name(), "SecureBoot") {
