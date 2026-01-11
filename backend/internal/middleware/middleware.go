@@ -210,7 +210,9 @@ func Recovery(next http.Handler) http.Handler {
 						"request_id": requestID,
 					}
 					tags := []string{"panic", "error"}
-					globalAlertManager.SendAlert(ctx, "Panic Recovered", fmt.Sprintf("Panic occurred: %v", err), "critical", "limen", "http", metadata, tags)
+					if alertErr := globalAlertManager.SendAlert(ctx, "Panic Recovered", fmt.Sprintf("Panic occurred: %v", err), "critical", "limen", "http", metadata, tags); alertErr != nil {
+						logger.Log.Warn("send alert failed", zap.Error(alertErr))
+					}
 				}
 
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -325,8 +327,18 @@ func Compression(next http.Handler) http.Handler {
 
 		// Create gzip writer with optimized compression level
 		// Level 6 provides good balance between compression and speed
-		gz, _ := gzip.NewWriterLevel(w, gzip.DefaultCompression)
-		defer gz.Close()
+		gz, err := gzip.NewWriterLevel(w, gzip.DefaultCompression)
+		if err != nil {
+			// Compression failed, fall back to uncompressed response
+			logger.Log.Warn("gzip init failed, falling back to uncompressed", zap.Error(err))
+			next.ServeHTTP(w, r)
+			return
+		}
+		defer func() {
+			if err := gz.Close(); err != nil {
+				logger.Log.Warn("gzip close failed", zap.Error(err))
+			}
+		}()
 
 		// Set headers
 		w.Header().Set("Content-Encoding", "gzip")

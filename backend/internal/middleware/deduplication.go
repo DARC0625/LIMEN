@@ -11,6 +11,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/DARC0625/LIMEN/backend/internal/logger"
+	"go.uber.org/zap"
 )
 
 // RequestDeduplicator prevents duplicate requests within a time window.
@@ -87,7 +90,10 @@ func Deduplication() func(http.Handler) http.Handler {
 			if dedup.isDuplicate(requestHash) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusConflict)
-				w.Write([]byte(`{"error":"duplicate_request","message":"This request was recently processed. Please wait a moment before retrying."}`))
+				if _, err := w.Write([]byte(`{"error":"duplicate_request","message":"This request was recently processed. Please wait a moment before retrying."}`)); err != nil {
+					logger.Log.Warn("response write failed", zap.Error(err))
+					return
+				}
 				return
 			}
 

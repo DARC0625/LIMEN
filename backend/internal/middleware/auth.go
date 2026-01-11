@@ -3,6 +3,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -116,7 +117,11 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 									Approved: refreshClaims.Approved,
 								}
 								// Update session with new access token
-								sessionStore.UpdateSessionTokens(session.ID, tokenString, "", "")
+								if err := sessionStore.UpdateSessionTokens(session.ID, tokenString, "", ""); err != nil {
+									logger.Log.Error("update session tokens failed", zap.Error(err))
+									errors.WriteInternalError(w, fmt.Errorf("update session tokens: %w", err), false)
+									return
+								}
 								logger.Log.Debug("Authenticated via refresh token cookie",
 									zap.String("path", r.URL.Path),
 									zap.Uint("user_id", claims.UserID))
