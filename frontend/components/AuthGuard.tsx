@@ -194,14 +194,14 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       try {
         authChannel = new BroadcastChannel('auth_channel');
         authChannel.onmessage = (event) => {
-          if (event.data.type === 'FORCE_LOGOUT' || event.data.type === 'AUTH_EVENT') {
-            if (event.data.action === 'log') {
-              forceLogout(event.data.reason || '인증 이벤트가 발생했습니다.');
+          if (event.data?.type === 'FORCE_LOGOUT' || event.data?.type === 'AUTH_EVENT') {
+            if (event.data?.action === 'log') {
+              forceLogout(event.data?.reason || '인증 이벤트가 발생했습니다.');
             }
           }
         };
       } catch {
-        // BroadcastChannel을 지원하지 않는 경우 무시
+        // ignore
       }
     }
     
