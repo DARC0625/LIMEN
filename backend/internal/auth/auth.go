@@ -19,7 +19,37 @@ var (
 	ErrInvalidToken        = errors.New("invalid token")
 	ErrInvalidRefreshToken = errors.New("invalid or expired refresh token")
 	ErrInvalidCSRFToken    = errors.New("invalid CSRF token")
+	ErrSessionNotFound     = errors.New("session not found")
 )
+
+// AuthErrorReason represents the reason for authentication failure
+type AuthErrorReason string
+
+const (
+	ReasonMissingCookie    AuthErrorReason = "missing_cookie"
+	ReasonEmptyToken       AuthErrorReason = "empty_token"
+	ReasonInvalidJWT       AuthErrorReason = "invalid_jwt"
+	ReasonExpiredToken     AuthErrorReason = "expired_token"
+	ReasonSessionNotFound  AuthErrorReason = "session_not_found"
+	ReasonUnknown          AuthErrorReason = "unknown"
+)
+
+// Reason extracts the authentication failure reason from an error
+func Reason(err error) AuthErrorReason {
+	if err == nil {
+		return ReasonUnknown
+	}
+	if errors.Is(err, ErrTokenExpired) {
+		return ReasonExpiredToken
+	}
+	if errors.Is(err, ErrSessionNotFound) {
+		return ReasonSessionNotFound
+	}
+	if errors.Is(err, ErrInvalidRefreshToken) {
+		return ReasonInvalidJWT
+	}
+	return ReasonUnknown
+}
 
 // RefreshTokenClaims represents JWT claims for refresh tokens.
 type RefreshTokenClaims struct {
@@ -259,10 +289,10 @@ func ResolveUserFromRefreshToken(refreshToken, jwtSecret string) (userID uint, c
 	sessionStore := GetSessionStore()
 	_, exists := sessionStore.GetSessionByRefreshToken(refreshToken)
 	if !exists {
-		// Token is valid but session not found (e.g., server restart)
+		// Token is valid but session not found (e.g., server restart, user deleted)
 		// This is a security check: valid token must have active session
-		// However, return claims for session recovery scenarios
-		return refreshClaims.UserID, refreshClaims, false, ErrInvalidRefreshToken
+		// Return nil claims to prevent misuse in handlers
+		return 0, nil, false, ErrSessionNotFound
 	}
 
 	// 4. All checks passed - return user ID and claims
