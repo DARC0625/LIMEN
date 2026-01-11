@@ -884,7 +884,11 @@ func (s *VMService) SetBootOrder(name string, bootOrder models.BootOrder) error 
 	if err != nil {
 		return fmt.Errorf("failed to redefine domain with new boot order: %w", err)
 	}
-	defer newDom.Free()
+	defer func() {
+		if err := newDom.Free(); err != nil {
+			logger.Log.Warn("failed to free domain", zap.Error(err))
+		}
+	}()
 
 	logger.Log.Info("Boot order updated", zap.String("vm_name", name), zap.String("boot_order", string(bootOrder)))
 	return nil
@@ -925,14 +929,23 @@ func (s *VMService) FinalizeInstall(name string) error {
 			// Wait up to 10 seconds for shutdown (reduced from 30 to avoid timeout)
 			for i := 0; i < 10; i++ {
 				time.Sleep(1 * time.Second)
-				state, _, _ := dom.GetState()
+				state, _, err := dom.GetState()
+				if err != nil {
+					logger.Log.Warn("failed to get domain state during shutdown wait", zap.Error(err))
+					continue
+				}
 				if state == DomainStateShutoff {
 					logger.Log.Info("VM shutdown completed", zap.String("vm_name", name))
 					break
 				}
 			}
 			// If still running after 10 seconds, force destroy
-			state, _, _ := dom.GetState()
+			state, _, err := dom.GetState()
+			if err != nil {
+				logger.Log.Warn("failed to get domain state before force destroy", zap.Error(err))
+				// Assume running and proceed with force destroy
+				state = DomainStateRunning
+			}
 			if state == DomainStateRunning {
 				logger.Log.Warn("VM still running after graceful shutdown timeout, forcing destroy",
 					zap.String("vm_name", name))

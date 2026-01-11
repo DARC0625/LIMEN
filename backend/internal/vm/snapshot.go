@@ -47,7 +47,11 @@ func (s *VMService) CreateSnapshot(vmID uint, snapshotName, description string) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create snapshot: %w", err)
 	}
-	defer snap.Free()
+	defer func() {
+		if err := snap.Free(); err != nil {
+			logger.Log.Warn("failed to free snapshot", zap.Error(err))
+		}
+	}()
 
 	// Get snapshot info
 	snapXML, err := snap.GetXMLDesc(0)
@@ -144,7 +148,11 @@ func (s *VMService) RestoreSnapshot(snapshotID uint) error {
 				logger.Log.Warn("Timeout waiting for VM to shut down", zap.String("vm_name", vm.Name))
 				break
 			case <-ticker.C:
-				active, _ := dom.IsActive()
+				active, err := dom.IsActive()
+				if err != nil {
+					logger.Log.Warn("failed to check domain active state", zap.Error(err))
+					continue
+				}
 				if !active {
 					return nil
 				}
@@ -157,7 +165,11 @@ func (s *VMService) RestoreSnapshot(snapshotID uint) error {
 	if err != nil {
 		return fmt.Errorf("failed to lookup snapshot in libvirt: %w", err)
 	}
-	defer snap.Free()
+	defer func() {
+		if err := snap.Free(); err != nil {
+			logger.Log.Warn("failed to free snapshot", zap.Error(err))
+		}
+	}()
 
 	// Revert to snapshot
 	flags := SnapshotRevertRunning | SnapshotRevertForce
@@ -202,7 +214,11 @@ func (s *VMService) DeleteSnapshot(snapshotID uint) error {
 		// Snapshot might not exist in libvirt, but we should still delete from DB
 		logger.Log.Warn("Snapshot not found in libvirt, deleting from DB only", zap.Error(err))
 	} else {
-		defer snap.Free()
+		defer func() {
+			if err := snap.Free(); err != nil {
+				logger.Log.Warn("failed to free snapshot", zap.Error(err))
+			}
+		}()
 
 		// Delete snapshot from libvirt
 		flags := SnapshotDeleteChildren | SnapshotDeleteMetadataOnly
