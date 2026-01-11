@@ -57,7 +57,7 @@ describe('queryClient', () => {
     const testQueryClient = new QueryClient({
       defaultOptions: {
         queries: {
-          retry: true ? 1 : 0, // true 브랜치 테스트
+          retry: 1, // true 브랜치 테스트
         },
       },
     })
@@ -71,7 +71,7 @@ describe('queryClient', () => {
     const testQueryClient = new QueryClient({
       defaultOptions: {
         queries: {
-          retry: false ? 1 : 0, // false 브랜치 테스트
+          retry: 0, // false 브랜치 테스트
         },
       },
     })
