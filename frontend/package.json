@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "PORT=9444 next dev --turbo --port 9444",
-    "build": "rm -rf .next node_modules/.cache && next build --turbo && node scripts/patch-novnc-bundle.js && node scripts/fix-css-link.js",
+    "build": "rm -rf .next node_modules/.cache && next build --turbo",
     "build:verify": "rm -rf .next node_modules/.cache && next build && node scripts/patch-novnc-bundle.js && node -e \"const fs=require('fs');const chunks=fs.readdirSync('.next/static/chunks').filter(f=>f.endsWith('.js'));const css=fs.readdirSync('.next/static/chunks').filter(f=>f.endsWith('.css'));if(chunks.length===0){console.error('❌ 빌드 파일이 없습니다!');process.exit(1);}if(css.length===0){console.error('❌ CSS 파일이 없습니다!');process.exit(1);}console.log('✅ 빌드 파일 검증 완료:',chunks.length,'개 JS 파일,',css.length,'개 CSS 파일');\"",
     "build:analyze": "ANALYZE=true next build --webpack && node scripts/patch-novnc-bundle.js",
     "build:analyze:turbo": "ANALYZE=true next build --turbo && node scripts/patch-novnc-bundle.js",

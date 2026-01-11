@@ -64,20 +64,17 @@ export function validateTokenIntegrity(token: string): boolean {
   }
 }
 
-// 다른 탭에 인증 이벤트 알림 전송 (클라이언트 전용)
-export function notifyAuthEvent(reason?: string): void {
-  // ✅ 서버/Edge에서는 아무 것도 하지 않음
-  if (typeof window === 'undefined') return;
-
-  // ✅ 브라우저에서도 지원 여부 확인
-  if (typeof BroadcastChannel === 'undefined') return;
-
-  try {
-    const channel = new BroadcastChannel('auth_channel');
-    channel.postMessage({ type: 'AUTH_EVENT', reason, action: 'log' });
-    channel.close();
-  } catch {
-    // noop
+// 다른 탭에 인증 이벤트 알림 전송 (Edge-safe 버전)
+// 실제 구현은 security.browser.ts에 있으며, 동적 import로 로드됨
+export function notifyAuthEvent(_reason?: string): void {
+  // Edge / SSR / Node에서는 아무 것도 안 함
+  // 브라우저에서는 동적 import로 security.browser.ts를 로드
+  if (typeof window !== 'undefined') {
+    import('./security.browser').then((m) => {
+      m.notifyAuthEvent(_reason);
+    }).catch(() => {
+      // 동적 import 실패 시 무시
+    });
   }
 }
 
