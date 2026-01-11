@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { authAPI, setToken } from '../lib/api';
+import { authAPI, setToken } from '@/lib/api';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { logger } from '../lib/utils/logger';
-import { sanitizeInput } from '../lib/utils/validation';
+import { logger } from '@/lib/utils/logger';
+import { sanitizeInput } from '@/lib/utils/validation';
 
 export default function LoginForm() {
   const [username, setUsername] = useState('');

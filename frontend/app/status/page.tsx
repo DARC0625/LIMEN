@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { VersionInfo } from '@/components/VersionInfo';
+// import { VersionInfo } from '@/components/VersionInfo'; // TODO: VersionInfo 컴포넌트 생성 필요
 
 interface ServiceStatus {
   status: 'operational' | 'degraded' | 'outage';
@@ -133,9 +133,9 @@ export default function StatusPage() {
           </div>
         )}
 
-        <div className="mt-8">
+        {/* <div className="mt-8">
           <VersionInfo />
-        </div>
+        </div> */}
       </div>
     </div>
   );

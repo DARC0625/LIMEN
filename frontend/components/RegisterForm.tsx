@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { authAPI } from '../lib/api';
+import { authAPI } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useToast } from './ToastContainer';
-import { getErrorMessage } from '../lib/types/errors';
-import { isValidUsername, isValidPassword, sanitizeInput } from '../lib/utils/validation';
+import { getErrorMessage } from '@/lib/types/errors';
+import { isValidUsername, isValidPassword, sanitizeInput } from '@/lib/utils/validation';
 
 export default function RegisterForm() {
   const [username, setUsername] = useState('');

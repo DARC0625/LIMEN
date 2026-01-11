@@ -201,9 +201,11 @@ export default function Home() {
         } else {
           // 백엔드에서 제공한 상세 에러 정보 확인
           if (apiError.details) {
+            const isRecord = (v: unknown): v is Record<string, unknown> => 
+              typeof v === 'object' && v !== null && !Array.isArray(v);
             const details = apiError.details;
-            if (details.error || details.message) {
-              errorMessage = `${error.message}\n${details.error || details.message}`;
+            if (isRecord(details) && (typeof details.error === 'string' || typeof details.message === 'string')) {
+              errorMessage = `${error.message}\n${details.error || details.message || ''}`;
             }
           }
         }
@@ -313,9 +315,11 @@ export default function Home() {
         
         // 백엔드에서 제공한 상세 에러 정보 확인
         if (apiError.details) {
+          const isRecord = (v: unknown): v is Record<string, unknown> => 
+            typeof v === 'object' && v !== null && !Array.isArray(v);
           const details = apiError.details;
-          if (details.error || details.message) {
-            errorMessage = `${error.message}\n${details.error || details.message}`;
+          if (isRecord(details) && (typeof details.error === 'string' || typeof details.message === 'string')) {
+            errorMessage = `${error.message}\n${details.error || details.message || ''}`;
           }
         }
       } else {
@@ -361,7 +365,7 @@ export default function Home() {
             setProcessingId(null);
           });
         },
-        onError: (error) => {
+        onError: (error: Error) => {
           window.console.error('[handleAction] Mutation error:', error);
           startTransition(() => {
             setProcessingId(null);
@@ -648,7 +652,7 @@ export default function Home() {
                 <div>
                   <BootOrderSelector
                     value={editingVM.boot_order}
-                    onChange={(bootOrder) => {
+                    onChange={(bootOrder: BootOrder) => {
                       if (editingVM) {
                         // 즉시 UI 업데이트 (낙관적 업데이트)
                         setEditingVM({ ...editingVM, boot_order: bootOrder });

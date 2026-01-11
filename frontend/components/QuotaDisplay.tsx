@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { useQuota } from '../hooks/useQuota';
+import { useQuota } from '@/hooks/useQuota';
 import { StatusCard } from './StatusCard';
 
 /**

@@ -44,11 +44,14 @@ const HONEYPOT_FIELD = 'website';
 
 // 입력 검증
 function validateInput(data: Record<string, unknown>): { valid: boolean; error?: string } {
-  if (!data.name || typeof data.name !== 'string' || data.name.trim().length < 2) {
+  // 타입 가드: 문자열인지 확인
+  const isString = (v: unknown): v is string => typeof v === 'string';
+  
+  if (!isString(data.name) || data.name.trim().length < 2) {
     return { valid: false, error: '이름은 2자 이상이어야 합니다.' };
   }
   
-  if (!data.email || typeof data.email !== 'string') {
+  if (!isString(data.email)) {
     return { valid: false, error: '이메일이 필요합니다.' };
   }
   
@@ -58,18 +61,20 @@ function validateInput(data: Record<string, unknown>): { valid: boolean; error?:
     return { valid: false, error: '유효한 이메일 형식이 아닙니다.' };
   }
   
-  if (!data.organization || typeof data.organization !== 'string' || data.organization.trim().length < 2) {
+  if (!isString(data.organization) || data.organization.trim().length < 2) {
     return { valid: false, error: '소속은 2자 이상이어야 합니다.' };
   }
   
   // 허니팟 필드 확인 (스팸 봇이 채우면 차단)
-  if (data[HONEYPOT_FIELD] && data[HONEYPOT_FIELD].trim().length > 0) {
+  const honeypotValue = data[HONEYPOT_FIELD];
+  if (isString(honeypotValue) && honeypotValue.trim().length > 0) {
     return { valid: false, error: '스팸으로 감지되었습니다.' };
   }
   
   // 입력 길이 제한
+  const purpose = isString(data.purpose) ? data.purpose : '';
   if (data.name.length > 100 || data.email.length > 255 || 
-      data.organization.length > 200 || (data.purpose && data.purpose.length > 1000)) {
+      data.organization.length > 200 || purpose.length > 1000) {
     return { valid: false, error: '입력 길이가 제한을 초과했습니다.' };
   }
   

@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { handleError } from '../lib/utils/error';
-import { vmAPI } from '../lib/api/index';
-import { logger } from '../lib/utils/logger';
-import { getErrorMessage } from '../lib/types/errors';
+import { handleError } from '@/lib/utils/error';
+import { vmAPI } from '@/lib/api/index';
+import { logger } from '@/lib/utils/logger';
+import { getErrorMessage } from '@/lib/types/errors';
+import type { VM } from '@/lib/types';
 
 // RFB type from @novnc/novnc (simplified interface)
 interface RFBInstance {
@@ -541,7 +542,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
           return; // 요청이 취소됨
         }
         
-        const vm = vms.find(v => v.uuid === uuid);
+        const vm = vms.find((v: VM) => v.uuid === uuid);
         
         if (!vm) {
           setStatus('VM not found');
@@ -553,7 +554,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
           uuid,
           status: vm.status,
           fullVM: vm,
-          allVMs: vms.map(v => ({ uuid: v.uuid, status: v.status, name: v.name }))
+          allVMs: vms.map((v: VM) => ({ uuid: v.uuid, status: v.status, name: v.name }))
         });
         
         if (vm.status !== 'Running') {
@@ -561,7 +562,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
           logger.log(`[VNCViewer] VM is not running (status: ${vm.status}), aborting VNC connection`, {
             uuid,
             status: vm.status,
-            allVMs: vms.map(v => ({ uuid: v.uuid, status: v.status }))
+            allVMs: vms.map((v: VM) => ({ uuid: v.uuid, status: v.status }))
           });
           return;
         }
@@ -932,18 +933,18 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
                   return false; // 요청이 취소됨
                 }
                 
-                const vm = vms.find(v => v.uuid === uuid);
+                const vm = vms.find((v: VM) => v.uuid === uuid);
                 logger.log('[VNCViewer] VM status check (reconnect):', {
                   uuid,
                   found: !!vm,
                   status: vm?.status,
                   fullVM: vm,
-                  allVMs: vms.map(v => ({ uuid: v.uuid, status: v.status, name: v.name }))
+                  allVMs: vms.map((v: VM) => ({ uuid: v.uuid, status: v.status, name: v.name }))
                 });
                 
                 if (!vm) {
                   setStatus('VM not found');
-                  logger.warn('[VNCViewer] VM not found during reconnect check', { uuid, allVMs: vms.map(v => v.uuid) });
+                  logger.warn('[VNCViewer] VM not found during reconnect check', { uuid, allVMs: vms.map((v: VM) => v.uuid) });
                   return false;
                 }
                 
@@ -952,7 +953,7 @@ export default function VNCViewer({ uuid }: { uuid: string }) {
                   logger.log(`[VNCViewer] VM is not running during reconnect (status: ${vm.status})`, {
                     uuid,
                     status: vm.status,
-                    allVMs: vms.map(v => ({ uuid: v.uuid, status: v.status }))
+                    allVMs: vms.map((v: VM) => ({ uuid: v.uuid, status: v.status }))
                   });
                   return false;
                 }

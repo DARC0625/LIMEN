@@ -465,7 +465,7 @@ export default function UserManagementPage() {
 
         {/* 모바일: 카드 뷰 */}
         <div className="md:hidden space-y-4">
-          {users.map((user) => (
+          {users.map((user: UserWithStats) => (
             <div key={user.id} className="bg-white rounded-xl shadow-lg border border-gray-200 p-4 transition-all">
               <div className="flex justify-between items-start mb-3">
                 <div className="flex-1">
@@ -580,7 +580,7 @@ export default function UserManagementPage() {
                     <div>
                       <strong className="text-gray-700 block mb-2">VMs ({expandedUserData.vms.length}):</strong>
                       <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
-                        {expandedUserData.vms.map((vm) => (
+                        {expandedUserData.vms.map((vm: VM) => (
                           <li key={vm.uuid}>
                             {vm.name} ({vm.status}) - {vm.cpu} CPU, {formatBytes(vm.memory * 1024)}
                           </li>

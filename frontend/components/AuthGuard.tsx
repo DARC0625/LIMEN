@@ -5,9 +5,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { 
   forceLogout, 
   checkAndUnblockAccount
-} from '../lib/security';
-import { checkAuth } from '../lib/auth';
-import { logger } from '../lib/utils/logger';
+} from '@/lib/security';
+import { checkAuth } from '@/lib/auth';
+import { logger } from '@/lib/utils/logger';
 
 const AuthContext = createContext<{ isAuthenticated: boolean | null }>({ isAuthenticated: null });
 

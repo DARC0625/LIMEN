@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef, startTransition } from 'react';
-import { useVMs } from '../hooks/useVMs';
-import type { VM } from '../lib/types';
+import { useVMs } from '@/hooks/useVMs';
+import type { VM } from '@/lib/types';
 // WebSocket 완전 제거 - React Error #321 근본 해결
 import dynamicImport from 'next/dynamic';
 import Loading from './Loading';
-import { formatBytes } from '../lib/utils/format';
+import { formatBytes } from '@/lib/utils/format';
 
 // 동적 import: SnapshotManager는 조건부로만 렌더링되므로 코드 스플리팅 적용
 const SnapshotManager = dynamicImport(

@@ -3,12 +3,12 @@
  * 에러 처리, 재시도, 토큰 관리 통합
  */
 
-import { trackAPIError } from '../errorTracking';
-import { trackPerformanceMetric } from '../analytics';
-import { tokenManager } from '../tokenManager';
-import { API_CONSTANTS } from '../constants';
-import type { APIError } from '../types';
-import { logger } from '../utils/logger';
+import { trackAPIError } from '@/lib/errorTracking';
+import { trackPerformanceMetric } from '@/lib/analytics';
+import { tokenManager } from '@/lib/tokenManager';
+import { API_CONSTANTS } from '@/lib/constants';
+import type { APIError } from '@/lib/types';
+import { logger } from '@/lib/utils/logger';
 
 /**
  * API URL 가져오기

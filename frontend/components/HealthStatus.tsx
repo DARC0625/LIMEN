@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { StatusCard, StatusRow } from './StatusCard';
-import { formatDateKR } from '../lib/utils/format';
-import { logger } from '../lib/utils/logger';
+import { formatDateKR } from '@/lib/utils/format';
+import { logger } from '@/lib/utils/logger';
 
 type BackendHealth = {
   status: string;
