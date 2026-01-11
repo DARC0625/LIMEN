@@ -226,3 +226,45 @@ func generateTokenID() (string, error) {
 	}
 	return base64.URLEncoding.EncodeToString(b), nil
 }
+
+// ResolveUserFromRefreshToken resolves user ID from refresh_token cookie.
+// This is a common function used by handlers that need session-based authentication
+// (e.g., /api/quota, /api/auth/session).
+//
+// Security checks performed:
+// 1. refresh_token cookie exists
+// 2. Token signature validation (JWT)
+// 3. Token expiration check
+// 4. Session exists in session store
+//
+// Returns:
+//   - userID: User ID if authentication succeeds
+//   - claims: Refresh token claims (for session recovery, etc.)
+//   - ok: true if authentication succeeded, false otherwise
+//   - err: Error details if authentication failed (for logging)
+func ResolveUserFromRefreshToken(refreshToken, jwtSecret string) (userID uint, claims *RefreshTokenClaims, ok bool, err error) {
+	// 1. Check if refresh token exists
+	if refreshToken == "" {
+		return 0, nil, false, ErrInvalidRefreshToken
+	}
+
+	// 2. Validate refresh token (signature + expiration)
+	refreshClaims, err := ValidateRefreshToken(refreshToken, jwtSecret)
+	if err != nil {
+		// ErrTokenExpired or ErrInvalidRefreshToken
+		return 0, nil, false, err
+	}
+
+	// 3. Verify session exists in session store
+	sessionStore := GetSessionStore()
+	_, exists := sessionStore.GetSessionByRefreshToken(refreshToken)
+	if !exists {
+		// Token is valid but session not found (e.g., server restart)
+		// This is a security check: valid token must have active session
+		// However, return claims for session recovery scenarios
+		return refreshClaims.UserID, refreshClaims, false, ErrInvalidRefreshToken
+	}
+
+	// 4. All checks passed - return user ID and claims
+	return refreshClaims.UserID, refreshClaims, true, nil
+}

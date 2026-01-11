@@ -39,39 +39,27 @@ func (h *Handler) HandleGetQuota(w http.ResponseWriter, r *http.Request, cfg *co
 	// Try to get user ID from context first (if Auth middleware already authenticated)
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
-		// Fallback: Try to authenticate via refresh_token cookie (session-based)
+		// Fallback: Authenticate via refresh_token cookie (session-based)
+		// Use common function to ensure consistent security checks
 		refreshToken := ""
 		if cookie, err := r.Cookie("refresh_token"); err == nil {
 			refreshToken = cookie.Value
 		}
 
-		if refreshToken == "" {
+		var authErr error
+		var refreshClaims *auth.RefreshTokenClaims
+		userID, refreshClaims, ok, authErr = auth.ResolveUserFromRefreshToken(refreshToken, cfg.JWTSecret)
+		if !ok {
+			// Security: Log authentication failures for monitoring
+			logger.Log.Debug("Quota endpoint authentication failed",
+				zap.String("path", r.URL.Path),
+				zap.String("remote_addr", r.RemoteAddr),
+				zap.Error(authErr))
 			errors.WriteUnauthorized(w, "Authentication required")
 			return
 		}
+		_ = refreshClaims // Not used in quota handler, but available if needed
 
-		// Validate refresh token
-		refreshClaims, err := auth.ValidateRefreshToken(refreshToken, cfg.JWTSecret)
-		if err != nil {
-			logger.Log.Debug("Refresh token validation failed for quota endpoint",
-				zap.String("path", r.URL.Path),
-				zap.Error(err))
-			errors.WriteUnauthorized(w, "Invalid or expired session")
-			return
-		}
-
-		// Verify session exists
-		sessionStore := auth.GetSessionStore()
-		_, exists := sessionStore.GetSessionByRefreshToken(refreshToken)
-		if !exists {
-			logger.Log.Debug("Refresh token not found in session store for quota endpoint",
-				zap.String("path", r.URL.Path),
-				zap.Uint("user_id", refreshClaims.UserID))
-			errors.WriteUnauthorized(w, "Session not found")
-			return
-		}
-
-		userID = refreshClaims.UserID
 		logger.Log.Debug("Authenticated quota request via refresh token cookie",
 			zap.String("path", r.URL.Path),
 			zap.Uint("user_id", userID))
