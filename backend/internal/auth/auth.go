@@ -35,6 +35,7 @@ const (
 )
 
 // Reason extracts the authentication failure reason from an error
+// This helps with security monitoring and debugging without exposing sensitive details.
 func Reason(err error) AuthErrorReason {
 	if err == nil {
 		return ReasonUnknown
@@ -45,6 +46,8 @@ func Reason(err error) AuthErrorReason {
 	if errors.Is(err, ErrSessionNotFound) {
 		return ReasonSessionNotFound
 	}
+	// ErrInvalidRefreshToken can be JWT parsing/signature error or empty token
+	// For logging purposes, we classify it as invalid_jwt (the most common case)
 	if errors.Is(err, ErrInvalidRefreshToken) {
 		return ReasonInvalidJWT
 	}
@@ -258,18 +261,18 @@ func generateTokenID() (string, error) {
 }
 
 // ResolveUserFromRefreshToken resolves user ID from refresh_token cookie.
-// This is a common function used by handlers that need session-based authentication
-// (e.g., /api/quota, /api/auth/session).
+// This function requires an active session in the session store.
+// Use ParseRefreshTokenForRecovery if you need to recover sessions.
 //
 // Security checks performed:
 // 1. refresh_token cookie exists
 // 2. Token signature validation (JWT)
 // 3. Token expiration check
-// 4. Session exists in session store
+// 4. Session exists in session store (required)
 //
 // Returns:
 //   - userID: User ID if authentication succeeds
-//   - claims: Refresh token claims (for session recovery, etc.)
+//   - claims: Refresh token claims (nil if session not found)
 //   - ok: true if authentication succeeded, false otherwise
 //   - err: Error details if authentication failed (for logging)
 func ResolveUserFromRefreshToken(refreshToken, jwtSecret string) (userID uint, claims *RefreshTokenClaims, ok bool, err error) {
@@ -285,7 +288,7 @@ func ResolveUserFromRefreshToken(refreshToken, jwtSecret string) (userID uint, c
 		return 0, nil, false, err
 	}
 
-	// 3. Verify session exists in session store
+	// 3. Verify session exists in session store (required)
 	sessionStore := GetSessionStore()
 	_, exists := sessionStore.GetSessionByRefreshToken(refreshToken)
 	if !exists {
@@ -297,4 +300,35 @@ func ResolveUserFromRefreshToken(refreshToken, jwtSecret string) (userID uint, c
 
 	// 4. All checks passed - return user ID and claims
 	return refreshClaims.UserID, refreshClaims, true, nil
+}
+
+// ParseRefreshTokenForRecovery validates a refresh token and returns claims without requiring an active session.
+// This is used for session recovery scenarios (e.g., after server restart).
+// The caller is responsible for creating a new session if needed.
+//
+// Security checks performed:
+// 1. refresh_token exists
+// 2. Token signature validation (JWT)
+// 3. Token expiration check
+//
+// Note: This function does NOT check session store existence.
+// Use ResolveUserFromRefreshToken if you need session validation.
+//
+// Returns:
+//   - claims: Refresh token claims if token is valid
+//   - err: Error if token validation fails
+func ParseRefreshTokenForRecovery(refreshToken, jwtSecret string) (*RefreshTokenClaims, error) {
+	// 1. Check if refresh token exists
+	if refreshToken == "" {
+		return nil, ErrInvalidRefreshToken
+	}
+
+	// 2. Validate refresh token (signature + expiration)
+	refreshClaims, err := ValidateRefreshToken(refreshToken, jwtSecret)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Return claims (session store check is skipped for recovery scenarios)
+	return refreshClaims, nil
 }
