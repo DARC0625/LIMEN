@@ -4,17 +4,17 @@
 
 import { logger } from './utils/logger';
 
-interface TokenPair {
+export type TokenPair = {
   accessToken: string;
   refreshToken: string;
   expiresAt: number; // Access Token 만료 시간
-}
+};
 
-interface TokenRefreshResponse {
+export type TokenRefreshResponse = {
   access_token: string;
   refresh_token?: string; // 선택적 (Rotation)
   expires_in: number; // 초 단위
-}
+};
 
 // Token Storage (메모리 + localStorage 폴백)
 class TokenManager {

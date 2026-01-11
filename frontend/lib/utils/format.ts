@@ -101,7 +101,7 @@ export function formatDateKR(isoString: string): string {
       minute: '2-digit', 
       second: '2-digit' 
     });
-  } catch (e) {
+  } catch {
     return isoString;
   }
 }

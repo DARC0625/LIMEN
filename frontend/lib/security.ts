@@ -88,7 +88,7 @@ export function forceLogout(reason: string = '보안상의 이유로 로그아�
     const channel = new BroadcastChannel('auth_channel');
     channel.postMessage({ type: 'AUTH_EVENT', reason, action: 'log' });
     channel.close();
-  } catch (e) {
+  } catch {
     // BroadcastChannel을 지원하지 않는 경우 무시
   }
 }
@@ -192,7 +192,7 @@ export function checkAndUnblockAccount(): void {
 }
 
 // 세션 초기화 (로그인 시 호출)
-export function initializeSession(token: string): void {
+export function initializeSession(_token: string): void {
   if (typeof window === 'undefined') return;
   
   // 차단 플래그 제거 (로그인 시 자동 해제)

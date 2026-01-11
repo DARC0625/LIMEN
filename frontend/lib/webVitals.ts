@@ -87,7 +87,7 @@ function sendToAnalytics(metric: Metric) {
   if (typeof window !== 'undefined' && 'performance' in window && 'mark' in window.performance) {
     try {
       window.performance.mark(`${metric.name}-${metric.id}`);
-    } catch (e) {
+    } catch {
       // Performance API 에러는 무시
     }
   }
@@ -129,13 +129,13 @@ export function initWebVitals() {
           rating: 'good',
           entries: entries as PerformanceEntry[],
         });
-      } catch (e) {
+      } catch {
         // 에러 무시
       }
     });
     
     lcpObserver.observe({ entryTypes: ['largest-contentful-paint'] });
-  } catch (e) {
+  } catch {
     // Performance Observer를 지원하지 않는 브라우저 또는 에러
   }
 
@@ -156,14 +156,14 @@ export function initWebVitals() {
               entries: [entry],
             });
           });
-        } catch (e) {
+        } catch {
           // 에러 무시
         }
       });
       
       fidObserver.observe({ entryTypes: ['first-input'] });
     }
-  } catch (e) {
+  } catch {
     // Performance Observer를 지원하지 않는 브라우저 또는 에러
   }
 
@@ -190,14 +190,14 @@ export function initWebVitals() {
               });
             }
           });
-        } catch (e) {
+        } catch {
           // 에러 무시
         }
       });
       
       paintObserver.observe({ entryTypes: ['paint'] });
     }
-  } catch (e) {
+  } catch {
     // Performance Observer를 지원하지 않는 브라우저 또는 에러
   }
 
@@ -213,7 +213,7 @@ export function initWebVitals() {
         rating: 'good',
       });
     }
-  } catch (e) {
+  } catch {
     // Navigation Timing을 지원하지 않는 브라우저
   }
 }
