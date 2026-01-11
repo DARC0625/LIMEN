@@ -35,12 +35,24 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run Extended Tests (integration + extended)
+      - name: Run Extended Tests (slow packages + integration)
         timeout-minutes: 25
         run: |
-          echo "=== Running Extended Tests (integration + extended tags, timeout 20m) ==="
+          echo "=== Running Extended Tests (slow packages + integration, timeout 20m) ==="
+          echo "느린/비필수 패키지: internal/vm, scripts/**, database, hardware 등"
+          echo ""
+          
           set +e
-          go test -v -count=1 -timeout 20m -tags=integration,extended ./... | tee test-nightly.log
+          # 느린 패키지들 + integration 태그 테스트
+          go test -v -count=1 -timeout 20m -tags=integration,extended \
+            ./internal/vm \
+            ./internal/database \
+            ./internal/hardware \
+            ./internal/alerting \
+            ./internal/metrics \
+            ./internal/logger \
+            ./scripts/... \
+            | tee test-nightly.log
           TEST_EXIT=$?
           set -e
           

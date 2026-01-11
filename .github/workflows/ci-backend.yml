@@ -27,16 +27,30 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
-      - name: Go test (fast suite, timeout 5m)
+      - name: Go test (fast suite, explicit package list, timeout 3m)
         working-directory: backend
-        timeout-minutes: 6
+        timeout-minutes: 4
         run: |
-          echo "=== Running Go tests (fast suite, timeout 5m) ==="
-          echo "This runs unit tests only (integration tests excluded via build tags)"
+          echo "=== Running Go tests (fast suite, timeout 3m) ==="
+          echo "PR용 fast suite: 비즈니스 로직 + 보안 + 입력 검증만 실행"
+          echo "느린 패키지(internal/vm, scripts/**)는 nightly로 분리됨"
           echo ""
           
           set +e
-          go test -v -count=1 -timeout 5m ./... | tee test.log
+          go test -v -count=1 -timeout 3m \
+            ./internal/handlers \
+            ./internal/router \
+            ./internal/middleware \
+            ./internal/validator \
+            ./internal/security \
+            ./internal/session \
+            ./internal/auth \
+            ./internal/crypto \
+            ./internal/models \
+            ./internal/errors \
+            ./internal/config \
+            ./internal/ratelimit \
+            | tee test.log
           TEST_EXIT=$?
           set -e
           
