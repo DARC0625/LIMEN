@@ -202,6 +202,12 @@ export async function apiRequest<T>(
         
         // 마지막 시도가 아니면 재시도
         if (attempt < (retry ? API_CONSTANTS.MAX_RETRIES : 1)) {
+          logger.debug('[apiRequest] Retrying request', { 
+            attempt, 
+            maxRetries: retry ? API_CONSTANTS.MAX_RETRIES : 1,
+            url,
+            method 
+          });
           await new Promise(resolve => 
             setTimeout(resolve, API_CONSTANTS.RETRY_DELAY * attempt)
           );
