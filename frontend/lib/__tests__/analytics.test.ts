@@ -3,6 +3,7 @@
  */
 
 import { trackPageView, trackEvent, trackPerformanceMetric, trackWebVitals } from '../analytics'
+import { setEnv, getEnv } from '../test-utils/env'
 
 describe('analytics', () => {
   beforeEach(() => {
@@ -21,7 +22,7 @@ describe('analytics', () => {
   describe('trackPageView', () => {
     it('logs page view in development', () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
-      process.env.NODE_ENV = 'development'
+      setEnv('NODE_ENV', 'development')
 
       trackPageView('/test')
 
@@ -66,7 +67,7 @@ describe('analytics', () => {
   describe('trackEvent', () => {
     it('logs event in development', () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
-      process.env.NODE_ENV = 'development'
+      setEnv('NODE_ENV', 'development')
 
       trackEvent('test-event', { key: 'value' })
 
@@ -96,7 +97,7 @@ describe('analytics', () => {
 
     it('includes timestamp and url in event data', () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
-      process.env.NODE_ENV = 'development'
+      setEnv('NODE_ENV', 'development')
 
       trackEvent('test-event', { key: 'value' })
 
@@ -118,7 +119,7 @@ describe('analytics', () => {
   describe('trackPerformanceMetric', () => {
     it('logs metric in development', () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
-      process.env.NODE_ENV = 'development'
+      setEnv('NODE_ENV', 'development')
 
       trackPerformanceMetric('test-metric', 100, 'ms')
 
@@ -141,7 +142,7 @@ describe('analytics', () => {
 
     it('uses default unit of ms', () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
-      process.env.NODE_ENV = 'development'
+      setEnv('NODE_ENV', 'development')
 
       trackPerformanceMetric('test-metric', 100)
 
@@ -184,7 +185,7 @@ describe('analytics', () => {
   describe('trackWebVitals', () => {
     it('calls trackPerformanceMetric', () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
-      process.env.NODE_ENV = 'development'
+      setEnv('NODE_ENV', 'development')
 
       trackWebVitals({
         id: 'test-id',
@@ -219,8 +220,8 @@ describe('analytics', () => {
 
   describe('trackPageView edge cases', () => {
     it('handles production environment without gtag and plausible', () => {
-      const originalEnv = process.env.NODE_ENV
-      process.env.NODE_ENV = 'production'
+      const originalEnv = getEnv('NODE_ENV')
+      setEnv('NODE_ENV', 'production')
       delete process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN
 
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
@@ -230,12 +231,12 @@ describe('analytics', () => {
       expect(consoleSpy).toHaveBeenCalledWith('[Page View]', '/test')
 
       consoleSpy.mockRestore()
-      process.env.NODE_ENV = originalEnv
+      setEnv('NODE_ENV', originalEnv)
     })
 
     it('handles production environment with gtag', () => {
-      const originalEnv = process.env.NODE_ENV
-      process.env.NODE_ENV = 'production'
+      const originalEnv = getEnv('NODE_ENV')
+      setEnv('NODE_ENV', 'production')
       process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID = 'GA-123'
       delete process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN
 
@@ -254,15 +255,15 @@ describe('analytics', () => {
       expect(consoleSpy).not.toHaveBeenCalled()
 
       consoleSpy.mockRestore()
-      process.env.NODE_ENV = originalEnv
+      setEnv('NODE_ENV', originalEnv)
       delete process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
     })
   })
 
   describe('trackEvent edge cases', () => {
     it('handles production environment without gtag and plausible', () => {
-      const originalEnv = process.env.NODE_ENV
-      process.env.NODE_ENV = 'production'
+      const originalEnv = getEnv('NODE_ENV')
+      setEnv('NODE_ENV', 'production')
       delete process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN
       delete (window as any).gtag
 
@@ -273,12 +274,12 @@ describe('analytics', () => {
       expect(consoleSpy).toHaveBeenCalled()
 
       consoleSpy.mockRestore()
-      process.env.NODE_ENV = originalEnv
+      setEnv('NODE_ENV', originalEnv)
     })
 
     it('handles production environment with gtag', () => {
-      const originalEnv = process.env.NODE_ENV
-      process.env.NODE_ENV = 'production'
+      const originalEnv = getEnv('NODE_ENV')
+      setEnv('NODE_ENV', 'production')
       delete process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN
 
       const mockGtag = jest.fn()
@@ -294,7 +295,7 @@ describe('analytics', () => {
       expect(mockGtag).toHaveBeenCalled()
       expect(consoleSpy).not.toHaveBeenCalled()
 
-      process.env.NODE_ENV = originalEnv
+      setEnv('NODE_ENV', originalEnv)
     })
 
     it('handles trackEvent with no properties', () => {
