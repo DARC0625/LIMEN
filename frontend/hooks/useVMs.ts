@@ -203,7 +203,7 @@ export function useCreateVM() {
     },
     
     // 서버 응답 성공: 임시 VM을 실제 VM으로 교체
-    onSuccess: (newVM, _variables, context) => {
+    onSuccess: (newVM) => {
       // React Error #321 완전 해결: 비동기 처리로 렌더링 중 업데이트 방지
       queueMicrotask(() => {
         startTransition(() => {
@@ -485,7 +485,7 @@ export function useVMAction() {
     },
     
     // 서버 응답 성공: 최종 데이터로 업데이트
-    onSuccess: (updatedVM, variables, context) => {
+    onSuccess: (updatedVM, variables) => {
       // 강제 로깅 (콘솔 필터링 우회)
       window.console.log('[useVMAction] ====== ON SUCCESS CALLED ======');
       window.console.log('[useVMAction] Action:', variables.action);
@@ -513,7 +513,7 @@ export function useVMAction() {
             delete protectedStates[variables.uuid];
             localStorage.setItem('protectedVMStates', JSON.stringify(protectedStates));
             window.console.log('[useVMAction] Delete: Removed from protectedVMStates:', { uuid: variables.uuid });
-          } catch (e) {
+          } catch {
             // localStorage 제거 실패는 무시
           }
           
@@ -638,7 +638,7 @@ export function useVMAction() {
               timestamp: protectionTimestamp
             };
             localStorage.setItem('protectedVMStates', JSON.stringify(protectedStates));
-          } catch (e) {
+          } catch {
             // localStorage 저장 실패는 무시
           }
           
@@ -685,7 +685,7 @@ export function useVMAction() {
               const protectedStates = JSON.parse(localStorage.getItem('protectedVMStates') || '{}');
               delete protectedStates[variables.uuid];
               localStorage.setItem('protectedVMStates', JSON.stringify(protectedStates));
-            } catch (e) {
+            } catch {
               // localStorage 제거 실패는 무시
             }
           }, 30000);

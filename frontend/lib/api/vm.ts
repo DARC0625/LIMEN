@@ -12,6 +12,36 @@ import type {
   BootOrder,
 } from '../types';
 
+// ============================================================================
+// 타입 가드 및 DTO
+// ============================================================================
+
+/**
+ * 타입 가드: Record<string, unknown>인지 확인
+ */
+function isRecord(x: unknown): x is Record<string, unknown> {
+  return typeof x === 'object' && x !== null && !Array.isArray(x);
+}
+
+/**
+ * 타입 가드: APIError인지 확인
+ */
+interface APIErrorWithDetails extends Error {
+  status?: number;
+  details?: unknown;
+}
+
+function isAPIError(x: unknown): x is APIErrorWithDetails {
+  return x instanceof Error && 'status' in x;
+}
+
+/**
+ * 타입 가드: boot_order가 유효한 문자열인지 확인
+ */
+function isValidBootOrderString(x: unknown): x is string | undefined | null {
+  return x === undefined || x === null || typeof x === 'string';
+}
+
 /**
  * 백엔드 부팅 순서 형식을 프론트엔드 형식으로 변환
  * 백엔드: cdrom, hd, cdrom_hd, hd_cdrom
@@ -57,7 +87,7 @@ export const vmAPI = {
     // 백엔드 부팅 순서 형식을 프론트엔드 형식으로 변환
     return vms.map(vm => ({
       ...vm,
-      boot_order: normalizeBootOrderFromBackend(vm.boot_order as any),
+      boot_order: normalizeBootOrderFromBackend(isValidBootOrderString(vm.boot_order) ? vm.boot_order : undefined),
     }));
   },
 
@@ -133,25 +163,26 @@ export const vmAPI = {
       return result;
     } catch (error) {
       // 500 에러인 경우 상세 정보 로깅
-      if (error instanceof Error && (error as any).status === 500) {
-        const apiError = error as any;
-        
+      if (isAPIError(error) && error.status === 500) {
         // errorDetails에서 실제 에러 메시지 추출
-        let actualErrorMessage = apiError.message;
-        if (apiError.details) {
-          const details = apiError.details;
+        let actualErrorMessage = error.message;
+        if (error.details) {
+          const details = error.details;
           
-          // 다양한 구조에서 에러 메시지 추출 시도
-          if (details.error) {
-            if (typeof details.error === 'string') {
-              actualErrorMessage = details.error;
-            } else if (typeof details.error === 'object' && details.error.message) {
-              actualErrorMessage = details.error.message;
+          // 타입 가드로 안전하게 접근
+          if (isRecord(details)) {
+            // 다양한 구조에서 에러 메시지 추출 시도
+            if (details.error) {
+              if (typeof details.error === 'string') {
+                actualErrorMessage = details.error;
+              } else if (isRecord(details.error) && typeof details.error.message === 'string') {
+                actualErrorMessage = details.error.message;
+              }
+            } else if (typeof details.message === 'string') {
+              actualErrorMessage = details.message;
+            } else if (typeof details.detail === 'string') {
+              actualErrorMessage = details.detail;
             }
-          } else if (details.message) {
-            actualErrorMessage = details.message;
-          } else if (details.detail) {
-            actualErrorMessage = details.detail;
           } else if (typeof details === 'string') {
             actualErrorMessage = details;
           }
@@ -173,14 +204,14 @@ export const vmAPI = {
           endpoint: '/vms',
           method: 'POST',
           errorMessage: actualErrorMessage,
-          errorDetails: apiError.details,
+          errorDetails: error.details,
           requestData: vmData,
         });
         
         // 더 구체적인 에러 메시지로 재생성
-        const enhancedError = new Error(actualErrorMessage);
-        (enhancedError as any).status = 500;
-        (enhancedError as any).details = apiError.details;
+        const enhancedError: APIErrorWithDetails = new Error(actualErrorMessage);
+        enhancedError.status = 500;
+        enhancedError.details = error.details;
         throw enhancedError;
       }
       
@@ -288,8 +319,8 @@ export const vmAPI = {
             message: error.message, 
             stack: error.stack, 
             name: error.name,
-            status: (error as any).status,
-            details: (error as any).details,
+            status: isAPIError(error) ? error.status : undefined,
+            details: isAPIError(error) ? error.details : undefined,
           }
         : { error: String(error) };
       
@@ -380,7 +411,7 @@ export const vmAPI = {
       // 백엔드 응답을 프론트엔드 형식으로 변환
       const normalizedResult = {
         ...result,
-        boot_order: normalizeBootOrderFromBackend(result.boot_order as any),
+        boot_order: normalizeBootOrderFromBackend(isValidBootOrderString(result.boot_order) ? result.boot_order : undefined),
       };
       
       logger.log('[vmAPI.setBootOrder] API success:', normalizedResult);
@@ -391,8 +422,8 @@ export const vmAPI = {
             message: error.message, 
             stack: error.stack, 
             name: error.name,
-            status: (error as any).status,
-            details: (error as any).details,
+            status: isAPIError(error) ? error.status : undefined,
+            details: isAPIError(error) ? error.details : undefined,
           }
         : { error: String(error) };
       
@@ -405,31 +436,33 @@ export const vmAPI = {
       logger.error('[vmAPI.setBootOrder] API error:', errorContext);
       
       // 더 명확한 에러 메시지 생성
-      if (error instanceof Error) {
-        const apiError = error as any;
-        if (apiError.status === 500 && apiError.details) {
-          const details = apiError.details;
-          let enhancedMessage = error.message;
-          
+      if (isAPIError(error) && error.status === 500 && error.details) {
+        const details = error.details;
+        let enhancedMessage = error.message;
+        
+        // 타입 가드로 안전하게 접근
+        if (isRecord(details)) {
           // 백엔드에서 제공한 상세 에러 정보 추가
           if (details.error || details.message) {
-            enhancedMessage = `${error.message}: ${details.error || details.message}`;
+            const errorMsg = typeof details.error === 'string' ? details.error : 
+                           typeof details.message === 'string' ? details.message : '';
+            enhancedMessage = `${error.message}: ${errorMsg}`;
           }
           
           // 특정 에러 타입에 대한 안내 추가
-          if (details.error && typeof details.error === 'string') {
+          if (typeof details.error === 'string') {
             if (details.error.includes('libvirt') || details.error.includes('XML')) {
               enhancedMessage += '\n\nVM 설정을 업데이트하는 중 오류가 발생했습니다. VM이 실행 중이거나 설정 파일에 문제가 있을 수 있습니다.';
             } else if (details.error.includes('running') || details.error.includes('shutdown')) {
               enhancedMessage += '\n\nVM이 실행 중일 수 있습니다. VM을 중지한 후 다시 시도해주세요.';
             }
           }
-          
-          const enhancedError = new Error(enhancedMessage);
-          (enhancedError as any).status = 500;
-          (enhancedError as any).details = details;
-          throw enhancedError;
         }
+        
+        const enhancedError: APIErrorWithDetails = new Error(enhancedMessage);
+        enhancedError.status = 500;
+        enhancedError.details = details;
+        throw enhancedError;
       }
       
       throw error;
@@ -469,7 +502,7 @@ export const vmAPI = {
       if (result.vm) {
         result.vm = {
           ...result.vm,
-          boot_order: normalizeBootOrderFromBackend(result.vm.boot_order as any),
+          boot_order: normalizeBootOrderFromBackend(isValidBootOrderString(result.vm.boot_order) ? result.vm.boot_order : undefined),
         };
       }
       
@@ -481,8 +514,8 @@ export const vmAPI = {
             message: error.message, 
             stack: error.stack, 
             name: error.name,
-            status: (error as any).status,
-            details: (error as any).details,
+            status: isAPIError(error) ? error.status : undefined,
+            details: isAPIError(error) ? error.details : undefined,
           }
         : { error: String(error) };
       
@@ -494,19 +527,21 @@ export const vmAPI = {
       logger.error('[vmAPI.finalizeInstall] API error:', errorContext);
       
       // 더 명확한 에러 메시지 생성
-      if (error instanceof Error) {
-        const apiError = error as any;
-        if (apiError.status === 500 && apiError.details) {
-          const details = apiError.details;
-          let enhancedMessage = error.message;
-          
+      if (isAPIError(error) && error.status === 500 && error.details) {
+        const details = error.details;
+        let enhancedMessage = error.message;
+        
+        // 타입 가드로 안전하게 접근
+        if (isRecord(details)) {
           // 백엔드에서 제공한 상세 에러 정보 추가
           if (details.error || details.message) {
-            enhancedMessage = `${error.message}: ${details.error || details.message}`;
+            const errorMsg = typeof details.error === 'string' ? details.error : 
+                           typeof details.message === 'string' ? details.message : '';
+            enhancedMessage = `${error.message}: ${errorMsg}`;
           }
           
           // 특정 에러 타입에 대한 안내 추가
-          if (details.error && typeof details.error === 'string') {
+          if (typeof details.error === 'string') {
             if (details.error.includes('running') || details.error.includes('shutdown')) {
               enhancedMessage += '\n\nVM이 실행 중일 수 있습니다. VM을 중지한 후 다시 시도해주세요.';
             } else if (details.error.includes('CDROM') || details.error.includes('cdrom')) {
@@ -515,12 +550,12 @@ export const vmAPI = {
               enhancedMessage += '\n\nVM 설정을 업데이트하는 중 오류가 발생했습니다.';
             }
           }
-          
-          const enhancedError = new Error(enhancedMessage);
-          (enhancedError as any).status = 500;
-          (enhancedError as any).details = details;
-          throw enhancedError;
         }
+        
+        const enhancedError: APIErrorWithDetails = new Error(enhancedMessage);
+        enhancedError.status = 500;
+        enhancedError.details = details;
+        throw enhancedError;
       }
       
       throw error;

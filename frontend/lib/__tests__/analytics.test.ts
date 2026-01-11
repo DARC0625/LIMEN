@@ -54,7 +54,7 @@ describe('analytics', () => {
 
     it('does nothing on server side', () => {
       const originalWindow = global.window
-      // @ts-ignore
+      // @ts-expect-error - intentional deletion of global.window for server-side test
       delete global.window
 
       expect(() => trackPageView('/test')).not.toThrow()

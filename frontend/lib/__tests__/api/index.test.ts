@@ -65,7 +65,7 @@ describe('lib/api/index', () => {
   describe('getUserRole', () => {
     it('returns null on server side', async () => {
       const originalWindow = global.window
-      // @ts-ignore
+      // @ts-expect-error - intentional deletion of global.window for server-side test
       delete global.window
 
       const result = await getUserRole()
@@ -105,7 +105,7 @@ describe('lib/api/index', () => {
   describe('isApproved', () => {
     it('returns false on server side', async () => {
       const originalWindow = global.window
-      // @ts-ignore
+      // @ts-expect-error - intentional deletion of global.window for server-side test
       delete global.window
 
       const result = await isApproved()
