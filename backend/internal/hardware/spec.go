@@ -116,8 +116,10 @@ func DetectSpec() (*Spec, error) {
 	}
 
 	// Basic system info
-	hostname, _ := os.Hostname()
-	spec.Hostname = hostname
+	hostname, err := os.Hostname()
+	if err == nil {
+		spec.Hostname = hostname
+	}
 	spec.Architecture = runtime.GOARCH
 	spec.OS = runtime.GOOS
 
@@ -255,7 +257,10 @@ func detectMemory() (*MemoryInfo, error) {
 		}
 
 		key := parts[0]
-		value, _ := strconv.ParseFloat(parts[1], 64)
+		value, err := strconv.ParseFloat(parts[1], 64)
+		if err != nil {
+			continue
+		}
 
 		switch key {
 		case "MemTotal:":
@@ -373,7 +378,10 @@ func detectSecurity() (*SecurityInfo, error) {
 	// Check Secure Boot
 	if _, err := os.Stat("/sys/firmware/efi"); err == nil {
 		// Try to read SecureBoot variable
-		files, _ := os.ReadDir("/sys/firmware/efi/efivars")
+		files, err := os.ReadDir("/sys/firmware/efi/efivars")
+		if err != nil {
+			return spec, fmt.Errorf("failed to read efivars: %w", err)
+		}
 		for _, file := range files {
 			if strings.Contains(file.Name(), "SecureBoot") {
 				sec.SecureBoot = true

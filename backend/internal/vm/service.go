@@ -150,11 +150,11 @@ func (s *VMService) createVMInternal(name string, memoryMB int, vcpu int, osType
 	// 0. Cleanup existing resources (Libvirt domain and Disk)
 	// Check if domain exists in libvirt and cleanup
 	if dom, err := s.driver.LookupDomainByName(name); err == nil {
-		if active, _ := dom.IsActive(); active {
-			dom.Destroy()
+		if active, err := dom.IsActive(); err == nil && active {
+			_ = dom.Destroy()
 		}
-		dom.UndefineFlags(0) // 0 = default flags
-		dom.Free()
+		_ = dom.UndefineFlags(0) // 0 = default flags
+		_ = dom.Free()
 	}
 
 	// 1. Create empty disk for VM in vmDir using UUID instead of name
@@ -338,7 +338,7 @@ func (s *VMService) createVMInternal(name string, memoryMB int, vcpu int, osType
 	if err != nil {
 		return fmt.Errorf("failed to define domain: %w", err)
 	}
-	defer dom.Free()
+	defer func() { _ = dom.Free() }()
 
 	if err := dom.Create(); err != nil {
 		return fmt.Errorf("failed to start domain: %w", err)

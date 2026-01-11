@@ -200,6 +200,9 @@ func GetClientIP(r *http.Request) string {
 		return realIP
 	}
 	// Fallback to RemoteAddr
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
 	return ip
 }
