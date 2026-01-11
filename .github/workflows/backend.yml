@@ -1,0 +1,147 @@
+name: Backend CI/CD (Go)
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+
+env:
+  GO_VERSION: '1.23'
+
+jobs:
+  test:
+    name: Backend Test (CI-safe, no libvirt)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ./backend/go.sum
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run Go linter (golangci-lint)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: ./backend
+          args: --timeout=5m
+
+      - name: Format check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not formatted. Run 'gofmt -s -w .'"
+            gofmt -s -d .
+            exit 1
+          fi
+
+      - name: P0 Smoke Tests (1~3분, PR 필수)
+        # 핵심 기능 빠른 검증: health, auth 기본, validator
+        run: go test -tags smoke -short -v \
+          ./cmd/server/... \
+          ./internal/handlers/health_test.go \
+          ./internal/handlers/auth_test.go \
+          ./internal/validator/... || (echo "Smoke tests failed" && exit 1)
+
+      - name: Core Regression Tests (3~10분, PR/main merge)
+        # 핵심 비즈니스 로직: auth, VM lifecycle, DB, API 계약
+        # Note: libvirt-dependent tests are excluded via build tags
+        run: go test -tags regression -short -v -race -coverprofile=coverage.out \
+          ./internal/auth/... \
+          ./internal/middleware/... \
+          ./internal/handlers/... \
+          ./internal/models/... \
+          ./internal/database/... \
+          ./internal/errors/... || (echo "Regression tests failed" && exit 1)
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./backend/coverage.out
+          flags: backend
+          name: backend-coverage
+        continue-on-error: true
+
+  build:
+    name: Backend Build (CI-safe, no libvirt)
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build backend (CI-safe, no libvirt)
+        # Note: Production builds should use: go build -tags libvirt
+        # CI builds exclude libvirt code via build tags
+        run: go build -ldflags="-s -w" -trimpath -o server ./cmd/server
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-binary
+          path: ./backend/server
+          retention-days: 7
+
+  # Optional: Libvirt validation (manual trigger, self-hosted runner only)
+  libvirt-validation:
+    name: Libvirt Validation (Manual)
+    runs-on: self-hosted
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download dependencies
+        working-directory: ./backend
+        run: go mod download
+
+      - name: Build with libvirt
+        working-directory: ./backend
+        run: go build -tags libvirt -ldflags="-s -w" -trimpath -o server ./cmd/server
+
+      - name: Run libvirt tests
+        working-directory: ./backend
+        run: go test -tags libvirt -v ./internal/vm/...
+
