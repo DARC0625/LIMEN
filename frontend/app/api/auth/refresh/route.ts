@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
-      credentials: 'include',
+      // 서버 사이드에서는 credentials 옵션이 의미 없음, 쿠키는 헤더로 전달
     });
 
     if (!response.ok) {
