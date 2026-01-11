@@ -1,0 +1,5 @@
+# 외부 번들 해시 파일
+# 형식: <파일경로> <해시알고리즘> <해시값>
+# 예: public/novnc/rfb.js sha256 abc123...
+
+e114d1ac46e2b8bf45a40c34cfbc50ed280cd1206576512db20228aabe29b4b0  public/novnc/rfb.js

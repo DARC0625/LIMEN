@@ -1,0 +1,18 @@
+# 브라우저 호환성 타깃
+# Chromium, Firefox, WebKit 모두 지원
+
+# 최신 2개 버전의 주요 브라우저
+last 2 Chrome versions
+last 2 Firefox versions
+last 2 Safari versions
+last 2 Edge versions
+
+# 모바일 브라우저
+last 2 iOS versions
+last 2 ChromeAndroid versions
+
+# 최소 지원 버전 (호환성 보장)
+Chrome >= 90
+Firefox >= 88
+Safari >= 14
+Edge >= 90
