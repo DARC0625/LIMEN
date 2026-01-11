@@ -4,6 +4,9 @@ import (
 	"encoding/xml"
 	"fmt"
 	"time"
+
+	"github.com/DARC0625/LIMEN/backend/internal/logger"
+	"go.uber.org/zap"
 )
 
 // VMStats represents VM resource usage statistics
@@ -21,7 +24,11 @@ func (s *VMService) GetVMStats(vmName string) (*VMStats, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to lookup domain: %v", err)
 	}
-	defer dom.Free()
+	defer func() {
+		if err := dom.Free(); err != nil {
+			logger.Log.Warn("failed to free domain", zap.Error(err))
+		}
+	}()
 
 	// Check if domain is active
 	active, err := dom.IsActive()
@@ -68,23 +75,35 @@ func (s *VMService) getVMStatsFallback(dom Domain, vmName string) (*VMStats, err
 
 	// Parse total memory (configured maximum)
 	if domainXML.Memory.Unit == "KiB" {
-		fmt.Sscanf(domainXML.Memory.Text, "%d", &totalMemMB)
+		if _, err := fmt.Sscanf(domainXML.Memory.Text, "%d", &totalMemMB); err != nil {
+			return nil, fmt.Errorf("parse vm stats memory line %q: %w", domainXML.Memory.Text, err)
+		}
 		totalMemMB = totalMemMB / 1024
 	} else if domainXML.Memory.Unit == "MiB" || domainXML.Memory.Unit == "MB" {
-		fmt.Sscanf(domainXML.Memory.Text, "%d", &totalMemMB)
+		if _, err := fmt.Sscanf(domainXML.Memory.Text, "%d", &totalMemMB); err != nil {
+			return nil, fmt.Errorf("parse vm stats memory line %q: %w", domainXML.Memory.Text, err)
+		}
 	} else if domainXML.Memory.Unit == "GiB" || domainXML.Memory.Unit == "GB" {
-		fmt.Sscanf(domainXML.Memory.Text, "%d", &totalMemMB)
+		if _, err := fmt.Sscanf(domainXML.Memory.Text, "%d", &totalMemMB); err != nil {
+			return nil, fmt.Errorf("parse vm stats memory line %q: %w", domainXML.Memory.Text, err)
+		}
 		totalMemMB = totalMemMB * 1024
 	}
 
 	// Parse current memory (actual allocated/used)
 	if domainXML.CurrentMemory.Unit == "KiB" {
-		fmt.Sscanf(domainXML.CurrentMemory.Text, "%d", &currentMemMB)
+		if _, err := fmt.Sscanf(domainXML.CurrentMemory.Text, "%d", &currentMemMB); err != nil {
+			return nil, fmt.Errorf("parse vm stats currentMemory line %q: %w", domainXML.CurrentMemory.Text, err)
+		}
 		currentMemMB = currentMemMB / 1024
 	} else if domainXML.CurrentMemory.Unit == "MiB" || domainXML.CurrentMemory.Unit == "MB" {
-		fmt.Sscanf(domainXML.CurrentMemory.Text, "%d", &currentMemMB)
+		if _, err := fmt.Sscanf(domainXML.CurrentMemory.Text, "%d", &currentMemMB); err != nil {
+			return nil, fmt.Errorf("parse vm stats currentMemory line %q: %w", domainXML.CurrentMemory.Text, err)
+		}
 	} else if domainXML.CurrentMemory.Unit == "GiB" || domainXML.CurrentMemory.Unit == "GB" {
-		fmt.Sscanf(domainXML.CurrentMemory.Text, "%d", &currentMemMB)
+		if _, err := fmt.Sscanf(domainXML.CurrentMemory.Text, "%d", &currentMemMB); err != nil {
+			return nil, fmt.Errorf("parse vm stats currentMemory line %q: %w", domainXML.CurrentMemory.Text, err)
+		}
 		currentMemMB = currentMemMB * 1024
 	}
 

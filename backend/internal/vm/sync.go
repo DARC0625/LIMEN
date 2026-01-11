@@ -22,7 +22,11 @@ func (s *VMService) SyncVMStatus(vm *models.VM) error {
 		}
 		return err
 	}
-	defer dom.Free()
+	defer func() {
+		if err := dom.Free(); err != nil {
+			logger.Log.Warn("failed to free domain", zap.Error(err))
+		}
+	}()
 
 	// Check if domain is active (running)
 	active, err := dom.IsActive()
@@ -95,7 +99,11 @@ func (s *VMService) GetVMStatusFromLibvirt(vmName string) (models.VMStatus, erro
 		}
 		return "", err
 	}
-	defer dom.Free()
+	defer func() {
+		if err := dom.Free(); err != nil {
+			logger.Log.Warn("failed to free domain", zap.Error(err))
+		}
+	}()
 
 	active, err := dom.IsActive()
 	if err != nil {
@@ -121,6 +129,10 @@ func (s *VMService) EnsureVMExists(vm *models.VM) error {
 		}
 		return err
 	}
-	defer dom.Free()
+	defer func() {
+		if err := dom.Free(); err != nil {
+			logger.Log.Warn("failed to free domain", zap.Error(err))
+		}
+	}()
 	return nil
 }

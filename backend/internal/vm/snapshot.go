@@ -23,7 +23,11 @@ func (s *VMService) CreateSnapshot(vmID uint, snapshotName, description string) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to lookup domain: %w", err)
 	}
-	defer dom.Free()
+	defer func() {
+		if err := dom.Free(); err != nil {
+			logger.Log.Warn("failed to free domain", zap.Error(err))
+		}
+	}()
 
 	// Generate unique snapshot name (UUID)
 	snapshotUUID := fmt.Sprintf("%d-%d", vmID, time.Now().Unix())
@@ -116,7 +120,11 @@ func (s *VMService) RestoreSnapshot(snapshotID uint) error {
 	if err != nil {
 		return fmt.Errorf("failed to lookup domain: %w", err)
 	}
-	defer dom.Free()
+	defer func() {
+		if err := dom.Free(); err != nil {
+			logger.Log.Warn("failed to free domain", zap.Error(err))
+		}
+	}()
 
 	// Check if VM is running
 	active, err := dom.IsActive()
@@ -206,7 +214,11 @@ func (s *VMService) DeleteSnapshot(snapshotID uint) error {
 	if err != nil {
 		return fmt.Errorf("failed to lookup domain: %w", err)
 	}
-	defer dom.Free()
+	defer func() {
+		if err := dom.Free(); err != nil {
+			logger.Log.Warn("failed to free domain", zap.Error(err))
+		}
+	}()
 
 	// Lookup snapshot in libvirt
 	snap, err := dom.SnapshotLookupByName(snapshot.LibvirtName)
