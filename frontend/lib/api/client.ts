@@ -156,7 +156,7 @@ export async function apiRequest<T>(
         ...fetchOptions,
         body: requestBody,
         headers,
-        credentials: 'include', // 쿠키 포함 (Refresh Token)
+        credentials: 'include', // ★ 필수: 쿠키 기반 인증을 위해 항상 포함
         signal: controller?.signal,
       });
       
