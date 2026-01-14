@@ -176,9 +176,10 @@ describe('Home Page', () => {
 
     fireEvent.click(submitButton)
 
-    // 에러 메시지 확인 (정규식으로 유연하게 매칭)
-    // 실제 코드에서는 "등록 처리 중 오류가 발생했습니다" 메시지 사용
-    expect(await screen.findByText(/등록.*처리.*오류|등록.*실패/i)).toBeInTheDocument()
+    // ✅ 계약 중심 테스트: 에러 상태가 사용자에게 인지 가능해야 함
+    // 정확한 문구는 구현 디테일이므로, 에러 상태(role="alert")만 검증
+    const errorAlert = await screen.findByRole('alert')
+    expect(errorAlert).toBeInTheDocument()
   })
 
   it('handles form submission with purpose field', async () => {

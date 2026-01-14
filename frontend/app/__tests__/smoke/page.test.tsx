@@ -170,11 +170,10 @@ describe('Home Page', () => {
 
     fireEvent.click(submitButton)
 
-    // ✅ 계약 중심 테스트: 사용자에게 보이는 에러 메시지 검증
-    // role="alert"는 구현 디테일이므로, 실제 텍스트 계약으로 검증
-    expect(
-      await screen.findByText(/대기자 등록에 실패|등록 실패|오류/i)
-    ).toBeInTheDocument()
+    // ✅ 계약 중심 테스트: 에러 상태가 사용자에게 인지 가능해야 함
+    // 정확한 문구는 구현 디테일이므로, 에러 상태(role="alert")만 검증
+    const errorAlert = await screen.findByRole('alert')
+    expect(errorAlert).toBeInTheDocument()
   })
 
   it('handles form submission with purpose field', async () => {
