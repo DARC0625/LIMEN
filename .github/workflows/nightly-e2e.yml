@@ -5,6 +5,12 @@ on:
     # 매일 한국시간 오전 3시 (UTC 18:00) 실행
     - cron: '0 18 * * *'
   workflow_dispatch:  # 수동 실행 가능
+    inputs:
+      run_integration:
+        description: 'Run integration E2E tests (requires secrets)'
+        required: false
+        default: 'false'
+        type: boolean
 
 env:
   NODE_VERSION: '20'
@@ -85,9 +91,9 @@ jobs:
         working-directory: ./frontend
 
     # ✅ Integration은 실서버/계정 의존이 있으므로 조건부 실행
-    # secrets가 설정되어 있을 때만 실행 (self-hosted runner에서만 실행하도록 설정)
+    # workflow_dispatch inputs 기반 분기 (secrets 조건으로 workflow 파싱 금지)
     if: |
-      ${{ secrets.ADMIN_USER != '' && secrets.ADMIN_PASS != '' && (secrets.BASE_URL != '' || vars.BASE_URL != '') }}
+      ${{ github.event_name == 'workflow_dispatch' && inputs.run_integration == 'true' }}
     
     steps:
       - name: Checkout code
@@ -112,8 +118,9 @@ jobs:
           CI: true
           ADMIN_USER: ${{ secrets.ADMIN_USER }}
           ADMIN_PASS: ${{ secrets.ADMIN_PASS }}
-          BASE_URL: ${{ secrets.BASE_URL || 'https://staging.limen.kr' }}
-          # ✅ Integration은 실서버 의존이므로 secrets에서 가져옴
+          BASE_URL: ${{ secrets.BASE_URL || vars.BASE_URL || 'https://staging.limen.kr' }}
+          # ✅ Integration은 실서버 의존이므로 secrets/vars에서 가져옴
+          # secrets 존재 여부는 job 내부에서만 사용 (workflow 파싱 단계에서는 사용 안 함)
 
       - name: Upload Playwright report (integration)
         if: failure()

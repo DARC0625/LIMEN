@@ -9,6 +9,14 @@
  * - 필요한 API만 가짜로 응답
  * - CI Gate에서 안정적으로 실행 가능
  * 
+ * ✅ 테스트 코드 작성 원칙 (미래 대응)
+ * - 브라우저별 분기 로직 금지 (if (browser === 'firefox'))
+ * - 타이밍 의존 sleep 최소화
+ * - DOM 내부 구조 직접 의존 금지
+ * - 사용자 행위 중심
+ * - 상태 전이는 observable 결과로만 검증
+ * - 모든 E2E는 idempotent
+ * 
  * 실행:
  * npm run test:e2e
  * 또는
@@ -36,6 +44,7 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     // ✅ Given: 로그인 상태 (토큰이 localStorage에 있음)
     // ✅ Hermetic: 유효한 origin에서 localStorage 접근
     // initScript로 goto 이전에 localStorage 주입 (SecurityError 방지)
+    // page.evaluate(localStorage) 접근은 반드시 동일 origin에서만
     await context.addInitScript(() => {
       localStorage.setItem('refresh_token', 'test-refresh-token');
       localStorage.setItem('token_expires_at', (Date.now() - 1000).toString()); // 만료된 상태 (refresh 트리거)
@@ -44,6 +53,19 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     
     // ✅ 유효한 origin으로 이동 (localStorage 접근 가능)
     await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
+    
+    // ✅ Given: 초기 저장소 상태 확인 (명확한 단계별 상태 명명)
+    const storageStateBefore = await page.evaluate(() => {
+      return {
+        refreshToken: localStorage.getItem('refresh_token'),
+        expiresAt: localStorage.getItem('token_expires_at'),
+        csrfToken: sessionStorage.getItem('csrf_token'),
+      };
+    });
+    
+    expect(storageStateBefore.refreshToken).toBe('test-refresh-token');
+    expect(storageStateBefore.expiresAt).toBeTruthy();
+    expect(storageStateBefore.csrfToken).toBe('test-csrf-token');
 
     // ✅ 완전 모킹: 모든 네트워크를 차단하고 필요한 API만 허용
     await context.route('**/*', async (route) => {
@@ -87,7 +109,7 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     expect(storageState.csrfToken).toBeNull();
 
     // ✅ Then: 모든 저장소 정리 확인
-    const storageState = await page.evaluate(() => {
+    const storageStateAfter = await page.evaluate(() => {
       return {
         refreshToken: localStorage.getItem('refresh_token'),
         expiresAt: localStorage.getItem('token_expires_at'),
@@ -95,9 +117,9 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       };
     });
 
-    expect(storageState.refreshToken).toBeNull();
-    expect(storageState.expiresAt).toBeNull();
-    expect(storageState.csrfToken).toBeNull();
+    expect(storageStateAfter.refreshToken).toBeNull();
+    expect(storageStateAfter.expiresAt).toBeNull();
+    expect(storageStateAfter.csrfToken).toBeNull();
 
     // ✅ Then: /login?reason=... 리다이렉트 확인
     await navigationPromise.catch(() => {}); // 리다이렉트로 인한 navigation 실패는 무시
@@ -129,6 +151,7 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
 
     // ✅ Hermetic: 유효한 origin에서 localStorage 접근
     // initScript로 goto 이전에 localStorage 주입 (SecurityError 방지)
+    // page.evaluate(localStorage) 접근은 반드시 동일 origin에서만
     await context.addInitScript(() => {
       localStorage.setItem('refresh_token', 'test-refresh-token');
       localStorage.setItem('token_expires_at', (Date.now() - 1000).toString()); // 만료된 상태
@@ -138,6 +161,19 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     // ✅ 유효한 origin으로 이동 (localStorage 접근 가능)
     await page1.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
     await page2.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
+    
+    // ✅ Given: 초기 저장소 상태 확인 (명확한 단계별 상태 명명)
+    const storageStateBefore = await page1.evaluate(() => {
+      return {
+        refreshToken: localStorage.getItem('refresh_token'),
+        expiresAt: localStorage.getItem('token_expires_at'),
+        csrfToken: sessionStorage.getItem('csrf_token'),
+      };
+    });
+    
+    expect(storageStateBefore.refreshToken).toBe('test-refresh-token');
+    expect(storageStateBefore.expiresAt).toBeTruthy();
+    expect(storageStateBefore.csrfToken).toBe('test-csrf-token');
 
     // ✅ 완전 모킹: 모든 네트워크를 차단하고 필요한 API만 허용
     let refreshCallCount = 0;
@@ -186,16 +222,26 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     // 실제로는 single-flight가 완벽하게 작동하면 1회일 수 있음
     expect(refreshCallCount).toBeLessThanOrEqual(2);
     
-    // ✅ Then: 두 페이지 모두 정상적으로 토큰 획득 확인
-    const token1 = await page1.evaluate(() => {
-      return localStorage.getItem('refresh_token');
-    });
-    const token2 = await page2.evaluate(() => {
-      return localStorage.getItem('refresh_token');
+    // ✅ Then: 두 페이지 모두 정상적으로 토큰 획득 확인 (명확한 단계별 상태 명명)
+    const storageStateAfter = await page1.evaluate(() => {
+      return {
+        refreshToken: localStorage.getItem('refresh_token'),
+        expiresAt: localStorage.getItem('token_expires_at'),
+        csrfToken: sessionStorage.getItem('csrf_token'),
+      };
     });
     
-    expect(token1).toBe('new-refresh-token');
-    expect(token2).toBe('new-refresh-token');
+    const storageStateAfter2 = await page2.evaluate(() => {
+      return {
+        refreshToken: localStorage.getItem('refresh_token'),
+        expiresAt: localStorage.getItem('token_expires_at'),
+        csrfToken: sessionStorage.getItem('csrf_token'),
+      };
+    });
+    
+    // ✅ 상태 전이는 observable 결과로만 검증 (사용자 행위 중심)
+    expect(storageStateAfter.refreshToken).toBe('new-refresh-token');
+    expect(storageStateAfter2.refreshToken).toBe('new-refresh-token');
     
     await page1.close();
     await page2.close();
