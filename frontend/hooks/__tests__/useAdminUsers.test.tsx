@@ -17,6 +17,7 @@ import {
   useApproveUser,
 } from '../useAdminUsers'
 import { useToast } from '../../components/ToastContainer'
+import type { UserWithStats } from '../../lib/types'
 
 // 의존성 모킹
 jest.mock('../../components/ToastContainer')
@@ -73,7 +74,7 @@ const mockAdminAPI = adminAPI as jest.Mocked<typeof adminAPI>
 const createTestQueryClient = () =>
   new QueryClient({
     defaultOptions: {
-      queries: { retry: false, cacheTime: 0, staleTime: 0 },
+      queries: { retry: false, gcTime: 0, staleTime: 0 }, // ✅ React Query v5: cacheTime → gcTime
       mutations: { retry: false },
     },
     logger: { log: () => {}, warn: () => {}, error: () => {} }, // 테스트 로그 정리용
@@ -89,10 +90,25 @@ const makeWrapper = () => {
 // 하위 호환성을 위해 createWrapper도 유지
 const createWrapper = makeWrapper
 
+// ✅ User 타입 mock factory (정석 템플릿)
+const makeUser = (overrides: Partial<UserWithStats> = {}): UserWithStats => ({
+  id: 1,
+  uuid: 'test-uuid-1',
+  username: 'user1',
+  role: 'user',
+  approved: true,
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
+  vm_count: 0,
+  total_cpu: 0,
+  total_memory: 0,
+  ...overrides,
+})
+
 describe('useAdminUsers', () => {
-  const mockUsers = [
-    { id: 1, username: 'admin', role: 'admin', email: 'admin@limen.kr' },
-    { id: 2, username: 'user1', role: 'user', email: 'user1@limen.kr' },
+  const mockUsers: UserWithStats[] = [
+    makeUser({ id: 1, username: 'admin', role: 'admin' }),
+    makeUser({ id: 2, username: 'user1', role: 'user' }),
   ]
 
   beforeEach(() => {
@@ -120,10 +136,10 @@ describe('useAdminUsers', () => {
   })
 
   it('should sort users by role and username', async () => {
-    const unsortedUsers = [
-      { id: 2, username: 'user1', role: 'user', email: 'user1@limen.kr' },
-      { id: 1, username: 'admin', role: 'admin', email: 'admin@limen.kr' },
-      { id: 3, username: 'user2', role: 'user', email: 'user2@limen.kr' },
+    const unsortedUsers: UserWithStats[] = [
+      makeUser({ id: 2, username: 'user1', role: 'user' }),
+      makeUser({ id: 1, username: 'admin', role: 'admin' }),
+      makeUser({ id: 3, username: 'user2', role: 'user' }),
     ]
 
     // ✅ adminAPI를 직접 mock
@@ -162,12 +178,9 @@ describe('useAdminUser', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     
-    // ✅ adminAPI를 직접 mock
+    // ✅ adminAPI를 직접 mock (User 타입 스펙에 맞춤)
     mockAdminAPI.getUser.mockResolvedValue({
-      id: 1,
-      username: 'user1',
-      role: 'user',
-      email: 'user1@limen.kr',
+      ...makeUser({ id: 1, username: 'user1', role: 'user' }),
       vms: [],
     } as any)
   })
@@ -178,6 +191,8 @@ describe('useAdminUser', () => {
 
   it('should fetch user details successfully', async () => {
     const userId = 1
+    const mockUser = makeUser({ id: userId, username: 'user1', role: 'user' })
+    mockAdminAPI.getUser.mockResolvedValue(mockUser as any)
 
     const { result } = renderHook(() => useAdminUser(userId), { wrapper: makeWrapper() })
 
@@ -209,12 +224,10 @@ describe('useCreateUser', () => {
       warning: jest.fn(),
     } as any)
     
-    // ✅ adminAPI를 직접 mock
-    mockAdminAPI.createUser.mockResolvedValue({
-      id: 1,
-      username: 'newuser',
-      role: 'user',
-    } as any)
+    // ✅ adminAPI를 직접 mock (User 타입 스펙에 맞춤)
+    mockAdminAPI.createUser.mockResolvedValue(
+      makeUser({ id: 1, username: 'newuser', role: 'user' })
+    )
   })
 
   afterEach(() => {
@@ -231,13 +244,13 @@ describe('useCreateUser', () => {
       await result.current.mutateAsync(newUser)
     })
 
-    // ✅ React Query 상태 전이가 완료될 때까지 대기
+    // ✅ React Query 상태 전이가 완료될 때까지 대기 (isSuccess도 waitFor로 감싸기)
     await waitFor(() => {
       expect(result.current.isPending).toBe(false)
+      expect(result.current.isSuccess).toBe(true)
     })
 
     // mutateAsync 완료 후 상태 검증
-    expect(result.current.isSuccess).toBe(true)
     expect(result.current.data).toBeDefined()
     expect(mockAdminAPI.createUser).toHaveBeenCalledWith(newUser)
   })
@@ -279,12 +292,10 @@ describe('useUpdateUser', () => {
       warning: jest.fn(),
     } as any)
     
-    // ✅ adminAPI를 직접 mock
-    mockAdminAPI.updateUser.mockResolvedValue({
-      id: 1,
-      username: 'user1',
-      role: 'admin',
-    } as any)
+    // ✅ adminAPI를 직접 mock (User 타입 스펙에 맞춤)
+    mockAdminAPI.updateUser.mockResolvedValue(
+      makeUser({ id: 1, username: 'user1', role: 'admin' })
+    )
   })
 
   afterEach(() => {
@@ -302,12 +313,12 @@ describe('useUpdateUser', () => {
       await result.current.mutateAsync({ id: userId, data: updateData })
     })
 
-    // ✅ React Query 상태 전이가 완료될 때까지 대기
+    // ✅ React Query 상태 전이가 완료될 때까지 대기 (isSuccess도 waitFor로 감싸기)
     await waitFor(() => {
       expect(result.current.isPending).toBe(false)
+      expect(result.current.isSuccess).toBe(true)
     })
 
-    expect(result.current.isSuccess).toBe(true)
     expect(result.current.data).toBeDefined()
     expect(mockAdminAPI.updateUser).toHaveBeenCalledWith(userId, updateData)
   })
@@ -341,12 +352,12 @@ describe('useDeleteUser', () => {
       await result.current.mutateAsync(userId)
     })
 
-    // ✅ React Query 상태 전이가 완료될 때까지 대기
+    // ✅ React Query 상태 전이가 완료될 때까지 대기 (isSuccess도 waitFor로 감싸기)
     await waitFor(() => {
       expect(result.current.isPending).toBe(false)
+      expect(result.current.isSuccess).toBe(true)
     })
 
-    expect(result.current.isSuccess).toBe(true)
     expect(result.current.error).toBeNull() // React Query는 에러가 없을 때 null 반환
     expect(mockAdminAPI.deleteUser).toHaveBeenCalledWith(userId)
   })
@@ -362,13 +373,10 @@ describe('useApproveUser', () => {
       warning: jest.fn(),
     } as any)
     
-    // ✅ adminAPI를 직접 mock
-    mockAdminAPI.approveUser.mockResolvedValue({
-      id: 1,
-      username: 'user1',
-      role: 'user',
-      approved: true,
-    } as any)
+    // ✅ adminAPI를 직접 mock (User 타입 스펙에 맞춤)
+    mockAdminAPI.approveUser.mockResolvedValue(
+      makeUser({ id: 1, username: 'user1', role: 'user', approved: true })
+    )
   })
 
   afterEach(() => {
@@ -385,12 +393,12 @@ describe('useApproveUser', () => {
       await result.current.mutateAsync(userId)
     })
 
-    // ✅ React Query 상태 전이가 완료될 때까지 대기
+    // ✅ React Query 상태 전이가 완료될 때까지 대기 (isSuccess도 waitFor로 감싸기)
     await waitFor(() => {
       expect(result.current.isPending).toBe(false)
+      expect(result.current.isSuccess).toBe(true)
     })
 
-    expect(result.current.isSuccess).toBe(true)
     expect(result.current.data).toBeDefined()
     expect(mockAdminAPI.approveUser).toHaveBeenCalledWith(userId)
   })
