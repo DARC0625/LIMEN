@@ -13,9 +13,12 @@ const isCI = !!process.env.CI;
 export default defineConfig({
   testDir: './e2e',
   // ✅ CI Gate: hermetic만 실행 (파일 단위 exclude)
+  // - PR Gate (ci-frontend.yml): token-refresh.spec.ts만 실행
+  // - Nightly (nightly-e2e.yml): token-refresh.spec.ts만 실행 (hermetic cross-browser)
+  // - Integration: nightly-e2e.yml에서 별도 job으로 실행 (vm-console-e2e.spec.ts, compatibility.spec.ts)
   // integration E2E는 별도 러너/야간으로 분리
   testMatch: isCI
-    ? ['**/token-refresh.spec.ts']           // CI Gate: hermetic only
+    ? ['**/token-refresh.spec.ts']           // CI/Nightly: hermetic only
     : ['**/*.spec.ts'],                      // 로컬: 전체
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

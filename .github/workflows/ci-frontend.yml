@@ -120,8 +120,11 @@ jobs:
           path: ./frontend/.next
           retention-days: 7
 
+  # ✅ PR Gate: Hermetic + Chromium Only
+  # 목표: "토큰 꼬임" 같은 P0를 항상 막는다 (신뢰성 1순위)
+  # 멀티플랫폼 커버리지는 nightly-e2e.yml에서 담당
   e2e-frontend:
-    name: Frontend E2E (Hermetic Only)
+    name: Frontend E2E (PR Gate - Hermetic Only)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -145,7 +148,7 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Run E2E tests (hermetic only)
+      - name: Run E2E tests (hermetic only, chromium)
         run: npm run test:e2e
         env:
           CI: true
@@ -155,7 +158,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-pr-gate
           path: frontend/playwright-report
           retention-days: 7
 
@@ -163,6 +166,6 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-test-results
+          name: playwright-test-results-pr-gate
           path: frontend/test-results
           retention-days: 7

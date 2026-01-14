@@ -1,0 +1,152 @@
+name: Nightly E2E (Cross-Browser + Integration)
+
+on:
+  schedule:
+    # 매일 한국시간 오전 3시 (UTC 18:00) 실행
+    - cron: '0 18 * * *'
+  workflow_dispatch:  # 수동 실행 가능
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ✅ Cross-Browser Hermetic Sweep
+  # PR Gate는 chromium-only, Nightly는 3브라우저 전부 실행
+  e2e-hermetic-cross-browser:
+    name: E2E Hermetic (Cross-Browser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    strategy:
+      fail-fast: false  # 한 브라우저 실패해도 나머지 계속 실행
+      matrix:
+        browser: [chromium, firefox, webkit]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: ./frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Run E2E hermetic tests (${{ matrix.browser }})
+        run: npm run test:e2e
+        env:
+          CI: true
+          # ✅ Nightly는 모든 브라우저 실행 (playwright.config.ts에서 testMatch로 전체 허용)
+          # 하지만 실제로는 token-refresh.spec.ts만 실행됨 (hermetic only)
+
+      - name: Upload Playwright report (${{ matrix.browser }})
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: frontend/playwright-report
+          retention-days: 14
+
+      - name: Upload test results (${{ matrix.browser }})
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results-${{ matrix.browser }}
+          path: frontend/test-results
+          retention-days: 14
+
+      - name: Upload trace (${{ matrix.browser }})
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-trace-${{ matrix.browser }}
+          path: frontend/test-results
+          retention-days: 14
+
+  # ✅ Integration Sweep (실서버 의존)
+  # vm-console-e2e.spec.ts, compatibility.spec.ts
+  # 주의: self-hosted runner가 준비되면 이 job을 self-hosted로 이동
+  e2e-integration:
+    name: E2E Integration (Real Server)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    # ✅ Integration은 실서버/계정 의존이 있으므로 조건부 실행
+    # 환경변수가 없으면 스킵 (self-hosted runner에서만 실행하도록 설정)
+    if: |
+      env.ADMIN_USER != '' && 
+      env.ADMIN_PASS != '' && 
+      env.BASE_URL != ''
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: ./frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E integration tests
+        run: npm run test:e2e:integration
+        env:
+          CI: true
+          ADMIN_USER: ${{ secrets.ADMIN_USER }}
+          ADMIN_PASS: ${{ secrets.ADMIN_PASS }}
+          BASE_URL: ${{ secrets.BASE_URL || 'https://staging.limen.kr' }}
+          # ✅ Integration은 실서버 의존이므로 secrets에서 가져옴
+
+      - name: Upload Playwright report (integration)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-integration
+          path: frontend/playwright-report
+          retention-days: 14
+
+      - name: Upload test results (integration)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results-integration
+          path: frontend/test-results
+          retention-days: 14
+
+  # ✅ Cross-Browser Summary
+  # 모든 브라우저 결과를 종합하여 리포트
+  e2e-summary:
+    name: E2E Summary
+    runs-on: ubuntu-latest
+    needs: [e2e-hermetic-cross-browser]
+    if: always()
+
+    steps:
+      - name: Check results
+        run: |
+          echo "✅ Cross-Browser Hermetic Sweep 완료"
+          echo "브라우저별 결과는 각 job에서 확인하세요"
+          echo ""
+          echo "다음 단계:"
+          echo "- Self-hosted runner 준비 시 integration job을 self-hosted로 이동"
+          echo "- 기관망/프록시 조건 추가 검증"
