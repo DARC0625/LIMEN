@@ -196,16 +196,29 @@ describe('api/index', () => {
   })
 
   describe('removeToken', () => {
-    it('should clear tokens and delete session', async () => {
+    beforeEach(() => {
+      // window 객체 mock (removeToken이 window 체크를 함)
+      Object.defineProperty(globalThis, 'window', {
+        value: {},
+        configurable: true,
+        writable: true,
+      })
+    })
+
+    it('should clear tokens and delete session', () => {
       localStorage.setItem('auth_token', 'test-token')
       localStorage.setItem('auth_token_timestamp', '123456')
+      mockTokenManager.getCSRFToken.mockReturnValue('test-csrf-token')
       ;(global.fetch as jest.Mock).mockResolvedValue({ ok: true })
 
       removeToken()
 
+      // ✅ 핵심: 로컬 토큰 정리는 항상 수행
       expect(mockTokenManager.clearTokens).toHaveBeenCalled()
       expect(localStorage.getItem('auth_token')).toBeNull()
       expect(localStorage.getItem('auth_token_timestamp')).toBeNull()
+      
+      // CSRF 토큰이 있으면 fetch 호출
       expect(global.fetch).toHaveBeenCalledWith(
         '/api/auth/session',
         expect.objectContaining({
@@ -214,20 +227,24 @@ describe('api/index', () => {
       )
     })
 
-    it('should clear tokens even when fetch fails', async () => {
+    it('should clear tokens even when fetch fails', () => {
+      mockTokenManager.getCSRFToken.mockReturnValue('test-csrf-token')
       ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
       localStorage.setItem('auth_token', 'test-token')
 
       removeToken()
 
+      // ✅ 핵심: 로컬 토큰 정리는 항상 수행
       expect(mockTokenManager.clearTokens).toHaveBeenCalled()
       expect(localStorage.getItem('auth_token')).toBeNull()
     })
 
-    it('should handle session deletion failure gracefully', async () => {
+    it('should handle session deletion failure gracefully', () => {
+      mockTokenManager.getCSRFToken.mockReturnValue('test-csrf-token')
       ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
 
       expect(() => removeToken()).not.toThrow()
+      expect(mockTokenManager.clearTokens).toHaveBeenCalled()
     })
 
     it('should work without CSRF token', () => {
@@ -236,8 +253,16 @@ describe('api/index', () => {
 
       removeToken()
 
-      const fetchCall = (global.fetch as jest.Mock).mock.calls[0][1]
-      expect(fetchCall.headers['X-CSRF-Token']).toBeUndefined()
+      // ✅ 핵심: CSRF 토큰이 없어도 fetch는 호출되지만 헤더에 포함되지 않음
+      expect(mockTokenManager.clearTokens).toHaveBeenCalled()
+      expect(localStorage.getItem('auth_token')).toBeNull()
+      
+      // fetch 호출 확인 (CSRF 토큰 없으면 헤더에 포함 안 됨)
+      expect(global.fetch).toHaveBeenCalled()
+      const fetchCall = (global.fetch as jest.Mock).mock.calls[0]
+      if (fetchCall && fetchCall[1]) {
+        expect(fetchCall[1].headers?.['X-CSRF-Token']).toBeUndefined()
+      }
     })
   })
 

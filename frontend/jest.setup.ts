@@ -1,14 +1,7 @@
 import '@testing-library/jest-dom';
 
-// TextEncoder/TextDecoder (jsdom에서 종종 누락)
-import { TextEncoder, TextDecoder } from 'util';
-
-if (!globalThis.TextEncoder) {
-  globalThis.TextEncoder = TextEncoder;
-}
-if (!globalThis.TextDecoder) {
-  globalThis.TextDecoder = TextDecoder;
-}
+// ✅ Node 20 + Jest + jsdom 환경에서는 TextEncoder/TextDecoder가 이미 글로벌로 존재
+// polyfill 시대의 유물이므로 제거 (최신/표준 철학에 맞음)
 
 // localStorage mock (node 환경에서 필요)
 // jsdom/node 둘 다 안전하게 동작

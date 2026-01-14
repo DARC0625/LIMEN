@@ -49,6 +49,7 @@ describe('authAPI', () => {
       access_token: 'test-access-token',
       refresh_token: 'test-refresh-token',
       expires_in: 900,
+      success: true, // ✅ 실제 API 반환 스펙에 맞춤
     }
 
     ;(global.fetch as jest.Mock).mockResolvedValue({
