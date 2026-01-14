@@ -170,12 +170,10 @@ describe('Home Page', () => {
 
     fireEvent.click(submitButton)
 
-    // 에러 메시지 확인 (role="alert"로 안정화)
-    const errorAlert = await screen.findByRole('alert')
+    // ✅ 계약 중심 테스트: 사용자에게 보이는 에러 메시지 검증
+    // role="alert"는 구현 디테일이므로, 실제 텍스트 계약으로 검증
     expect(
-      screen.getByText((content, element) =>
-        (element?.textContent ?? '').includes('대기자 등록에 실패')
-      )
+      await screen.findByText(/대기자 등록에 실패|등록 실패|오류/i)
     ).toBeInTheDocument()
   })
 

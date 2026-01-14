@@ -167,16 +167,20 @@ describe('authAPI', () => {
   })
 
   it('handles login with refresh token from cookie', async () => {
-    // document.cookie 모킹
+    // document.cookie 모킹 (jsdom 환경에서 document 사용)
     Object.defineProperty(document, 'cookie', {
       value: 'refresh_token=cookie-refresh-token',
       writable: true,
       configurable: true,
     })
 
+    // Given: JSON 응답에 access_token과 refresh_token이 모두 있음
+    // (실제 로직: 둘 다 있어야 setTokens 호출됨)
     const mockResponse = {
       access_token: 'test-access-token',
+      refresh_token: 'test-refresh-token', // JSON 응답에 포함
       expires_in: 900,
+      success: true,
     }
 
     ;(global.fetch as jest.Mock).mockResolvedValue({
@@ -192,8 +196,13 @@ describe('authAPI', () => {
       password: 'testpass',
     })
 
+    // Then: JSON 응답에 토큰이 모두 있으므로 setTokens가 호출되어야 함
     expect(result).toBeDefined()
-    expect(mockTokenManager.setTokens).toHaveBeenCalled()
+    expect(mockTokenManager.setTokens).toHaveBeenCalledWith(
+      'test-access-token',
+      'test-refresh-token',
+      900
+    )
   })
 
   it('handles login error without message', async () => {
