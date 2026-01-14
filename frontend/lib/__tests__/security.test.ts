@@ -211,7 +211,8 @@ describe('security', () => {
       expect(localStorage.getItem('auth_token_timestamp')).toBe('123456')
     })
 
-    it('sends broadcast message', () => {
+    it('sends broadcast message when BroadcastChannel exists', async () => {
+      // ✅ 환경 존재 계약: BroadcastChannel이 존재할 때만 postMessage
       const mockChannel = {
         postMessage: jest.fn(),
         close: jest.fn(),
@@ -220,12 +221,30 @@ describe('security', () => {
 
       forceLogout('test reason')
 
+      // notifyAuthEvent는 동적 import를 사용하므로 약간의 대기 필요
+      await new Promise(resolve => setTimeout(resolve, 10))
+
       expect(mockChannel.postMessage).toHaveBeenCalledWith({
         type: 'AUTH_EVENT',
         reason: 'test reason',
         action: 'log',
       })
       expect(mockChannel.close).toHaveBeenCalled()
+    })
+
+    it('does not send broadcast message when BroadcastChannel does not exist', async () => {
+      // ✅ 환경 존재 계약: BroadcastChannel이 없으면 postMessage하지 않음
+      const originalBroadcastChannel = global.BroadcastChannel
+      // @ts-expect-error - intentional deletion for test
+      delete global.BroadcastChannel
+
+      expect(() => forceLogout('test reason')).not.toThrow()
+
+      // notifyAuthEvent는 동적 import를 사용하므로 약간의 대기 필요
+      await new Promise(resolve => setTimeout(resolve, 10))
+
+      // Cleanup
+      global.BroadcastChannel = originalBroadcastChannel
     })
   })
 
