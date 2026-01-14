@@ -195,8 +195,10 @@ export function useApproveUser() {
       const previousUser = queryClient.getQueryData<UserWithStats>(['admin', 'users', userId]);
 
       // ✅ 즉시 캐시 업데이트 (1 frame 내 반영)
+      // ✅ CI 안정화: undefined 캐시 방어 로직 추가
       queryClient.setQueryData<UserWithStats[]>(['admin', 'users'], (old) => {
-        if (!old) return [];
+        // ✅ 방어: 캐시가 없으면 스킵 (테스트는 캐시 시딩을 전제로)
+        if (!old) return old;
         return old.map(user => 
           user.id === userId 
             ? { ...user, approved: true } as UserWithStats
@@ -205,8 +207,10 @@ export function useApproveUser() {
       });
 
       // 사용자 상세 캐시도 동시 업데이트 (queryKey 정합성)
+      // ✅ CI 안정화: undefined 캐시 방어 로직 추가
       queryClient.setQueryData<UserWithStats>(['admin', 'users', userId], (old) => {
-        if (!old) return undefined;
+        // ✅ 방어: 캐시가 없으면 스킵 (테스트는 캐시 시딩을 전제로)
+        if (!old) return old;
         return { ...old, approved: true } as UserWithStats;
       });
 

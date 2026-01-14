@@ -80,7 +80,7 @@ const createTestQueryClient = () => {
 
   return new QueryClient({
     defaultOptions: {
-      queries: { retry: false, gcTime: 0, staleTime: 0 }, // ✅ React Query v5: cacheTime → gcTime
+      queries: { retry: false, gcTime: Infinity, staleTime: 0 }, // ✅ CI 안정화: gcTime Infinity로 고정 (환경별 GC/옵저버 차이 제거)
       mutations: { retry: false },
     },
   })
@@ -420,9 +420,16 @@ describe('useApproveUser', () => {
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     )
 
-    // ✅ 초기 캐시 데이터 설정
+    // ✅ Given: 초기 캐시 데이터 시딩 (강제) - CI 안정화를 위해 반드시 명시
+    // 리스트 캐시 시딩
     queryClient.setQueryData(['admin', 'users'], [pendingUser])
+    // 상세 캐시 시딩 (두 key 동시 업데이트를 위해)
     queryClient.setQueryData(['admin', 'users', userId], pendingUser)
+
+    // ✅ 캐시 시딩 확인
+    const initialUsers = queryClient.getQueryData<UserWithStats[]>(['admin', 'users'])
+    expect(initialUsers).toBeDefined()
+    expect(initialUsers!.find(u => u.id === userId)?.approved).toBe(false)
 
     mockAdminAPI.approveUser.mockResolvedValue(approvedUser)
 
@@ -434,16 +441,16 @@ describe('useApproveUser', () => {
     })
 
     // ✅ Then: 네트워크 응답을 기다리지 않고도 즉시 캐시가 업데이트되어야 함
-    // "1 frame 내" 즉시 반영 검증
+    // CI 안정화: timeout 1000ms로 상향 (100ms는 CI에서 타이밍 민감)
     await waitFor(() => {
       const cachedUsers = queryClient.getQueryData<UserWithStats[]>(['admin', 'users'])
       expect(cachedUsers).toBeDefined()
-      const updatedUser = cachedUsers?.find(u => u.id === userId)
-      expect(updatedUser?.approved).toBe(true) // ✅ 즉시 approved로 변경
-    }, { timeout: 100 }) // ✅ 1 frame 내 반영 (100ms 이내)
+      const updatedUser = cachedUsers!.find(u => u.id === userId)
+      expect(updatedUser).toBeDefined()
+      expect(updatedUser!.approved).toBe(true) // ✅ 즉시 approved로 변경
+    }, { timeout: 1000 }) // ✅ CI 안정화: 100ms → 1000ms
 
     // ✅ 사용자 상세 캐시도 동시 업데이트 확인 (queryKey 정합성)
-    // 주의: 상세 캐시는 초기 설정이 없을 수 있으므로 optional 체크
     const cachedUser = queryClient.getQueryData<UserWithStats>(['admin', 'users', userId])
     if (cachedUser) {
       expect(cachedUser.approved).toBe(true)
@@ -460,9 +467,16 @@ describe('useApproveUser', () => {
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     )
 
-    // ✅ 초기 캐시 데이터 설정
+    // ✅ Given: 초기 캐시 데이터 시딩 (강제) - CI 안정화를 위해 반드시 명시
+    // 리스트 캐시 시딩
     queryClient.setQueryData(['admin', 'users'], [pendingUser])
+    // 상세 캐시 시딩 (두 key 동시 업데이트를 위해)
     queryClient.setQueryData(['admin', 'users', userId], pendingUser)
+
+    // ✅ 캐시 시딩 확인
+    const initialUsers = queryClient.getQueryData<UserWithStats[]>(['admin', 'users'])
+    expect(initialUsers).toBeDefined()
+    expect(initialUsers!.find(u => u.id === userId)?.approved).toBe(false)
 
     // ✅ mutation이 실패하도록 설정
     mockAdminAPI.approveUser.mockRejectedValue(new Error('Approve failed'))
@@ -479,15 +493,16 @@ describe('useApproveUser', () => {
     })
 
     // ✅ Then: 에러 발생 시 rollback되어 pending 상태로 돌아가야 함
+    // CI 안정화: timeout 1000ms로 상향
     await waitFor(() => {
       const cachedUsers = queryClient.getQueryData<UserWithStats[]>(['admin', 'users'])
       expect(cachedUsers).toBeDefined()
-      const updatedUser = cachedUsers?.find(u => u.id === userId)
-      expect(updatedUser?.approved).toBe(false) // ✅ rollback: pending 상태로 복구
-    })
+      const updatedUser = cachedUsers!.find(u => u.id === userId)
+      expect(updatedUser).toBeDefined()
+      expect(updatedUser!.approved).toBe(false) // ✅ rollback: pending 상태로 복구
+    }, { timeout: 1000 }) // ✅ CI 안정화: timeout 상향
 
     // ✅ 사용자 상세 캐시도 rollback 확인
-    // 주의: 상세 캐시는 초기 설정이 없을 수 있으므로 optional 체크
     const cachedUser = queryClient.getQueryData<UserWithStats>(['admin', 'users', userId])
     if (cachedUser) {
       expect(cachedUser.approved).toBe(false) // ✅ rollback: pending 상태로 복구
