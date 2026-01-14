@@ -17,8 +17,10 @@
 
 import { test, expect } from '@playwright/test';
 
-// ✅ Hermetic: localhost 의존 제거
-// BASE_URL은 사용하지 않음 (about:blank로 대체)
+// ✅ Hermetic: 유효한 origin에서 localStorage 접근
+// about:blank는 opaque origin이라 localStorage 접근 불가
+// 최소한의 dev server는 필요 (백엔드는 모킹)
+const BASE_URL = process.env.BASE_URL || 'http://localhost:9444';
 
 test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', () => {
   /**
@@ -32,15 +34,16 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
    */
   test('S4: refresh 실패 시 전역 세션 정리 및 강제 로그아웃', async ({ page, context }) => {
     // ✅ Given: 로그인 상태 (토큰이 localStorage에 있음)
-    // ✅ Hermetic: about:blank로 네비게이션 (localhost 의존 제거)
-    await page.goto('about:blank');
-    
-    // 로그인 시뮬레이션: localStorage에 직접 토큰 설정 (테스트용)
-    await page.evaluate(() => {
+    // ✅ Hermetic: 유효한 origin에서 localStorage 접근
+    // initScript로 goto 이전에 localStorage 주입 (SecurityError 방지)
+    await context.addInitScript(() => {
       localStorage.setItem('refresh_token', 'test-refresh-token');
       localStorage.setItem('token_expires_at', (Date.now() - 1000).toString()); // 만료된 상태 (refresh 트리거)
       sessionStorage.setItem('csrf_token', 'test-csrf-token');
     });
+    
+    // ✅ 유효한 origin으로 이동 (localStorage 접근 가능)
+    await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
 
     // ✅ 완전 모킹: 모든 네트워크를 차단하고 필요한 API만 허용
     await context.route('**/*', async (route) => {
@@ -64,15 +67,8 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     });
 
     // ✅ When: API 호출 시도 (자동 refresh 트리거)
-    // ✅ Hermetic: 실제 네비게이션 대신 fetch 호출 시뮬레이션
-    // tokenManager.getAccessToken()이 자동으로 refresh를 트리거하도록 함
-    // 실제로는 페이지 내에서 API 호출이 발생하면 자동으로 refresh가 트리거됨
-    // 여기서는 직접 refresh를 트리거하기 위해 tokenManager를 사용하는 코드를 실행
-    await page.evaluate(() => {
-      // tokenManager가 자동으로 refresh를 시도하도록 만료된 토큰 상태 유지
-      // 실제 앱에서는 API 호출 시 자동으로 refresh가 트리거됨
-      // 여기서는 시뮬레이션을 위해 약간의 지연 후 확인
-    });
+    // dashboard로 이동하면 API 호출이 발생하고, access token이 만료되어 refresh 시도
+    const navigationPromise = page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'domcontentloaded' });
     
     // ✅ Then: refresh 실패 처리 대기
     await page.waitForTimeout(1000);
@@ -90,21 +86,32 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     expect(storageState.expiresAt).toBeNull();
     expect(storageState.csrfToken).toBeNull();
 
-    // ✅ Then: refresh 실패 시 세션 정리 확인
-    // Hermetic: 실제 리다이렉트는 테스트하지 않고, 저장소 정리만 확인
-    // (실제 앱에서는 window.location.href로 리다이렉트하지만, hermetic에서는 검증 범위 축소)
-    // 저장소 정리가 완료되었는지 재확인
-    const finalStorageState = await page.evaluate(() => {
+    // ✅ Then: 모든 저장소 정리 확인
+    const storageState = await page.evaluate(() => {
       return {
         refreshToken: localStorage.getItem('refresh_token'),
         expiresAt: localStorage.getItem('token_expires_at'),
         csrfToken: sessionStorage.getItem('csrf_token'),
       };
     });
+
+    expect(storageState.refreshToken).toBeNull();
+    expect(storageState.expiresAt).toBeNull();
+    expect(storageState.csrfToken).toBeNull();
+
+    // ✅ Then: /login?reason=... 리다이렉트 확인
+    await navigationPromise.catch(() => {}); // 리다이렉트로 인한 navigation 실패는 무시
+    await page.waitForTimeout(500); // 리다이렉트 대기
     
-    expect(finalStorageState.refreshToken).toBeNull();
-    expect(finalStorageState.expiresAt).toBeNull();
-    expect(finalStorageState.csrfToken).toBeNull();
+    const currentUrl = page.url();
+    expect(currentUrl).toContain('/login');
+    expect(currentUrl).toContain('reason=');
+    
+    // reason 파라미터 확인
+    const urlParams = new URL(currentUrl).searchParams;
+    const reason = urlParams.get('reason');
+    expect(reason).toBeTruthy();
+    expect(decodeURIComponent(reason!)).toContain('세션이 만료되었습니다');
   });
 
   /**
@@ -120,16 +127,17 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     const page1 = await context.newPage();
     const page2 = await context.newPage();
 
-    // ✅ Hermetic: about:blank로 네비게이션 (localhost 의존 제거)
-    await page1.goto('about:blank');
-    await page2.goto('about:blank');
-    
-    // 같은 localStorage를 공유하므로 한 번만 설정해도 됨
-    await page1.evaluate(() => {
+    // ✅ Hermetic: 유효한 origin에서 localStorage 접근
+    // initScript로 goto 이전에 localStorage 주입 (SecurityError 방지)
+    await context.addInitScript(() => {
       localStorage.setItem('refresh_token', 'test-refresh-token');
       localStorage.setItem('token_expires_at', (Date.now() - 1000).toString()); // 만료된 상태
       sessionStorage.setItem('csrf_token', 'test-csrf-token');
     });
+    
+    // ✅ 유효한 origin으로 이동 (localStorage 접근 가능)
+    await page1.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
+    await page2.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
 
     // ✅ 완전 모킹: 모든 네트워크를 차단하고 필요한 API만 허용
     let refreshCallCount = 0;
@@ -162,24 +170,11 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       await route.abort();
     });
 
-    // ✅ When: 두 페이지에서 동시에 API 호출 시뮬레이션 (refresh 트리거)
-    // ✅ Hermetic: 실제 네비게이션 대신 동시 refresh 트리거 시뮬레이션
-    // 실제 앱에서는 각 페이지에서 API 호출 시 자동으로 refresh가 트리거됨
-    // 여기서는 동시에 refresh가 트리거되도록 시뮬레이션
-    const promise1 = page1.evaluate(() => {
-      // tokenManager가 자동으로 refresh를 시도하도록 만료된 토큰 상태 유지
-      return Promise.resolve();
-    });
-    const promise2 = page2.evaluate(() => {
-      // tokenManager가 자동으로 refresh를 시도하도록 만료된 토큰 상태 유지
-      return Promise.resolve();
-    });
+    // ✅ When: 두 페이지에서 동시에 API 호출 (refresh 트리거)
+    const promise1 = page1.goto(`${BASE_URL}/dashboard`, { waitUntil: 'domcontentloaded' });
+    const promise2 = page2.goto(`${BASE_URL}/dashboard`, { waitUntil: 'domcontentloaded' });
     
     await Promise.all([promise1, promise2]);
-    
-    // refresh 호출이 트리거되도록 약간의 지연
-    await page1.waitForTimeout(500);
-    await page2.waitForTimeout(500);
     
     // ✅ Then: refresh 호출 횟수 확인
     // 주의: 각 페이지마다 별도의 tokenManager 인스턴스가 있으므로

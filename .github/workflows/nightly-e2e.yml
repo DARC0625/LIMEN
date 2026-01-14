@@ -85,11 +85,9 @@ jobs:
         working-directory: ./frontend
 
     # ✅ Integration은 실서버/계정 의존이 있으므로 조건부 실행
-    # 환경변수가 없으면 스킵 (self-hosted runner에서만 실행하도록 설정)
+    # secrets가 설정되어 있을 때만 실행 (self-hosted runner에서만 실행하도록 설정)
     if: |
-      env.ADMIN_USER != '' && 
-      env.ADMIN_PASS != '' && 
-      env.BASE_URL != ''
+      ${{ secrets.ADMIN_USER != '' && secrets.ADMIN_PASS != '' && (secrets.BASE_URL != '' || vars.BASE_URL != '') }}
     
     steps:
       - name: Checkout code
