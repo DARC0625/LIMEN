@@ -71,14 +71,20 @@ import { adminAPI } from '../../lib/api/admin'
 const mockAdminAPI = adminAPI as jest.Mocked<typeof adminAPI>
 
 // ✅ QueryClient를 제공하는 wrapper (정석 템플릿)
-const createTestQueryClient = () =>
-  new QueryClient({
+// React Query v5: logger는 QueryClientConfig에 없음 → console mock으로 대체
+const createTestQueryClient = () => {
+  // 테스트 로그 정리용: console mock (각 테스트마다 독립적으로)
+  jest.spyOn(console, 'log').mockImplementation(() => {})
+  jest.spyOn(console, 'warn').mockImplementation(() => {})
+  jest.spyOn(console, 'error').mockImplementation(() => {})
+
+  return new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: 0, staleTime: 0 }, // ✅ React Query v5: cacheTime → gcTime
       mutations: { retry: false },
     },
-    logger: { log: () => {}, warn: () => {}, error: () => {} }, // 테스트 로그 정리용
   })
+}
 
 const makeWrapper = () => {
   const qc = createTestQueryClient()

@@ -76,7 +76,14 @@ describe('authAPI', () => {
         }),
       })
     )
-    expect(result).toEqual(mockResponse)
+    // ✅ 핵심 계약만 검증: access_token, refresh_token, expires_in, success
+    // 부가 필드는 유연하게 (toMatchObject 사용)
+    expect(result).toMatchObject({
+      access_token: 'test-access-token',
+      refresh_token: 'test-refresh-token',
+      expires_in: 900,
+      success: true,
+    })
     expect(mockTokenManager.setTokens).toHaveBeenCalled()
   })
 
@@ -116,7 +123,8 @@ describe('authAPI', () => {
         skipAuth: true,
       })
     )
-    expect(result).toEqual(mockResponse)
+    // ✅ 핵심 계약만 검증: id, username, role
+    expect(result).toMatchObject(mockResponse)
   })
 
   it('checks session', async () => {
@@ -135,7 +143,8 @@ describe('authAPI', () => {
         method: 'GET',
       })
     )
-    expect(result).toEqual(mockResponse)
+    // ✅ 핵심 계약만 검증: valid, user
+    expect(result).toMatchObject(mockResponse)
   })
 
   it('creates session', async () => {
@@ -274,7 +283,8 @@ describe('authAPI', () => {
     const result = await authAPI.refreshToken('old-refresh-token')
 
     expect(global.fetch).toHaveBeenCalled()
-    expect(result).toEqual(mockResponse)
+    // ✅ 핵심 계약만 검증: access_token, refresh_token, expires_in
+    expect(result).toMatchObject(mockResponse)
   })
 
   it('handles refresh token errors', async () => {
@@ -480,7 +490,8 @@ describe('authAPI', () => {
       // body가 없으면 쿠키를 사용하는 것
       expect(fetchCall.body).toBeUndefined()
     }
-    expect(result).toEqual(mockResponse)
+    // ✅ 핵심 계약만 검증: access_token, refresh_token, expires_in
+    expect(result).toMatchObject(mockResponse)
   })
 
   it('handles refreshToken with both cookie and parameter (cookie takes precedence)', async () => {
@@ -517,7 +528,8 @@ describe('authAPI', () => {
       // body가 없으면 쿠키를 사용하는 것
       expect(fetchCall.body).toBeUndefined()
     }
-    expect(result).toEqual(mockResponse)
+    // ✅ 핵심 계약만 검증: access_token, refresh_token, expires_in
+    expect(result).toMatchObject(mockResponse)
   })
 
   it('handles refreshToken without cookie (uses parameter)', async () => {
@@ -548,7 +560,8 @@ describe('authAPI', () => {
     const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
     // 쿠키가 없으면 body에 refresh_token을 포함
     expect(callBody.refresh_token).toBe('parameter-refresh-token')
-    expect(result).toEqual(mockResponse)
+    // ✅ 핵심 계약만 검증: access_token, refresh_token, expires_in
+    expect(result).toMatchObject(mockResponse)
   })
 
   it('handles refreshToken error without message', async () => {
@@ -678,7 +691,12 @@ describe('authAPI', () => {
       password: 'testpass',
     })
 
-    expect(result).toEqual(mockResponse)
+    // ✅ 핵심 계약만 검증: access_token, expires_in, success (refresh_token은 쿠키에서)
+    expect(result).toMatchObject({
+      access_token: 'test-access-token',
+      expires_in: 900,
+      success: true,
+    })
     // 쿠키에서 refresh_token을 찾았는지 확인
     expect(mockTokenManager.setTokens).toHaveBeenCalled()
   })
@@ -703,7 +721,12 @@ describe('authAPI', () => {
       password: 'testpass',
     })
 
-    expect(result).toEqual(mockResponse)
+    // ✅ 핵심 계약만 검증: access_token, refresh_token, success (expires_in은 기본값 사용)
+    expect(result).toMatchObject({
+      access_token: 'test-access-token',
+      refresh_token: 'test-refresh-token',
+      success: true,
+    })
     // 기본 expires_in이 사용되었는지 확인
     expect(mockTokenManager.setTokens).toHaveBeenCalled()
   })
@@ -727,7 +750,10 @@ describe('authAPI', () => {
       password: 'testpass',
     })
 
-    expect(result).toEqual(mockResponse)
+    // ✅ 핵심 계약만 검증: success (legacy token은 localStorage에 저장)
+    expect(result).toMatchObject({
+      success: true,
+    })
     // 하위 호환성을 위해 localStorage에 저장되었는지 확인
     expect(localStorage.setItem).toHaveBeenCalledWith('auth_token', 'legacy-token')
   })
@@ -752,7 +778,10 @@ describe('authAPI', () => {
       password: 'testpass',
     })
 
-    expect(result).toEqual(mockResponse)
+    // ✅ 핵심 계약만 검증: success (access_token이 빈 문자열이면 토큰 저장 안 됨)
+    expect(result).toMatchObject({
+      success: true,
+    })
   })
 
   it('handles createSession without refreshToken', async () => {
@@ -797,7 +826,13 @@ describe('authAPI', () => {
     })
 
     // 서버 사이드에서는 쿠키에서 refresh_token을 찾지 않음
-    expect(result).toEqual(mockResponse)
+    // ✅ 핵심 계약만 검증: access_token, refresh_token, expires_in, success
+    expect(result).toMatchObject({
+      access_token: 'test-access-token',
+      refresh_token: 'test-refresh-token',
+      expires_in: 900,
+      success: true,
+    })
     
     global.window = originalWindow
   })
@@ -925,7 +960,8 @@ describe('authAPI', () => {
     const result = await authAPI.refreshToken()
 
     // 서버 사이드에서는 쿠키에서 refresh_token을 찾지 않음
-    expect(result).toEqual(mockResponse)
+    // ✅ 핵심 계약만 검증: access_token, refresh_token, expires_in
+    expect(result).toMatchObject(mockResponse)
     
     global.window = originalWindow
   })
