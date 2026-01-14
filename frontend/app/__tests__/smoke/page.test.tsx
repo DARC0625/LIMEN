@@ -55,17 +55,25 @@ describe('Home Page', () => {
 
   it('renders main heading', () => {
     render(<Home />)
-
-    expect(screen.getByText('LIMEN')).toBeInTheDocument()
+    
+    // ✅ 첫 번째 assert: 페이지가 제대로 렌더됐는지 확인
+    // 렌더링 자체가 실패하면 방향이 달라짐
+    screen.debug()
+    
+    // Hero 섹션이 존재하는지 확인 (구조 계약)
+    expect(screen.getByTestId('hero')).toBeInTheDocument()
+    
+    // 메인 제목 확인 (role="heading" 또는 testid 기반)
+    expect(screen.getByRole('heading', { name: /LIMEN/i })).toBeInTheDocument()
   })
 
   it('renders waitlist form section', () => {
     render(<Home />)
 
-    // "대기자 등록" 텍스트가 여러 곳에 있으므로 getAllByText 사용
-    const waitlistTexts = screen.getAllByText('대기자 등록')
-    expect(waitlistTexts.length).toBeGreaterThan(0)
+    // ✅ 구조 계약: waitlist form 섹션이 존재하는지 확인
+    expect(screen.getByTestId('waitlist-form')).toBeInTheDocument()
     
+    // 폼 입력 필드들이 존재하는지 확인 (구조 계약)
     expect(screen.getByLabelText(/이름/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/소속/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/이메일/i)).toBeInTheDocument()
@@ -74,9 +82,13 @@ describe('Home Page', () => {
   it('renders core value sections', () => {
     render(<Home />)
 
-    expect(screen.getByText('웹 기반 접근')).toBeInTheDocument()
-    expect(screen.getByText('실시간 환경')).toBeInTheDocument()
-    expect(screen.getByText('안전한 격리')).toBeInTheDocument()
+    // ✅ 구조 계약: features 섹션이 존재하는지 확인
+    // 카피 기반 검증 제거, 구조/핵심 요소 존재 검증으로 전환
+    expect(screen.getByTestId('features')).toBeInTheDocument()
+    
+    // features 섹션 내부에 3개의 카드가 있는지 확인 (구조 계약)
+    const featureCards = screen.getByTestId('features').querySelectorAll('div.bg-white')
+    expect(featureCards.length).toBeGreaterThanOrEqual(3)
   })
 
   it('handles form submission successfully', async () => {

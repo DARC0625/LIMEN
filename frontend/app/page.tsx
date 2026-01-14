@@ -55,7 +55,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Hero Section */}
-      <section className="container mx-auto px-4 py-16 md:py-24">
+      <section data-testid="hero" className="container mx-auto px-4 py-16 md:py-24">
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
             LIMEN
@@ -68,7 +68,7 @@ export default function Home() {
           </p>
           
           {/* 핵심 가치 3개 */}
-          <div className="grid md:grid-cols-3 gap-6 mb-12">
+          <div data-testid="features" className="grid md:grid-cols-3 gap-6 mb-12">
             <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
               <div className="text-3xl mb-3">🌐</div>
               <h3 className="font-semibold text-lg mb-2 text-gray-900">웹 기반 접근</h3>
@@ -169,7 +169,7 @@ export default function Home() {
       </section>
 
       {/* 대기자 등록 Form Section */}
-      <section id="waitlist-form" className="container mx-auto px-4 py-16 bg-white">
+      <section id="waitlist-form" data-testid="waitlist-form" className="container mx-auto px-4 py-16 bg-white">
         <div className="max-w-2xl mx-auto">
           <h2 className="text-3xl font-bold text-center mb-8 text-gray-900">
             대기자 등록
