@@ -176,6 +176,7 @@ export function useDeleteUser() {
 
 /**
  * 사용자 승인 Mutation
+ * ✅ Optimistic Update: 클릭 즉시 UI 반영 (1 frame 내)
  */
 export function useApproveUser() {
   const queryClient = useQueryClient();
@@ -183,27 +184,68 @@ export function useApproveUser() {
 
   return useMutation({
     mutationFn: (userId: number) => adminAPI.approveUser(userId),
-    onSuccess: (updatedUser, userId) => {
-      // React Error #321 완전 해결: queueMicrotask로 비동기 처리
-      queueMicrotask(() => {
-        startTransition(() => {
-          // 사용자 목록 캐시 업데이트
-          queryClient.setQueryData<UserWithStats[]>(['admin', 'users'], (old) => {
-            if (!old) return [];
-            return old.map(user => 
-              user.id === userId 
-                ? { ...user, approved: updatedUser.approved } as UserWithStats
-                : user
-            );
-          });
-        });
+    // ✅ onMutate: 네트워크 요청 전에 즉시 캐시 업데이트 (optimistic update)
+    onMutate: async (userId) => {
+      // 진행 중인 쿼리 취소 (낙관적 업데이트와 충돌 방지)
+      await queryClient.cancelQueries({ queryKey: ['admin', 'users'] });
+      await queryClient.cancelQueries({ queryKey: ['admin', 'users', userId] });
+
+      // 이전 캐시 스냅샷 저장 (rollback용)
+      const previousUsers = queryClient.getQueryData<UserWithStats[]>(['admin', 'users']);
+      const previousUser = queryClient.getQueryData<UserWithStats>(['admin', 'users', userId]);
+
+      // ✅ 즉시 캐시 업데이트 (1 frame 내 반영)
+      queryClient.setQueryData<UserWithStats[]>(['admin', 'users'], (old) => {
+        if (!old) return [];
+        return old.map(user => 
+          user.id === userId 
+            ? { ...user, approved: true } as UserWithStats
+            : user
+        );
       });
-      queueMicrotask(() => {
-        toast.success('User approved successfully');
+
+      // 사용자 상세 캐시도 동시 업데이트 (queryKey 정합성)
+      queryClient.setQueryData<UserWithStats>(['admin', 'users', userId], (old) => {
+        if (!old) return undefined;
+        return { ...old, approved: true } as UserWithStats;
       });
+
+      // rollback용 컨텍스트 반환
+      return { previousUsers, previousUser };
     },
-    onError: (error: unknown) => {
+    // ✅ onError: 이전 캐시로 rollback
+    onError: (error: unknown, userId, context) => {
+      // 이전 캐시로 복구
+      if (context?.previousUsers) {
+        queryClient.setQueryData(['admin', 'users'], context.previousUsers);
+      }
+      if (context?.previousUser) {
+        queryClient.setQueryData(['admin', 'users', userId], context.previousUser);
+      }
       toast.error(`Failed to approve user: ${getErrorMessage(error)}`);
+    },
+    // ✅ onSuccess: 서버 응답으로 최종 확인 (이미 optimistic update로 반영됨)
+    onSuccess: (updatedUser, userId) => {
+      // 서버 응답으로 최종 캐시 업데이트 (정합성 보장)
+      queryClient.setQueryData<UserWithStats[]>(['admin', 'users'], (old) => {
+        if (!old) return [];
+        return old.map(user => 
+          user.id === userId 
+            ? { ...user, approved: updatedUser.approved } as UserWithStats
+            : user
+        );
+      });
+      queryClient.setQueryData<UserWithStats>(['admin', 'users', userId], (old) => {
+        if (!old) return undefined;
+        return { ...old, approved: updatedUser.approved } as UserWithStats;
+      });
+      toast.success('User approved successfully');
+    },
+    // ✅ onSettled: 성공/실패 관계없이 서버 정합성 회수
+    onSettled: (data, error, userId) => {
+      // 서버 정합성 회수 (optimistic update와 서버 상태 동기화)
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users', userId] });
     },
   });
 }

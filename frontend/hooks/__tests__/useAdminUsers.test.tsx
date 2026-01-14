@@ -408,6 +408,91 @@ describe('useApproveUser', () => {
     expect(result.current.data).toBeDefined()
     expect(mockAdminAPI.approveUser).toHaveBeenCalledWith(userId)
   })
+
+  it('should immediately update cache when Approve is called (optimistic update)', async () => {
+    const userId = 1
+    const pendingUser = makeUser({ id: userId, username: 'testuser', approved: false })
+    const approvedUser = makeUser({ id: userId, username: 'testuser', approved: true })
+
+    // ✅ QueryClient 가져오기
+    const queryClient = createTestQueryClient()
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    )
+
+    // ✅ 초기 캐시 데이터 설정
+    queryClient.setQueryData(['admin', 'users'], [pendingUser])
+    queryClient.setQueryData(['admin', 'users', userId], pendingUser)
+
+    mockAdminAPI.approveUser.mockResolvedValue(approvedUser)
+
+    const { result } = renderHook(() => useApproveUser(), { wrapper })
+
+    // ✅ When: Approve 호출 (mutate 사용 - optimistic update 테스트)
+    await act(async () => {
+      result.current.mutate(userId)
+    })
+
+    // ✅ Then: 네트워크 응답을 기다리지 않고도 즉시 캐시가 업데이트되어야 함
+    // "1 frame 내" 즉시 반영 검증
+    await waitFor(() => {
+      const cachedUsers = queryClient.getQueryData<UserWithStats[]>(['admin', 'users'])
+      expect(cachedUsers).toBeDefined()
+      const updatedUser = cachedUsers?.find(u => u.id === userId)
+      expect(updatedUser?.approved).toBe(true) // ✅ 즉시 approved로 변경
+    }, { timeout: 100 }) // ✅ 1 frame 내 반영 (100ms 이내)
+
+    // ✅ 사용자 상세 캐시도 동시 업데이트 확인 (queryKey 정합성)
+    // 주의: 상세 캐시는 초기 설정이 없을 수 있으므로 optional 체크
+    const cachedUser = queryClient.getQueryData<UserWithStats>(['admin', 'users', userId])
+    if (cachedUser) {
+      expect(cachedUser.approved).toBe(true)
+    }
+  })
+
+  it('should rollback cache when Approve fails (error handling)', async () => {
+    const userId = 1
+    const pendingUser = makeUser({ id: userId, username: 'testuser', approved: false })
+
+    // ✅ QueryClient 가져오기
+    const queryClient = createTestQueryClient()
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    )
+
+    // ✅ 초기 캐시 데이터 설정
+    queryClient.setQueryData(['admin', 'users'], [pendingUser])
+    queryClient.setQueryData(['admin', 'users', userId], pendingUser)
+
+    // ✅ mutation이 실패하도록 설정
+    mockAdminAPI.approveUser.mockRejectedValue(new Error('Approve failed'))
+
+    const { result } = renderHook(() => useApproveUser(), { wrapper })
+
+    // ✅ When: Approve 호출 (실패 시뮬레이션)
+    await act(async () => {
+      try {
+        await result.current.mutateAsync(userId)
+      } catch (error) {
+        // 에러는 예상된 것
+      }
+    })
+
+    // ✅ Then: 에러 발생 시 rollback되어 pending 상태로 돌아가야 함
+    await waitFor(() => {
+      const cachedUsers = queryClient.getQueryData<UserWithStats[]>(['admin', 'users'])
+      expect(cachedUsers).toBeDefined()
+      const updatedUser = cachedUsers?.find(u => u.id === userId)
+      expect(updatedUser?.approved).toBe(false) // ✅ rollback: pending 상태로 복구
+    })
+
+    // ✅ 사용자 상세 캐시도 rollback 확인
+    // 주의: 상세 캐시는 초기 설정이 없을 수 있으므로 optional 체크
+    const cachedUser = queryClient.getQueryData<UserWithStats>(['admin', 'users', userId])
+    if (cachedUser) {
+      expect(cachedUser.approved).toBe(false) // ✅ rollback: pending 상태로 복구
+    }
+  })
 })
 
 
