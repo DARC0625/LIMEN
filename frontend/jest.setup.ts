@@ -3,25 +3,49 @@ import '@testing-library/jest-dom';
 // TextEncoder/TextDecoder (jsdom에서 종종 누락)
 import { TextEncoder, TextDecoder } from 'util';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-if (!globalThis.TextEncoder) globalThis.TextEncoder = TextEncoder as any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-if (!globalThis.TextDecoder) globalThis.TextDecoder = TextDecoder as any;
+if (!globalThis.TextEncoder) {
+  globalThis.TextEncoder = TextEncoder;
+}
+if (!globalThis.TextDecoder) {
+  globalThis.TextDecoder = TextDecoder;
+}
 
 // localStorage mock (node 환경에서 필요)
 // jsdom/node 둘 다 안전하게 동작
 if (!globalThis.localStorage) {
-  const store = new Map<string, string>();
+  class LocalStorageMock implements Storage {
+    private store = new Map<string, string>();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  globalThis.localStorage = {
-    getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
-    setItem: (k: string, v: string) => { store.set(k, String(v)); },
-    removeItem: (k: string) => { store.delete(k); },
-    clear: () => { store.clear(); },
-    key: (i: number) => Array.from(store.keys())[i] ?? null,
-    get length() { return store.size; },
-  } as any;
+    getItem(key: string): string | null {
+      return this.store.has(key) ? this.store.get(key)! : null;
+    }
+
+    setItem(key: string, value: string): void {
+      this.store.set(key, String(value));
+    }
+
+    removeItem(key: string): void {
+      this.store.delete(key);
+    }
+
+    clear(): void {
+      this.store.clear();
+    }
+
+    key(index: number): string | null {
+      return Array.from(this.store.keys())[index] ?? null;
+    }
+
+    get length(): number {
+      return this.store.size;
+    }
+  }
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: new LocalStorageMock(),
+    configurable: true,
+    writable: true,
+  });
 }
 
 // ✅ 정책: undici 직접 로드 및 전역 주입 금지

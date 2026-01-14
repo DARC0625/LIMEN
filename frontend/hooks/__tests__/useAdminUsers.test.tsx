@@ -57,7 +57,6 @@ const makeWrapper = () => {
       mutations: { retry: false },
     },
   })
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   )

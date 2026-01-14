@@ -3,19 +3,7 @@
  * @jest-environment node
  */
 
-import {
-  getUserRole,
-  isApproved,
-  isAdmin,
-  setToken,
-  removeToken,
-  setTokens,
-} from '../index'
-import { tokenManager } from '../../tokenManager'
-import { getUserRoleFromToken, isUserApprovedFromToken } from '../../utils/token'
-import { authAPI } from '../auth'
-
-// Mock dependencies
+// ✅ Mock dependencies를 import 이전에 선언 (mock 먼저, import 나중)
 jest.mock('../../tokenManager', () => ({
   tokenManager: {
     getAccessToken: jest.fn(),
@@ -42,6 +30,37 @@ jest.mock('../../utils/logger', () => ({
   },
 }))
 
+// Mock이 선언된 후에 import
+import {
+  getUserRole,
+  isApproved,
+  isAdmin,
+  setToken,
+  removeToken,
+  setTokens,
+} from '../index'
+import { tokenManager } from '../../tokenManager'
+import { getUserRoleFromToken, isUserApprovedFromToken } from '../../utils/token'
+import { authAPI } from '../auth'
+
+jest.mock('../../utils/token', () => ({
+  getUserRoleFromToken: jest.fn(),
+  isUserApprovedFromToken: jest.fn(),
+}))
+
+jest.mock('../auth', () => ({
+  authAPI: {
+    createSession: jest.fn(),
+  },
+}))
+
+jest.mock('../../utils/logger', () => ({
+  logger: {
+    error: jest.fn(),
+  },
+}))
+
+// Mock이 선언된 후에 타입 캐스팅
 const mockTokenManager = tokenManager as jest.Mocked<typeof tokenManager>
 const mockGetUserRoleFromToken = getUserRoleFromToken as jest.MockedFunction<typeof getUserRoleFromToken>
 const mockIsUserApprovedFromToken = isUserApprovedFromToken as jest.MockedFunction<typeof isUserApprovedFromToken>
