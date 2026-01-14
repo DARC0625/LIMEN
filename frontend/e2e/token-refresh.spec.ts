@@ -1,8 +1,11 @@
 /**
- * 토큰 꼬임 P0 - E2E 테스트
+ * 토큰 꼬임 P0 - E2E 테스트 (Hermetic)
  * 
  * S3: 멀티탭 동시 refresh 경합
  * S4: refresh 실패 시 강제 로그아웃
+ * 
+ * ✅ Hermetic E2E: API 모킹 기반, 실서버 의존 없음
+ * CI Gate에서 안정적으로 실행 가능
  * 
  * 실행:
  * npm run test:e2e -- token-refresh
@@ -14,6 +17,7 @@ import { test, expect } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:9444';
 
+// ✅ Hermetic E2E: CI Gate에서 실행 (실서버 의존 없음)
 test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리', () => {
   /**
    * S4: refresh 실패 시 강제 로그아웃 테스트
