@@ -121,16 +121,14 @@ describe('useAdminUsers', () => {
   it('should fetch user list successfully', async () => {
     const { result } = renderHook(() => useAdminUsers(), { wrapper: makeWrapper() })
 
-    // 상태 플래그 타이밍을 피하기 위해 data가 정의될 때까지 기다림
+    // useQuery는 초기 render에 data가 undefined인 게 정상
+    // isLoading이 false가 될 때까지 기다린 후 data 검증
     await waitFor(() => {
-      // 에러가 있으면 실패
-      if (result.current.error) {
-        throw result.current.error
-      }
-      expect(result.current.data).toBeDefined()
-    }, { timeout: 5000 })
+      expect(result.current.isLoading).toBe(false)
+    })
 
     expect(result.current.data).toEqual(mockUsers)
+    expect(result.current.isError).toBe(false)
   })
 
   it('should sort users by role and username', async () => {
@@ -161,8 +159,9 @@ describe('useAdminUsers', () => {
 
     const { result } = renderHook(() => useAdminUsers(), { wrapper: makeWrapper() })
 
+    // isLoading이 false가 될 때까지 기다린 후 data 검증
     await waitFor(() => {
-      expect(result.current.data).toBeDefined()
+      expect(result.current.isLoading).toBe(false)
     })
 
     // admin이 먼저, 그 다음 username 순으로 정렬
@@ -193,9 +192,13 @@ describe('useAdminUsers', () => {
 
     const { result } = renderHook(() => useAdminUsers(), { wrapper: makeWrapper() })
 
+    // isLoading이 false가 될 때까지 기다린 후 에러 상태 검증
     await waitFor(() => {
-      expect(result.current.error).toBeDefined()
+      expect(result.current.isLoading).toBe(false)
     })
+
+    expect(result.current.isError).toBe(true)
+    expect(result.current.error).toBeDefined()
   })
 })
 
@@ -243,13 +246,14 @@ describe('useAdminUser', () => {
 
     const { result } = renderHook(() => useAdminUser(userId), { wrapper: makeWrapper() })
 
-    // 상태 플래그 타이밍을 피하기 위해 data가 정의될 때까지 기다림
+    // isLoading이 false가 될 때까지 기다린 후 data 검증
     await waitFor(() => {
-      expect(result.current.data).toBeDefined()
+      expect(result.current.isLoading).toBe(false)
     })
 
     expect(result.current.data?.id).toBe(userId)
     expect(result.current.data?.username).toBe('user1')
+    expect(result.current.isError).toBe(false)
   })
 
   it('should not fetch when userId is null', () => {
@@ -305,9 +309,13 @@ describe('useCreateUser', () => {
 
     result.current.mutate(newUser)
 
+    // useMutation은 isPending이 false가 될 때까지 기다린 후 검증
     await waitFor(() => {
-      expect(result.current.data).toBeDefined()
+      expect(result.current.isPending).toBe(false)
     })
+
+    expect(result.current.isSuccess).toBe(true)
+    expect(result.current.data).toBeDefined()
   })
 
   it('should handle creation errors', async () => {
@@ -336,9 +344,13 @@ describe('useCreateUser', () => {
 
     result.current.mutate(newUser)
 
+    // useMutation은 isPending이 false가 될 때까지 기다린 후 에러 검증
     await waitFor(() => {
-      expect(result.current.error).toBeDefined()
+      expect(result.current.isPending).toBe(false)
     })
+
+    expect(result.current.isError).toBe(true)
+    expect(result.current.error).toBeDefined()
   })
 })
 
@@ -387,9 +399,13 @@ describe('useUpdateUser', () => {
 
     result.current.mutate({ id: userId, data: updateData })
 
+    // useMutation은 isPending이 false가 될 때까지 기다린 후 검증
     await waitFor(() => {
-      expect(result.current.data).toBeDefined()
+      expect(result.current.isPending).toBe(false)
     })
+
+    expect(result.current.isSuccess).toBe(true)
+    expect(result.current.data).toBeDefined()
   })
 })
 
@@ -436,11 +452,13 @@ describe('useDeleteUser', () => {
 
     result.current.mutate(userId)
 
-    // DELETE는 성공 시 data가 없을 수 있으므로 mutation이 완료되었는지 확인
+    // useMutation은 isPending이 false가 될 때까지 기다린 후 검증
     await waitFor(() => {
       expect(result.current.isPending).toBe(false)
-      expect(result.current.error).toBeUndefined()
     })
+
+    expect(result.current.isSuccess).toBe(true)
+    expect(result.current.error).toBeUndefined()
   })
 })
 
@@ -487,9 +505,13 @@ describe('useApproveUser', () => {
 
     result.current.mutate(userId)
 
+    // useMutation은 isPending이 false가 될 때까지 기다린 후 검증
     await waitFor(() => {
-      expect(result.current.data).toBeDefined()
+      expect(result.current.isPending).toBe(false)
     })
+
+    expect(result.current.isSuccess).toBe(true)
+    expect(result.current.data).toBeDefined()
   })
 })
 
