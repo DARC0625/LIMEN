@@ -70,21 +70,29 @@ class TokenManager {
       return;
     }
     
+    // ✅ Auth 타임라인 로그: 토큰 저장 시작
+    const expiresAt = Date.now() + (expiresIn * 1000);
     logger.log('[tokenManager] setTokens called', {
+      timestamp: new Date().toISOString(),
       accessTokenLength: accessToken?.length || 0,
       refreshTokenLength: refreshToken?.length || 0,
       expiresIn,
+      expiresAt,
+      timeUntilExpiry: Math.floor(expiresIn),
     });
     
     this.accessToken = accessToken;
     this.refreshToken = refreshToken;
-    this.expiresAt = Date.now() + (expiresIn * 1000);
+    this.expiresAt = expiresAt;
     
     // localStorage에 Refresh Token만 저장 (Access Token은 메모리에만)
     try {
       localStorage.setItem('refresh_token', refreshToken);
       localStorage.setItem('token_expires_at', this.expiresAt.toString());
+      
+      // ✅ Auth 타임라인 로그: localStorage 저장 완료
       logger.log('[tokenManager] Tokens saved to localStorage', {
+        timestamp: new Date().toISOString(),
         refreshTokenSaved: !!localStorage.getItem('refresh_token'),
         expiresAtSaved: !!localStorage.getItem('token_expires_at'),
         expiresAt: this.expiresAt,
@@ -115,47 +123,92 @@ class TokenManager {
   }
 
   // Access Token 가져오기 (자동 갱신 포함)
+  // ✅ Single-flight: 동시 refresh 요청을 하나로 묶어 경합 방지
   async getAccessToken(): Promise<string | null> {
     if (typeof window === 'undefined') return null;
     
+    // ✅ Auth 타임라인 로그: access token 요청
+    const now = Date.now();
+    const timeUntilExpiry = this.getTimeUntilExpiry();
+    
     // Access Token이 유효하면 반환
-    if (this.accessToken && this.expiresAt > Date.now() + 60000) { // 1분 여유
+    if (this.accessToken && this.expiresAt > now + 60000) { // 1분 여유
+      // ✅ Auth 타임라인 로그: 유효한 토큰 반환
+      logger.log('[tokenManager] Returning valid access token', {
+        timestamp: new Date().toISOString(),
+        expiresAt: this.expiresAt,
+        timeUntilExpiry,
+      });
       return this.accessToken;
     }
     
     // Refresh Token이 없으면 null
     if (!this.refreshToken) {
+      // ✅ Auth 타임라인 로그: refresh token 없음
+      logger.warn('[tokenManager] No refresh token available', {
+        timestamp: new Date().toISOString(),
+        hasAccessToken: !!this.accessToken,
+        expiresAt: this.expiresAt,
+        timeUntilExpiry,
+      });
       return null;
     }
     
-    // 이미 갱신 중이면 대기
+    // ✅ Single-flight: 이미 갱신 중이면 대기 (동시 refresh 경합 방지)
     if (this.refreshPromise) {
+      // ✅ Auth 타임라인 로그: refresh 대기 중
+      logger.log('[tokenManager] Refresh already in progress, waiting...', {
+        timestamp: new Date().toISOString(),
+      });
       return this.refreshPromise;
     }
     
-    // 토큰 갱신
+    // ✅ 토큰 갱신 (single-flight 보장)
     this.refreshPromise = this.refreshAccessToken();
     
     try {
       const newAccessToken = await this.refreshPromise;
       return newAccessToken;
     } finally {
+      // ✅ Single-flight: refresh 완료 후 promise 초기화
       this.refreshPromise = null;
     }
   }
 
   // Access Token 갱신
+  // ✅ Single-flight: 동시 refresh 요청을 하나로 묶어 경합 방지
   private async refreshAccessToken(): Promise<string> {
     if (!this.refreshToken) {
+      // ✅ Auth 타임라인 로그: refresh 요청 시작 실패 (토큰 없음)
+      logger.warn('[tokenManager] Refresh request failed: No refresh token available', {
+        timestamp: new Date().toISOString(),
+        hasAccessToken: !!this.accessToken,
+        expiresAt: this.expiresAt,
+        timeUntilExpiry: this.getTimeUntilExpiry(),
+      });
       throw new Error('No refresh token available');
     }
+    
+    // ✅ Auth 타임라인 로그: refresh 요청 시작
+    const refreshStartTime = Date.now();
+    logger.log('[tokenManager] Refresh request started', {
+      timestamp: new Date().toISOString(),
+      hasAccessToken: !!this.accessToken,
+      expiresAt: this.expiresAt,
+      timeUntilExpiry: this.getTimeUntilExpiry(),
+      refreshTokenExists: !!this.refreshToken,
+    });
     
     try {
       // authAPI 사용 (순환 참조 방지를 위해 동적 import)
       const { authAPI } = await import('./api/auth');
       const data = await authAPI.refreshToken(this.refreshToken);
       
-      logger.log('[tokenManager] Refresh token response:', {
+      // ✅ Auth 타임라인 로그: refresh 성공
+      const refreshDuration = Date.now() - refreshStartTime;
+      logger.log('[tokenManager] Refresh request succeeded', {
+        timestamp: new Date().toISOString(),
+        duration: `${refreshDuration}ms`,
         hasAccessToken: !!data.access_token,
         accessTokenLength: data.access_token?.length || 0,
         hasRefreshToken: !!data.refresh_token,
@@ -174,28 +227,69 @@ class TokenManager {
         expiresIn
       );
       
+      // ✅ Auth 타임라인 로그: 토큰 저장 완료
+      logger.log('[tokenManager] Tokens updated after refresh', {
+        timestamp: new Date().toISOString(),
+        newExpiresAt: this.expiresAt,
+        newTimeUntilExpiry: this.getTimeUntilExpiry(),
+      });
+      
       return data.access_token;
     } catch (error) {
-      logger.error(error instanceof Error ? error : new Error(String(error)), { component: 'tokenManager', action: 'refresh_token' });
-      
-      // Refresh token이 만료되었거나 유효하지 않은 경우
+      // ✅ Auth 타임라인 로그: refresh 실패
+      const refreshDuration = Date.now() - refreshStartTime;
       const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes('Invalid or expired refresh token') || 
-          errorMessage.includes('expired') ||
-          errorMessage.includes('invalid')) {
-        logger.warn('[tokenManager] Refresh token expired or invalid, clearing tokens and redirecting to login');
-        this.clearTokens();
-        
-        // 로그인 페이지로 리다이렉트 (클라이언트 사이드에서만)
-        if (typeof window !== 'undefined') {
-          // AuthGuard가 자동으로 처리하도록 하기 위해 약간의 지연을 두고 리다이렉트
-          setTimeout(() => {
-            window.location.href = '/login';
-          }, 100);
+      logger.error(error instanceof Error ? error : new Error(String(error)), {
+        component: 'tokenManager',
+        action: 'refresh_token',
+        timestamp: new Date().toISOString(),
+        duration: `${refreshDuration}ms`,
+        errorMessage,
+      });
+      
+      // ✅ Refresh 실패 시 전역 세션 정리 → 로그인으로 강제
+      // "부분 복구" 금지: 모든 저장소 정리 + BroadcastChannel로 다른 탭에도 알림
+      logger.warn('[tokenManager] Refresh failed, performing global session cleanup', {
+        timestamp: new Date().toISOString(),
+        errorMessage,
+        willRedirect: typeof window !== 'undefined',
+      });
+      
+      // 전역 세션 정리
+      this.clearTokens();
+      
+      // ✅ BroadcastChannel을 통한 다른 탭에 세션 정리 알림
+      if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
+        try {
+          const channel = new BroadcastChannel('auth_events');
+          channel.postMessage({
+            type: 'SESSION_EXPIRED',
+            reason: 'refresh_failed',
+            error: errorMessage,
+            timestamp: new Date().toISOString(),
+          });
+          channel.close();
+          logger.log('[tokenManager] Broadcasted session expired event to other tabs', {
+            timestamp: new Date().toISOString(),
+          });
+        } catch (broadcastError) {
+          logger.warn('[tokenManager] Failed to broadcast session expired event', {
+            error: broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
+          });
         }
-      } else {
-        // 기타 에러는 토큰만 클리어
-        this.clearTokens();
+      }
+      
+      // ✅ 로그인 페이지로 강제 리다이렉트
+      if (typeof window !== 'undefined') {
+        // ✅ Auth 타임라인 로그: 리다이렉트 트리거
+        logger.log('[tokenManager] Redirecting to login due to refresh failure', {
+          timestamp: new Date().toISOString(),
+          reason: 'refresh_failed',
+          errorMessage,
+        });
+        
+        // 즉시 리다이렉트 (지연 없이)
+        window.location.href = `/login?reason=${encodeURIComponent('세션이 만료되었습니다. 다시 로그인해주세요.')}`;
       }
       
       throw error;
@@ -208,18 +302,33 @@ class TokenManager {
   }
 
   // 토큰 삭제
+  // ✅ 전역 세션 정리: 모든 저장소 정리
   clearTokens(): void {
     if (typeof window === 'undefined') return;
+    
+    // ✅ Auth 타임라인 로그: 토큰 삭제 시작
+    logger.log('[tokenManager] clearTokens called', {
+      timestamp: new Date().toISOString(),
+      hadAccessToken: !!this.accessToken,
+      hadRefreshToken: !!this.refreshToken,
+      expiresAt: this.expiresAt,
+    });
     
     this.accessToken = null;
     this.refreshToken = null;
     this.expiresAt = 0;
     
+    // ✅ 모든 저장소 정리 (localStorage, sessionStorage)
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('token_expires_at');
     sessionStorage.removeItem('csrf_token');
     
     this.csrfToken = null;
+    
+    // ✅ Auth 타임라인 로그: 토큰 삭제 완료
+    logger.log('[tokenManager] Tokens cleared', {
+      timestamp: new Date().toISOString(),
+    });
   }
 
   // 토큰 유효성 확인
