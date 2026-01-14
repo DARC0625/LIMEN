@@ -98,12 +98,16 @@ func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	// Use direct encoding for simple responses (no pooling needed for small responses)
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
 		"time":    time.Now().Format(time.RFC3339),
 		"db":      dbStatus,
 		"libvirt": libvirtStatus,
-	})
+	}); err != nil {
+		logger.Log.Error("failed to encode response", zap.Error(err))
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
 type CreateVMRequest struct {
@@ -1108,11 +1112,14 @@ func (h *Handler) HandleVMConsole(w http.ResponseWriter, r *http.Request) {
 	// Return response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"ws_url":     wsURL,
 		"protocol":   "vnc",
 		"expires_at": expirationTime.Format(time.RFC3339),
-	})
+	}); err != nil {
+		logger.Log.Error("failed to encode response", zap.Error(err))
+		return
+	}
 
 	logger.Log.Info("Console URL issued",
 		zap.String("vm_uuid", uuidStr),
@@ -1247,10 +1254,13 @@ func (h *Handler) HandleVMDelete(w http.ResponseWriter, r *http.Request) {
 	// Return success response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "VM deleted successfully",
 		"vm_uuid": uuidStr,
-	})
+	}); err != nil {
+		logger.Log.Error("failed to encode response", zap.Error(err))
+		return
+	}
 }
 
 // acceptWebSocket accepts a WebSocket connection with origin validation.
@@ -2341,7 +2351,7 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"vm_uuid":    uuidStr,
 			"media_path": mediaPath,
 			"attached":   mediaPath != "",
@@ -2353,7 +2363,10 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 					"name":   filepath.Base(vmDiskPath),
 				},
 			},
-		})
+		}); err != nil {
+			logger.Log.Error("failed to encode response", zap.Error(err))
+			return
+		}
 		return
 	}
 
@@ -2386,11 +2399,14 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 		}
 		logger.Log.Info("Media detached (disabled)", zap.String("vm_name", vmRec.Name), zap.String("previous_iso_path", currentMediaPath))
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"message":             "Media disabled successfully. You can reattach it later.",
 			"vm_uuid":             uuidStr,
 			"previous_media_path": currentMediaPath,
-		})
+		}); err != nil {
+			logger.Log.Error("failed to encode response", zap.Error(err))
+			return
+		}
 	case "attach":
 		// Support both iso_path (legacy) and media_path (new, supports both ISO and VM disk)
 		mediaPath := req.MediaPath
@@ -2422,11 +2438,14 @@ func (h *Handler) HandleVMMedia(w http.ResponseWriter, r *http.Request) {
 		}
 		logger.Log.Info("Media attached", zap.String("vm_name", vmRec.Name), zap.String("media_path", mediaPath))
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"message":    "Media attached successfully",
 			"vm_uuid":    uuidStr,
 			"media_path": mediaPath,
-		})
+		}); err != nil {
+			logger.Log.Error("failed to encode response", zap.Error(err))
+			return
+		}
 	default:
 		errors.WriteBadRequest(w, fmt.Sprintf("Invalid action: %s. Valid actions: attach, detach", req.Action), nil)
 	}
@@ -2492,12 +2511,16 @@ func (h *Handler) HandleListISOs(w http.ResponseWriter, r *http.Request, cfg *co
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"isos":       isos,
 		"vm_disks":   vmDisks,
 		"count":      len(isos),
 		"disk_count": len(vmDisks),
-	})
+	}); err != nil {
+		logger.Log.Error("failed to encode response", zap.Error(err))
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
 // HandleVMBootOrder handles boot order changes for a VM
@@ -2622,11 +2645,15 @@ func (h *Handler) HandleGetVMBootOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"vm_uuid":      uuidStr,
 		"boot_order":   vmRec.BootOrder,
 		"boot_devices": vmRec.BootOrder.GetBootDevices(),
-	})
+	}); err != nil {
+		logger.Log.Error("failed to encode response", zap.Error(err))
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
 // HandleFinalizeInstall finalizes VM installation by removing CDROM device
@@ -2687,19 +2714,25 @@ func (h *Handler) HandleFinalizeInstall(w http.ResponseWriter, r *http.Request) 
 	var updatedVM models.VM
 	if err := h.DB.Where("uuid = ?", uuidStr).First(&updatedVM).Error; err == nil {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{
 			"message":             "VM installation finalized successfully. CDROM removed, boot order preserved.",
 			"vm_uuid":             uuidStr,
 			"boot_order":          updatedVM.BootOrder,
 			"installation_status": "Installed",
-		})
+		}); encodeErr != nil {
+			logger.Log.Error("failed to encode response", zap.Error(encodeErr))
+			return
+		}
 	} else {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{
 			"message":             "VM installation finalized successfully. CDROM removed, boot order preserved.",
 			"vm_uuid":             uuidStr,
 			"boot_order":          vmRec.BootOrder,
 			"installation_status": "Installed",
-		})
+		}); encodeErr != nil {
+			logger.Log.Error("failed to encode response", zap.Error(encodeErr))
+			return
+		}
 	}
 }
