@@ -129,7 +129,8 @@ export const vmAPI = {
       vmData.vnc_enabled = vm.vnc_enabled;
     } else {
       // Default: Enable VNC for GUI OS
-      const guiOS = ['ubuntu-desktop', 'kali', 'windows10'];
+      // windows10과 windows 모두 지원 (백엔드 호환성 변환 후에도 체크)
+      const guiOS = ['ubuntu-desktop', 'kali', 'windows10', 'windows'];
       if (vm.os_type && guiOS.includes(vm.os_type)) {
         vmData.vnc_enabled = true;
         vmData.graphics_type = 'vnc';
