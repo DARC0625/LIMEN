@@ -27,6 +27,8 @@ jest.mock('../auth', () => ({
 jest.mock('../../utils/logger', () => ({
   logger: {
     error: jest.fn(),
+    log: jest.fn(),
+    warn: jest.fn(),
   },
 }))
 
@@ -42,23 +44,6 @@ import {
 import { tokenManager } from '../../tokenManager'
 import { getUserRoleFromToken, isUserApprovedFromToken } from '../../utils/token'
 import { authAPI } from '../auth'
-
-jest.mock('../../utils/token', () => ({
-  getUserRoleFromToken: jest.fn(),
-  isUserApprovedFromToken: jest.fn(),
-}))
-
-jest.mock('../auth', () => ({
-  authAPI: {
-    createSession: jest.fn(),
-  },
-}))
-
-jest.mock('../../utils/logger', () => ({
-  logger: {
-    error: jest.fn(),
-  },
-}))
 
 // Mock이 선언된 후에 타입 캐스팅
 const mockTokenManager = tokenManager as jest.Mocked<typeof tokenManager>
@@ -257,8 +242,18 @@ describe('api/index', () => {
   })
 
   describe('setTokens', () => {
+    beforeEach(() => {
+      jest.clearAllMocks()
+      // window 객체 mock (setTokens가 window 체크를 함)
+      Object.defineProperty(globalThis, 'window', {
+        value: {},
+        configurable: true,
+        writable: true,
+      })
+    })
+
     it('should set tokens and create session', async () => {
-      mockAuthAPI.createSession.mockResolvedValue()
+      mockAuthAPI.createSession.mockResolvedValue(undefined)
 
       await setTokens('access-token', 'refresh-token', 900)
 
@@ -280,7 +275,7 @@ describe('api/index', () => {
 
       await setTokens('access-token', 'refresh-token', 900)
 
-      expect(mockTokenManager.setTokens).toHaveBeenCalled()
+      expect(mockTokenManager.setTokens).toHaveBeenCalledWith('access-token', 'refresh-token', 900)
       // 에러가 로깅되어야 함
     })
   })
