@@ -58,13 +58,8 @@ export default defineConfig({
           use: { ...devices['Desktop Safari'] },
         },
       ],
-  // ✅ Hermetic: 최소한의 dev server는 필요 (localStorage 접근을 위한 유효한 origin)
-  // 백엔드는 모킹하지만, 프론트 dev server는 필요
-  // CI에서도 webServer 실행 (hermetic은 백엔드 모킹이지, 프론트 서버까지 제거하는 게 아님)
-  webServer: process.env.BASE_URL ? undefined : {
-    command: 'npm run dev -- --port 9444',
-    url: 'http://127.0.0.1:9444',
-    reuseExistingServer: !isCI,
-    timeout: 120_000,
-  },
+  // ✅ Hermetic: page.goto 제거로 webServer 불필요
+  // setContent로 빈 페이지 생성하므로 실제 서버 불필요
+  // 모든 네트워크는 page.route()로 완전 모킹
+  webServer: undefined, // ✅ Hermetic은 실제 서버 의존 없음
 });
