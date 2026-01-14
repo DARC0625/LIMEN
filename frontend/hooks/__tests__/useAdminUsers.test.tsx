@@ -1,8 +1,11 @@
 /**
  * useAdminUsers 훅 테스트
+ * @jest-environment jsdom
+ * 
+ * 브라우저 계약(Response, fetch)을 사용하므로 jsdom 환경 필요
  */
 
-import { renderHook, waitFor } from '@testing-library/react'
+import { renderHook, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import {
@@ -17,6 +20,19 @@ import { useToast } from '../../components/ToastContainer'
 
 // 의존성 모킹
 jest.mock('../../components/ToastContainer')
+
+// ✅ 훅이 실제로 호출하는 API를 mock
+jest.mock('../../lib/api/admin', () => ({
+  adminAPI: {
+    listUsers: jest.fn(),
+    getUser: jest.fn(),
+    createUser: jest.fn(),
+    updateUser: jest.fn(),
+    deleteUser: jest.fn(),
+    approveUser: jest.fn(),
+  },
+}))
+
 jest.mock('../../lib/tokenManager', () => ({
   tokenManager: {
     getAccessToken: jest.fn().mockResolvedValue('mock-token'),
@@ -49,14 +65,22 @@ jest.mock('../../lib/utils/errorHelpers', () => ({
 
 const mockUseToast = useToast as jest.MockedFunction<typeof useToast>
 
-// QueryClient를 제공하는 wrapper (반드시 사용)
-const makeWrapper = () => {
-  const qc = new QueryClient({
-    defaultOptions: { 
-      queries: { retry: false },
+// adminAPI mock 가져오기
+import { adminAPI } from '../../lib/api/admin'
+const mockAdminAPI = adminAPI as jest.Mocked<typeof adminAPI>
+
+// ✅ QueryClient를 제공하는 wrapper (정석 템플릿)
+const createTestQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, cacheTime: 0, staleTime: 0 },
       mutations: { retry: false },
     },
+    logger: { log: () => {}, warn: () => {}, error: () => {} }, // 테스트 로그 정리용
   })
+
+const makeWrapper = () => {
+  const qc = createTestQueryClient()
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   )
@@ -74,43 +98,8 @@ describe('useAdminUsers', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     
-    // fetch 모킹: new Response() 사용
-    global.fetch = jest.fn((input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input.toString()
-      
-      // 디버깅: 실제 호출되는 URL 확인
-      // console.log('[TEST] Fetch called with URL:', url)
-
-      // ✅ hook이 실제로 호출하는 URL로 체크 (넓게 잡기)
-      // /api/admin 또는 /admin 등 모든 경우 처리
-      if (url.includes('/api/admin') && !url.match(/\/admin\/users\/\d+/)) {
-        return Promise.resolve(
-          new Response(JSON.stringify(mockUsers), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        )
-      }
-
-      // 사용자 상세 조회
-      if (url.match(/\/admin\/users\/\d+$/)) {
-        const userId = parseInt(url.split('/').pop() || '0')
-        const user = mockUsers.find(u => u.id === userId) || { id: userId, username: 'user', role: 'user', email: 'user@limen.kr', vms: [] }
-        return Promise.resolve(
-          new Response(JSON.stringify(user), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        )
-      }
-
-      return Promise.resolve(
-        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      )
-    }) as jest.MockedFunction<typeof fetch>
+    // ✅ 훅이 실제로 호출하는 adminAPI를 mock
+    mockAdminAPI.listUsers.mockResolvedValue(mockUsers)
   })
 
   afterEach(() => {
@@ -137,24 +126,8 @@ describe('useAdminUsers', () => {
       { id: 3, username: 'user2', role: 'user', email: 'user2@limen.kr' },
     ]
 
-    ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input.toString()
-      // URL 조건을 넓혀서 쿼리 파라미터 등 처리 (넓게 잡기)
-      if (url.includes('/api/admin') && !url.match(/\/admin\/users\/\d+/)) {
-        return Promise.resolve(
-          new Response(JSON.stringify(unsortedUsers), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        )
-      }
-      return Promise.resolve(
-        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      )
-    })
+    // ✅ adminAPI를 직접 mock
+    mockAdminAPI.listUsers.mockResolvedValue(unsortedUsers)
 
     const { result } = renderHook(() => useAdminUsers(), { wrapper: makeWrapper() })
 
@@ -170,24 +143,8 @@ describe('useAdminUsers', () => {
   })
 
   it('should handle errors', async () => {
-    ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input.toString()
-      // URL 조건을 넓혀서 쿼리 파라미터 등 처리 (넓게 잡기)
-      if (url.includes('/api/admin') && !url.match(/\/admin\/users\/\d+/)) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ error: 'Failed to fetch users' }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        )
-      }
-      return Promise.resolve(
-        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      )
-    })
+    // ✅ adminAPI를 직접 mock하여 에러 반환
+    mockAdminAPI.listUsers.mockRejectedValue(new Error('Failed to fetch users'))
 
     const { result } = renderHook(() => useAdminUsers(), { wrapper: makeWrapper() })
 
@@ -205,35 +162,14 @@ describe('useAdminUser', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     
-    // fetch 모킹: new Response() 사용
-    global.fetch = jest.fn((input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input.toString()
-
-      // 사용자 상세 조회 (URL 조건을 넓혀서 쿼리 파라미터 등 처리)
-      if (url.match(/\/admin\/users\/\d+$/)) {
-        const userId = parseInt(url.split('/').pop() || '0')
-        const mockUser = {
-          id: userId,
-          username: 'user1',
-          role: 'user',
-          email: 'user1@limen.kr',
-          vms: [],
-        }
-        return Promise.resolve(
-          new Response(JSON.stringify(mockUser), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        )
-      }
-
-      return Promise.resolve(
-        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      )
-    }) as jest.MockedFunction<typeof fetch>
+    // ✅ adminAPI를 직접 mock
+    mockAdminAPI.getUser.mockResolvedValue({
+      id: 1,
+      username: 'user1',
+      role: 'user',
+      email: 'user1@limen.kr',
+      vms: [],
+    } as any)
   })
 
   afterEach(() => {
@@ -258,8 +194,8 @@ describe('useAdminUser', () => {
   it('should not fetch when userId is null', () => {
     renderHook(() => useAdminUser(null), { wrapper: makeWrapper() })
 
-    // enabled가 false이므로 fetch가 호출되지 않아야 함
-    expect(global.fetch).not.toHaveBeenCalled()
+    // enabled가 false이므로 adminAPI.getUser가 호출되지 않아야 함
+    expect(mockAdminAPI.getUser).not.toHaveBeenCalled()
   })
 })
 
@@ -273,28 +209,12 @@ describe('useCreateUser', () => {
       warning: jest.fn(),
     } as any)
     
-    // fetch 모킹: new Response() 사용
-    global.fetch = jest.fn((input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input.toString()
-
-      // URL 조건을 넓혀서 쿼리 파라미터 등 처리 (넓게 잡기)
-      if (url.includes('/api/admin') && !url.match(/\/admin\/users\/\d+/)) {
-        // POST 요청인 경우
-        return Promise.resolve(
-          new Response(JSON.stringify({ id: 1, username: 'newuser', role: 'user' }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        )
-      }
-
-      return Promise.resolve(
-        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      )
-    }) as jest.MockedFunction<typeof fetch>
+    // ✅ adminAPI를 직접 mock
+    mockAdminAPI.createUser.mockResolvedValue({
+      id: 1,
+      username: 'newuser',
+      role: 'user',
+    } as any)
   })
 
   afterEach(() => {
@@ -306,42 +226,38 @@ describe('useCreateUser', () => {
 
     const { result } = renderHook(() => useCreateUser(), { wrapper: makeWrapper() })
 
-    result.current.mutate(newUser)
+    // ✅ mutateAsync로 성공을 "진짜" 만들기
+    await act(async () => {
+      await result.current.mutateAsync(newUser)
+    })
 
-    // useMutation은 isPending이 false가 될 때까지 기다린 후 검증
+    // ✅ React Query 상태 전이가 완료될 때까지 대기
     await waitFor(() => {
       expect(result.current.isPending).toBe(false)
     })
 
+    // mutateAsync 완료 후 상태 검증
     expect(result.current.isSuccess).toBe(true)
     expect(result.current.data).toBeDefined()
+    expect(mockAdminAPI.createUser).toHaveBeenCalledWith(newUser)
   })
 
   it('should handle creation errors', async () => {
     const newUser = { username: 'newuser', password: 'password', role: 'user' }
 
-    ;(global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input.toString()
-      // URL 조건을 넓혀서 쿼리 파라미터 등 처리 (넓게 잡기)
-      if (url.includes('/api/admin') && !url.match(/\/admin\/users\/\d+/)) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ error: 'Failed to create user' }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        )
-      }
-      return Promise.resolve(
-        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      )
-    })
+    // ✅ adminAPI를 직접 mock하여 에러 반환
+    mockAdminAPI.createUser.mockRejectedValue(new Error('Failed to create user'))
 
     const { result } = renderHook(() => useCreateUser(), { wrapper: makeWrapper() })
 
-    result.current.mutate(newUser)
+    // ✅ mutateAsync로 에러를 "진짜" 잡기
+    await act(async () => {
+      try {
+        await result.current.mutateAsync(newUser)
+      } catch (error) {
+        // 에러는 예상된 것
+      }
+    })
 
     // useMutation은 isPending이 false가 될 때까지 기다린 후 에러 검증
     await waitFor(() => {
@@ -363,27 +279,12 @@ describe('useUpdateUser', () => {
       warning: jest.fn(),
     } as any)
     
-    // fetch 모킹: new Response() 사용
-    global.fetch = jest.fn((input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input.toString()
-
-      // URL 조건을 넓혀서 쿼리 파라미터 등 처리
-      if (url.match(/\/admin\/users\/\d+$/)) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ id: 1, username: 'user1', role: 'admin' }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        )
-      }
-
-      return Promise.resolve(
-        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      )
-    }) as jest.MockedFunction<typeof fetch>
+    // ✅ adminAPI를 직접 mock
+    mockAdminAPI.updateUser.mockResolvedValue({
+      id: 1,
+      username: 'user1',
+      role: 'admin',
+    } as any)
   })
 
   afterEach(() => {
@@ -396,15 +297,19 @@ describe('useUpdateUser', () => {
 
     const { result } = renderHook(() => useUpdateUser(), { wrapper: makeWrapper() })
 
-    result.current.mutate({ id: userId, data: updateData })
+    // ✅ mutateAsync로 성공을 "진짜" 만들기
+    await act(async () => {
+      await result.current.mutateAsync({ id: userId, data: updateData })
+    })
 
-    // useMutation은 isPending이 false가 될 때까지 기다린 후 검증
+    // ✅ React Query 상태 전이가 완료될 때까지 대기
     await waitFor(() => {
       expect(result.current.isPending).toBe(false)
     })
 
     expect(result.current.isSuccess).toBe(true)
     expect(result.current.data).toBeDefined()
+    expect(mockAdminAPI.updateUser).toHaveBeenCalledWith(userId, updateData)
   })
 })
 
@@ -418,26 +323,8 @@ describe('useDeleteUser', () => {
       warning: jest.fn(),
     } as any)
     
-    // fetch 모킹: new Response() 사용
-    global.fetch = jest.fn((input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input.toString()
-
-      if (url.match(/\/api\/admin\/users\/\d+$/)) {
-        return Promise.resolve(
-          new Response(null, {
-            status: 204,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        )
-      }
-
-      return Promise.resolve(
-        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      )
-    }) as jest.MockedFunction<typeof fetch>
+    // ✅ adminAPI를 직접 mock
+    mockAdminAPI.deleteUser.mockResolvedValue(undefined as any)
   })
 
   afterEach(() => {
@@ -449,15 +336,19 @@ describe('useDeleteUser', () => {
 
     const { result } = renderHook(() => useDeleteUser(), { wrapper: makeWrapper() })
 
-    result.current.mutate(userId)
+    // ✅ mutateAsync로 성공을 "진짜" 만들기
+    await act(async () => {
+      await result.current.mutateAsync(userId)
+    })
 
-    // useMutation은 isPending이 false가 될 때까지 기다린 후 검증
+    // ✅ React Query 상태 전이가 완료될 때까지 대기
     await waitFor(() => {
       expect(result.current.isPending).toBe(false)
     })
 
     expect(result.current.isSuccess).toBe(true)
-    expect(result.current.error).toBeUndefined()
+    expect(result.current.error).toBeNull() // React Query는 에러가 없을 때 null 반환
+    expect(mockAdminAPI.deleteUser).toHaveBeenCalledWith(userId)
   })
 })
 
@@ -471,26 +362,13 @@ describe('useApproveUser', () => {
       warning: jest.fn(),
     } as any)
     
-    // fetch 모킹: new Response() 사용
-    global.fetch = jest.fn((input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input.toString()
-
-      if (url.match(/\/api\/admin\/users\/\d+\/approve$/)) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ id: 1, username: 'user1', role: 'user', approved: true }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        )
-      }
-
-      return Promise.resolve(
-        new Response(JSON.stringify({ error: 'not mocked: ' + url }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      )
-    }) as jest.MockedFunction<typeof fetch>
+    // ✅ adminAPI를 직접 mock
+    mockAdminAPI.approveUser.mockResolvedValue({
+      id: 1,
+      username: 'user1',
+      role: 'user',
+      approved: true,
+    } as any)
   })
 
   afterEach(() => {
@@ -502,15 +380,19 @@ describe('useApproveUser', () => {
 
     const { result } = renderHook(() => useApproveUser(), { wrapper: makeWrapper() })
 
-    result.current.mutate(userId)
+    // ✅ mutateAsync로 성공을 "진짜" 만들기
+    await act(async () => {
+      await result.current.mutateAsync(userId)
+    })
 
-    // useMutation은 isPending이 false가 될 때까지 기다린 후 검증
+    // ✅ React Query 상태 전이가 완료될 때까지 대기
     await waitFor(() => {
       expect(result.current.isPending).toBe(false)
     })
 
     expect(result.current.isSuccess).toBe(true)
     expect(result.current.data).toBeDefined()
+    expect(mockAdminAPI.approveUser).toHaveBeenCalledWith(userId)
   })
 })
 
