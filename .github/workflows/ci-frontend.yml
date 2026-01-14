@@ -38,6 +38,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check for undici usage (재발 방지)
+        run: |
+          if grep -r "from 'undici'\|require('undici')" frontend --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" -n; then
+            echo "❌ undici 직접 사용이 발견되었습니다. globalThis 기반 표준 API만 사용하세요."
+            exit 1
+          fi
+          echo "✅ undici 직접 사용 없음 확인"
+
       - name: Run ESLint
         run: npm run lint
 

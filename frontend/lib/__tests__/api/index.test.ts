@@ -1,5 +1,6 @@
 /**
  * lib/api/index.ts 테스트
+ * @jest-environment node
  */
 
 import { getUserRole, isApproved, isAdmin, setToken, removeToken, setTokens } from '../../api/index'

@@ -1,5 +1,6 @@
 /**
  * Snapshot API 테스트
+ * @jest-environment node
  */
 
 import { snapshotAPI } from '../snapshot'

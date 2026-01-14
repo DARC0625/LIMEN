@@ -17,6 +17,8 @@ const customJestConfig = {
     '/node_modules/',
     '/e2e/', // Playwright E2E 전부 제외
   ],
+  // API/유틸 테스트는 각 파일에 /** @jest-environment node */ 주석 추가
+  // 또는 testEnvironment를 조건부로 설정 (nextJest 제약으로 주석 방식 권장)
 }
 
 // createJestConfig는 next/jest가 비동기적으로 Next.js 구성을 로드할 수 있도록 하는 함수를 내보냅니다

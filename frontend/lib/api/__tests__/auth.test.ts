@@ -1,5 +1,6 @@
 /**
  * authAPI 테스트
+ * @jest-environment node
  */
 
 import { authAPI } from '../auth'

@@ -1,5 +1,6 @@
 /**
  * API 클라이언트 테스트
+ * @jest-environment node
  */
 
 import { apiRequest } from '../client'

@@ -1,5 +1,6 @@
 /**
  * Admin API 테스트
+ * @jest-environment node
  */
 
 import { adminAPI } from '../admin'

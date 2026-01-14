@@ -119,7 +119,7 @@ export default [
       },
     },
   },
-  // 프로덕션 소스: 강한 규칙 유지
+  // 프로덕션 소스: 강한 규칙 유지 + undici 사용 금지
   {
     files: ["src/**/*.{ts,tsx,js,jsx}", "app/**/*.{ts,tsx,js,jsx}", "components/**/*.{ts,tsx,js,jsx}", "hooks/**/*.{ts,tsx,js,jsx}", "lib/**/*.{ts,tsx,js,jsx}"],
     rules: {
@@ -128,6 +128,21 @@ export default [
         argsIgnorePattern: "^_",
         varsIgnorePattern: "^_",
         caughtErrorsIgnorePattern: "^_",
+      }],
+      // undici 직접 사용 금지 (표준 Web API만 사용)
+      "no-restricted-imports": ["error", {
+        paths: [{
+          name: "undici",
+          message: "undici 직접 사용 금지. globalThis 기반 표준 API(fetch/Response/Headers/Request)만 사용하세요.",
+        }],
+        patterns: [{
+          group: ["undici/*"],
+          message: "undici 직접 사용 금지. globalThis 기반 표준 API(fetch/Response/Headers/Request)만 사용하세요.",
+        }],
+      }],
+      "no-restricted-syntax": ["error", {
+        selector: "CallExpression[callee.name='require'][arguments.0.value='undici']",
+        message: "undici require 금지. globalThis 기반 표준 API(fetch/Response/Headers/Request)만 사용하세요.",
       }],
     },
   },

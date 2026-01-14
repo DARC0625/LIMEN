@@ -1,5 +1,6 @@
 /**
  * Quota API 테스트
+ * @jest-environment node
  */
 
 import { quotaAPI } from '../quota'

@@ -1,5 +1,6 @@
 /**
  * vmAPI 테스트
+ * @jest-environment node
  */
 
 import { vmAPI } from '../vm'
