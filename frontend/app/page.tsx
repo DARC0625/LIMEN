@@ -177,7 +177,7 @@ export default function Home() {
           
           
           {submitStatus === 'success' ? (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+            <div role="status" aria-live="polite" className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
               <div className="text-green-600 text-lg font-semibold mb-2">
                 등록이 완료되었습니다
               </div>
