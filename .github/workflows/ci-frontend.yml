@@ -148,8 +148,8 @@ jobs:
       - name: Run E2E tests (hermetic only)
         run: npm run test:e2e
         env:
-          BASE_URL: http://localhost:9444
           CI: true
+          # ✅ BASE_URL 제거: hermetic은 localhost 의존 없음
 
       - name: Upload Playwright report (on failure)
         if: failure()

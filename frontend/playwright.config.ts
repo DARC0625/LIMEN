@@ -32,24 +32,35 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-  ],
-  webServer: process.env.BASE_URL ? undefined : {
-    command: 'npm run dev',
-    url: 'http://localhost:9444',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
+  // ✅ CI Gate: chromium-only (firefox/webkit는 nightly로 분리)
+  // PR CI는 빠르고 안정적인 hermetic만 실행
+  projects: isCI
+    ? [
+        {
+          name: 'chromium',
+          use: { ...devices['Desktop Chrome'] },
+        },
+      ]
+    : [
+        {
+          name: 'chromium',
+          use: { ...devices['Desktop Chrome'] },
+        },
+        {
+          name: 'firefox',
+          use: { ...devices['Desktop Firefox'] },
+        },
+        {
+          name: 'webkit',
+          use: { ...devices['Desktop Safari'] },
+        },
+      ],
+  // ✅ CI에서는 webServer 불필요 (hermetic은 네비게이션 최소화)
+  // 로컬에서는 필요 시 자동으로 dev server 시작
+  webServer: isCI || process.env.BASE_URL ? undefined : {
+    command: 'npm run dev -- --port 9444',
+    url: 'http://127.0.0.1:9444',
+    reuseExistingServer: true,
+    timeout: 120_000,
   },
 });
