@@ -290,8 +290,12 @@ describe('Home Page', () => {
     fireEvent.click(submitButton)
 
     // 제출 중에는 버튼이 비활성화되어야 함
-    expect(submitButton).toBeDisabled()
-    expect(screen.getByText(/등록 중/i)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(submitButton).toBeDisabled()
+    })
+    
+    // React Query 상태 전환이 끝날 때까지 대기
+    expect(await screen.findByText(/등록 중/i)).toBeInTheDocument()
   })
 
   it('renders footer links', () => {

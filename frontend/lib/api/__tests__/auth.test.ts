@@ -1,6 +1,8 @@
 /**
  * authAPI 테스트
- * @jest-environment node
+ * @jest-environment jsdom
+ * 
+ * 브라우저 개념(cookie, document, window)을 사용하므로 jsdom 환경 필요
  */
 
 import { authAPI } from '../auth'
