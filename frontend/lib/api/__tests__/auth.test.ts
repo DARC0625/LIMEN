@@ -85,7 +85,7 @@ describe('authAPI', () => {
       ok: false,
       status: 401,
       json: async () => ({ message: 'Invalid credentials' }),
-    } as Response)
+    } as unknown as Response)
 
     await expect(
       authAPI.login({
@@ -200,7 +200,7 @@ describe('authAPI', () => {
     ;(global.fetch as jest.Mock).mockResolvedValue({
       ok: false,
       json: async () => ({}),
-    } as Response)
+    } as unknown as Response)
 
     await expect(
       authAPI.login({
@@ -218,7 +218,7 @@ describe('authAPI', () => {
       json: async () => {
         throw new Error('Invalid JSON')
       },
-    } as Response)
+    } as unknown as Response)
 
     // When/Then: JSON 파싱 실패 시 기본 메시지로 에러 처리
     await expect(
