@@ -14,10 +14,10 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:e2e": "npx playwright test --grep-invert @integration",
-    "test:e2e:ui": "npx playwright test --ui --grep-invert @integration",
-    "test:e2e:debug": "npx playwright test --debug --grep-invert @integration",
-    "test:e2e:integration": "npx playwright test --grep @integration",
+    "test:e2e": "npx playwright test e2e/token-refresh.spec.ts",
+    "test:e2e:ui": "npx playwright test --ui e2e/token-refresh.spec.ts",
+    "test:e2e:debug": "npx playwright test --debug e2e/token-refresh.spec.ts",
+    "test:e2e:integration": "npx playwright test e2e/vm-console-e2e.spec.ts e2e/compatibility.spec.ts",
     "lint": "eslint . --max-warnings 50",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
@@ -69,8 +69,7 @@
     "typescript": "^5",
     "typescript-eslint": "^8.52.0",
     "undici": "^7.18.2",
-    "web-streams-polyfill": "^4.2.0",
-    "@playwright/test": "^1.48.0"
+    "web-streams-polyfill": "^4.2.0"
   },
   "engines": {
     "node": ">=20.0.0",

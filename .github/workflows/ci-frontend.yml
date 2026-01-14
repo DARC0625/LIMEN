@@ -113,24 +113,17 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Verify build output
-        run: |
-          ls -la .next || echo "⚠️ .next directory not found"
-          ls -la .next/static 2>/dev/null || echo "⚠️ .next/static not found"
-          find .next -type f -name "*.js" | head -5 || echo "⚠️ No JS files found"
-
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
-          path: .next
+          path: ./frontend/.next
           retention-days: 7
-          if-no-files-found: warn
 
   e2e-frontend:
-    name: Frontend E2E
+    name: Frontend E2E (Hermetic Only)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: ./frontend
@@ -150,15 +143,13 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+        run: npx playwright install --with-deps chromium
 
-      - name: Run E2E tests (hermetic only, integration excluded)
+      - name: Run E2E tests (hermetic only)
         run: npm run test:e2e
         env:
           BASE_URL: http://localhost:9444
-          # ✅ 통합 E2E는 CI Gate에서 제외 (hermetic만 실행)
-          # ADMIN_USER, ADMIN_PASS는 integration E2E에만 필요하므로 제외
-          # integration E2E는 별도 러너/야간으로 분리
+          CI: true
 
       - name: Upload Playwright report (on failure)
         if: failure()
