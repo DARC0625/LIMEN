@@ -14,9 +14,9 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:debug": "playwright test --debug",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:e2e:debug": "npx playwright test --debug",
     "lint": "eslint . --max-warnings 50",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
@@ -68,7 +68,8 @@
     "typescript": "^5",
     "typescript-eslint": "^8.52.0",
     "undici": "^7.18.2",
-    "web-streams-polyfill": "^4.2.0"
+    "web-streams-polyfill": "^4.2.0",
+    "@playwright/test": "^1.48.0"
   },
   "engines": {
     "node": ">=20.0.0",
