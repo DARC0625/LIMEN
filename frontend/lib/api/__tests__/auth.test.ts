@@ -81,9 +81,11 @@ describe('authAPI', () => {
   })
 
   it('handles login errors', async () => {
-    ;(global.fetch as jest.Mock).mockResolvedValue(
-      new Response(JSON.stringify({ message: 'Invalid credentials' }), { status: 401 })
-    )
+    ;(global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ message: 'Invalid credentials' }),
+    } as Response)
 
     await expect(
       authAPI.login({
@@ -209,10 +211,16 @@ describe('authAPI', () => {
   })
 
   it('handles login JSON parse error', async () => {
-    ;(global.fetch as jest.Mock).mockResolvedValue(
-      new Response(JSON.stringify({ message: 'fail' }), { status: 401 })
-    )
+    // Given: JSON 파싱이 실패하는 응답
+    ;(global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => {
+        throw new Error('Invalid JSON')
+      },
+    } as Response)
 
+    // When/Then: JSON 파싱 실패 시 기본 메시지로 에러 처리
     await expect(
       authAPI.login({
         username: 'testuser',

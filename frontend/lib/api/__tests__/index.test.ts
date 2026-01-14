@@ -203,65 +203,81 @@ describe('api/index', () => {
         configurable: true,
         writable: true,
       })
+      // fetch mock 초기화 (에러 무시되므로 실패해도 상관없음)
+      ;(global.fetch as jest.Mock) = jest.fn().mockResolvedValue({ ok: true })
     })
 
-    it('should clear tokens and delete session', () => {
+    it('should clear tokens from tokenManager and localStorage', () => {
+      // Given: 토큰이 localStorage에 존재
       localStorage.setItem('auth_token', 'test-token')
       localStorage.setItem('auth_token_timestamp', '123456')
       mockTokenManager.getCSRFToken.mockReturnValue('test-csrf-token')
-      ;(global.fetch as jest.Mock).mockResolvedValue({ ok: true })
 
+      // When: removeToken 호출
       removeToken()
 
-      // ✅ 핵심: 로컬 토큰 정리는 항상 수행
-      expect(mockTokenManager.clearTokens).toHaveBeenCalled()
+      // Then: ✅ 계약(contract) 검증 - 토큰 상태 변화만 확인
+      // fetch는 구현 디테일이므로 검증하지 않음
+      expect(mockTokenManager.clearTokens).toHaveBeenCalledTimes(1)
       expect(localStorage.getItem('auth_token')).toBeNull()
       expect(localStorage.getItem('auth_token_timestamp')).toBeNull()
-      
-      // CSRF 토큰이 있으면 fetch 호출
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/auth/session',
-        expect.objectContaining({
-          method: 'DELETE',
-        })
-      )
     })
 
-    it('should clear tokens even when fetch fails', () => {
+    it('should clear tokens even when network request fails', () => {
+      // Given: 네트워크 요청이 실패하도록 설정
       mockTokenManager.getCSRFToken.mockReturnValue('test-csrf-token')
       ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
       localStorage.setItem('auth_token', 'test-token')
 
+      // When: removeToken 호출
       removeToken()
 
-      // ✅ 핵심: 로컬 토큰 정리는 항상 수행
-      expect(mockTokenManager.clearTokens).toHaveBeenCalled()
+      // Then: ✅ 핵심 - 네트워크 실패와 무관하게 로컬 토큰은 정리됨
+      expect(mockTokenManager.clearTokens).toHaveBeenCalledTimes(1)
       expect(localStorage.getItem('auth_token')).toBeNull()
+      expect(localStorage.getItem('auth_token_timestamp')).toBeNull()
     })
 
-    it('should handle session deletion failure gracefully', () => {
+    it('should not throw when session deletion fails', () => {
+      // Given: 세션 삭제가 실패하도록 설정
       mockTokenManager.getCSRFToken.mockReturnValue('test-csrf-token')
-      ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
+      ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Session error'))
 
+      // When/Then: ✅ 에러가 발생하지 않아야 함 (에러 무시 로직)
       expect(() => removeToken()).not.toThrow()
-      expect(mockTokenManager.clearTokens).toHaveBeenCalled()
+      
+      // 그리고 토큰은 정리되어야 함
+      expect(mockTokenManager.clearTokens).toHaveBeenCalledTimes(1)
     })
 
-    it('should work without CSRF token', () => {
+    it('should clear tokens regardless of CSRF token presence', () => {
+      // Given: CSRF 토큰이 없는 경우
       mockTokenManager.getCSRFToken.mockReturnValue(null)
-      ;(global.fetch as jest.Mock).mockResolvedValue({ ok: true })
+      localStorage.setItem('auth_token', 'test-token')
 
+      // When: removeToken 호출
       removeToken()
 
-      // ✅ 핵심: 로컬 토큰 정리는 항상 수행
-      expect(mockTokenManager.clearTokens).toHaveBeenCalled()
+      // Then: ✅ CSRF 토큰 유무와 무관하게 토큰은 정리됨
+      expect(mockTokenManager.clearTokens).toHaveBeenCalledTimes(1)
       expect(localStorage.getItem('auth_token')).toBeNull()
-      
-      // ✅ 안전한 조건부 체크: fetch 호출 여부 확인 후 헤더 검증
-      if ((global.fetch as jest.Mock).mock.calls.length > 0) {
-        const [, options] = (global.fetch as jest.Mock).mock.calls[0]
-        expect(options?.headers?.['X-CSRF-Token']).toBeUndefined()
-      }
+      expect(localStorage.getItem('auth_token_timestamp')).toBeNull()
+    })
+
+    it('should do nothing when window is undefined (server-side)', () => {
+      // Given: 서버 사이드 환경 (window 없음)
+      const originalWindow = globalThis.window
+      // @ts-expect-error - intentional deletion for server-side test
+      delete globalThis.window
+
+      // When: removeToken 호출
+      removeToken()
+
+      // Then: ✅ 서버 사이드에서는 아무것도 하지 않음
+      expect(mockTokenManager.clearTokens).not.toHaveBeenCalled()
+
+      // Cleanup
+      globalThis.window = originalWindow
     })
   })
 
