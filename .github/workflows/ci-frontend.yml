@@ -113,9 +113,16 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Verify build output
+        run: |
+          ls -la .next || echo "⚠️ .next directory not found"
+          ls -la .next/static 2>/dev/null || echo "⚠️ .next/static not found"
+          find .next -type f -name "*.js" | head -5 || echo "⚠️ No JS files found"
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
-          path: ./frontend/.next
+          path: .next
           retention-days: 7
+          if-no-files-found: warn
