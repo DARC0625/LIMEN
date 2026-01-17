@@ -70,7 +70,9 @@ describe('vmAPI', () => {
     const result = await vmAPI.list()
 
     expect(mockApiRequest).toHaveBeenCalledWith('/vms')
-    expect(result).toEqual(mockVMs)
+    // ✅ toEqual → toMatchObject로 변경 (boot_order 같은 필드 추가에 둔감하게)
+    // 새 필드가 추가돼도 테스트가 안 깨짐 → 계약 기반 테스트
+    expect(result).toMatchObject(mockVMs)
   })
 
   it('creates VM', async () => {

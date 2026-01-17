@@ -216,9 +216,9 @@ describe('security', () => {
       const mockChannel = {
         postMessage: jest.fn(),
         close: jest.fn(),
-      }
+      }; // ✅ 세미콜론 추가 (ASI 해결)
       // ✅ globalThis.BroadcastChannel로 mock (node/jsdom 어디서든 작동)
-      (globalThis as any).BroadcastChannel = jest.fn().mockImplementation(() => mockChannel) as any
+      (globalThis as any).BroadcastChannel = jest.fn().mockImplementation(() => mockChannel) as any;
 
       forceLogout('test reason')
 

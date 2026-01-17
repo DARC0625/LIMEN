@@ -151,8 +151,9 @@ try {
       // initScript/route/네트워크가 정상 작동하는지 1초 안에 확정
       try {
         await fetch('/api/auth/refresh', { method: 'POST' });
-      } catch (e) {
+      } catch {
         // 네트워크 에러는 예상됨 (route가 401을 반환하거나 abort)
+        // unused 변수 제거
       }
       
       // ✅ refresh 호출 계측 시작 (__FETCH_CALLS 초기화)
