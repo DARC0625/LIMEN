@@ -2,6 +2,15 @@
 // 비정상 접근 감지 및 자동 로그아웃 기능
 
 import { logger } from './utils/logger';
+import { StoragePort } from './ports/storagePort';
+import { LocationPort } from './ports/locationPort';
+import { BroadcastPort } from './ports/broadcastPort';
+import { createBrowserStoragePort, browserLocalStoragePort } from './adapters/browserStoragePort';
+import { createBrowserLocationPort } from './adapters/browserLocationPort';
+import { createBrowserBroadcastPort } from './adapters/browserBroadcastPort';
+import { createMemoryStoragePort } from './adapters/memoryStoragePort';
+import { createMemoryLocationPort } from './adapters/memoryLocationPort';
+import { createNoopBroadcastPort } from './adapters/noopBroadcastPort';
 
 // 세션 하이재킹 방지를 위한 브라우저 핑거프린트
 export function getBrowserFingerprint(): string {
@@ -78,27 +87,90 @@ export function notifyAuthEvent(_reason?: string): void {
   }
 }
 
-// 비정상 활동 감지 및 로깅 (차단 없음, 패시브 모니터링만)
-export function forceLogout(reason: string = '보안상의 이유로 로그아웃되었습니다.'): void {
-  if (typeof window === 'undefined') return;
+/**
+ * forceLogout - Port 주입 방식 (정석)
+ * 
+ * 정석 원칙: core 함수는 "리다이렉트 실행" 대신
+ * 결과 객체를 반환하고, 실제 redirect/broadcast는 브라우저 레이어에서 수행
+ * 
+ * @param reason - 로그아웃 이유
+ * @param options - Port 주입 옵션
+ * @returns 로그아웃 결과 객체 (redirect는 실행하지 않음)
+ */
+export function forceLogout(
+  reason: string = '보안상의 이유로 로그아웃되었습니다.',
+  options?: {
+    storage?: StoragePort;
+    location?: LocationPort | null;
+    broadcast?: BroadcastPort | null;
+  }
+): { action: 'LOGOUT'; reason: string; pathname?: string; shouldRedirect?: boolean } {
+  const storage = options?.storage ?? (typeof window !== 'undefined' && browserLocalStoragePort
+    ? browserLocalStoragePort
+    : createMemoryStoragePort());
+  
+  const location = options?.location ?? (typeof window !== 'undefined'
+    ? createBrowserLocationPort()
+    : null);
+  
+  const broadcast = options?.broadcast ?? (typeof window !== 'undefined'
+    ? createBrowserBroadcastPort()
+    : createNoopBroadcastPort());
+  
+  const pathname = location?.getPathname() ?? '/';
+  const hasToken = !!storage.get('auth_token');
   
   // 차단하지 않고 로깅만 수행
   logger.warn('[Security Log] Logout event detected:', {
     reason,
-    pathname: window.location.pathname,
+    pathname,
     timestamp: new Date().toISOString(),
-    hasToken: !!localStorage.getItem('auth_token'),
+    hasToken,
   });
   
   // 토큰이 만료되었거나 유효하지 않은 경우에만 토큰 제거 (정상적인 로그아웃)
   // 강제 리다이렉트는 하지 않음 - 사용자가 정상적으로 로그인 페이지로 이동할 수 있도록 함
   if (reason.includes('만료') || reason.includes('expired') || reason.includes('invalid')) {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_token_timestamp');
+    storage.remove('auth_token');
+    storage.remove('auth_token_timestamp');
   }
   
-  // 다른 탭에 알림만 전송 (차단하지 않음)
-  notifyAuthEvent(reason);
+  // Broadcast는 실행하지 않고, 결과에 포함
+  if (broadcast) {
+    broadcast.postAuthEvent({
+      type: 'AUTH_EVENT',
+      reason,
+      action: 'log',
+    });
+    broadcast.close();
+  }
+  
+  // Redirect는 실행하지 않고, 결과에 포함
+  // 실제 redirect는 브라우저 레이어에서 수행
+  return {
+    action: 'LOGOUT',
+    reason,
+    pathname,
+    shouldRedirect: reason.includes('만료') || reason.includes('expired') || reason.includes('invalid'),
+  };
+}
+
+/**
+ * forceLogoutBrowser - 브라우저용 래퍼 (기존 호환성 유지)
+ * 
+ * Port를 자동으로 주입하고, redirect도 실행
+ */
+export function forceLogoutBrowser(reason?: string): void {
+  const result = forceLogout(reason ?? '보안상의 이유로 로그아웃되었습니다.', {
+    storage: typeof window !== 'undefined' && browserLocalStoragePort ? browserLocalStoragePort : null,
+    location: typeof window !== 'undefined' ? createBrowserLocationPort() : null,
+    broadcast: typeof window !== 'undefined' ? createBrowserBroadcastPort() : null,
+  });
+  
+  // 브라우저 레이어에서 redirect 수행
+  if (result.shouldRedirect && typeof window !== 'undefined') {
+    window.location.href = '/login';
+  }
 }
 
 // 세션 ID 생성 (탭별 고유 ID)

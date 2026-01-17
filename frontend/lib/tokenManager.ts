@@ -3,6 +3,15 @@
 // 자동 토큰 갱신 및 CSRF 보호
 
 import { logger } from './utils/logger';
+import { StoragePort, SessionStoragePort } from './ports/storagePort';
+import { LocationPort } from './ports/locationPort';
+import { ClockPort } from './ports/clockPort';
+import { createBrowserStoragePort, browserLocalStoragePort, browserSessionStoragePort } from './adapters/browserStoragePort';
+import { createBrowserLocationPort } from './adapters/browserLocationPort';
+import { createBrowserClockPort } from './adapters/browserClockPort';
+import { createMemoryStoragePort, createMemorySessionStoragePort } from './adapters/memoryStoragePort';
+import { createMemoryLocationPort } from './adapters/memoryLocationPort';
+import { createMemoryClockPort } from './adapters/memoryClockPort';
 
 export type TokenPair = {
   accessToken: string;
@@ -16,7 +25,7 @@ export type TokenRefreshResponse = {
   expires_in: number; // 초 단위
 };
 
-// Token Storage (메모리 + localStorage 폴백)
+// Token Storage (메모리 + StoragePort 폴백)
 class TokenManager {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
@@ -24,36 +33,41 @@ class TokenManager {
   private csrfToken: string | null = null;
   private refreshPromise: Promise<string> | null = null;
 
-  constructor() {
+  constructor(
+    private storage: StoragePort,
+    private sessionStorage: SessionStoragePort,
+    private clock: ClockPort,
+    private location?: LocationPort | null
+  ) {
     logger.log('[tokenManager] Constructor called');
-    if (typeof window !== 'undefined') {
-      // localStorage에서 토큰 복원 (페이지 새로고침 대비)
-      this.loadTokens();
-      // CSRF 토큰 생성/복원
-      this.ensureCSRFToken();
-      logger.log('[tokenManager] Constructor complete', {
-        hasRefreshToken: !!this.refreshToken,
-        refreshTokenInStorage: !!localStorage.getItem('refresh_token'),
-        expiresAt: this.expiresAt,
-      });
-    } else {
-      logger.log('[tokenManager] Constructor: window is undefined (server side)');
-    }
+    // localStorage에서 토큰 복원 (페이지 새로고침 대비)
+    this.loadTokens();
+    // CSRF 토큰 생성/복원
+    this.ensureCSRFToken();
+    logger.log('[tokenManager] Constructor complete', {
+      hasRefreshToken: !!this.refreshToken,
+      refreshTokenInStorage: !!this.storage.get('refresh_token'),
+      expiresAt: this.expiresAt,
+    });
   }
 
   // CSRF 토큰 관리
   private ensureCSRFToken(): void {
-    if (typeof window === 'undefined') return;
-    
     // 세션 스토리지에서 CSRF 토큰 확인
-    let csrf = sessionStorage.getItem('csrf_token');
+    let csrf = this.sessionStorage.get('csrf_token');
     
     if (!csrf) {
       // 새로운 CSRF 토큰 생성 (32바이트 랜덤)
-      const array = new Uint8Array(32);
-      crypto.getRandomValues(array);
-      csrf = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-      sessionStorage.setItem('csrf_token', csrf);
+      // crypto는 브라우저/Node 모두에서 사용 가능
+      if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+        const array = new Uint8Array(32);
+        crypto.getRandomValues(array);
+        csrf = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+      } else {
+        // Node 환경 fallback (테스트용)
+        csrf = Math.random().toString(36).substring(2, 34) + Math.random().toString(36).substring(2, 34);
+      }
+      this.sessionStorage.set('csrf_token', csrf);
     }
     
     this.csrfToken = csrf;
@@ -63,13 +77,8 @@ class TokenManager {
     return this.csrfToken;
   }
 
-  // 토큰 저장 (메모리 + localStorage)
+  // 토큰 저장 (메모리 + StoragePort)
   setTokens(accessToken: string, refreshToken: string, expiresIn: number): void {
-    if (typeof window === 'undefined') {
-      logger.warn('[tokenManager] setTokens called on server side, ignoring');
-      return;
-    }
-    
     logger.log('[tokenManager] setTokens called', {
       accessTokenLength: accessToken?.length || 0,
       refreshTokenLength: refreshToken?.length || 0,
@@ -78,15 +87,15 @@ class TokenManager {
     
     this.accessToken = accessToken;
     this.refreshToken = refreshToken;
-    this.expiresAt = Date.now() + (expiresIn * 1000);
+    this.expiresAt = this.clock.now() + (expiresIn * 1000);
     
-    // localStorage에 Refresh Token만 저장 (Access Token은 메모리에만)
+    // StoragePort에 Refresh Token만 저장 (Access Token은 메모리에만)
     try {
-      localStorage.setItem('refresh_token', refreshToken);
-      localStorage.setItem('token_expires_at', this.expiresAt.toString());
-      logger.log('[tokenManager] Tokens saved to localStorage', {
-        refreshTokenSaved: !!localStorage.getItem('refresh_token'),
-        expiresAtSaved: !!localStorage.getItem('token_expires_at'),
+      this.storage.set('refresh_token', refreshToken);
+      this.storage.set('token_expires_at', this.expiresAt.toString());
+      logger.log('[tokenManager] Tokens saved to storage', {
+        refreshTokenSaved: !!this.storage.get('refresh_token'),
+        expiresAtSaved: !!this.storage.get('token_expires_at'),
         expiresAt: this.expiresAt,
       });
     } catch (error) {
@@ -95,15 +104,13 @@ class TokenManager {
     }
     
     // Access Token은 메모리에만 (보안 강화)
-    // localStorage에는 저장하지 않음
+    // StoragePort에는 저장하지 않음
   }
 
-  // 토큰 로드 (localStorage에서)
+  // 토큰 로드 (StoragePort에서)
   private loadTokens(): void {
-    if (typeof window === 'undefined') return;
-    
-    const refreshToken = localStorage.getItem('refresh_token');
-    const expiresAtStr = localStorage.getItem('token_expires_at');
+    const refreshToken = this.storage.get('refresh_token');
+    const expiresAtStr = this.storage.get('token_expires_at');
     
     if (refreshToken && expiresAtStr) {
       this.refreshToken = refreshToken;
@@ -116,10 +123,8 @@ class TokenManager {
 
   // Access Token 가져오기 (자동 갱신 포함)
   async getAccessToken(): Promise<string | null> {
-    if (typeof window === 'undefined') return null;
-    
     // Access Token이 유효하면 반환
-    if (this.accessToken && this.expiresAt > Date.now() + 60000) { // 1분 여유
+    if (this.accessToken && this.expiresAt > this.clock.now() + 60000) { // 1분 여유
       return this.accessToken;
     }
     
@@ -210,11 +215,11 @@ class TokenManager {
           errorMessage.includes('refresh_failed')) {
         logger.warn('[tokenManager] Refresh token expired or invalid, clearing tokens and redirecting to login');
         
-        // 로그인 페이지로 리다이렉트 (클라이언트 사이드에서만)
-        if (typeof window !== 'undefined') {
+        // 로그인 페이지로 리다이렉트 (LocationPort가 있으면 사용)
+        if (this.location) {
           // AuthGuard가 자동으로 처리하도록 하기 위해 약간의 지연을 두고 리다이렉트
           setTimeout(() => {
-            window.location.href = '/login';
+            this.location!.redirect('/login');
           }, 100);
         }
       }
@@ -234,15 +239,13 @@ class TokenManager {
 
   // 토큰 삭제
   clearTokens(): void {
-    if (typeof window === 'undefined') return;
-    
     this.accessToken = null;
     this.refreshToken = null;
     this.expiresAt = 0;
     
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('token_expires_at');
-    sessionStorage.removeItem('csrf_token');
+    this.storage.remove('refresh_token');
+    this.storage.remove('token_expires_at');
+    this.sessionStorage.remove('csrf_token');
     
     this.csrfToken = null;
   }
@@ -254,18 +257,16 @@ class TokenManager {
       return true;
     }
     
-    // 메모리에 없으면 localStorage에서 확인 (페이지 리로드 후)
-    if (typeof window !== 'undefined') {
-      const refreshToken = localStorage.getItem('refresh_token');
-      if (refreshToken) {
-        // localStorage에 있으면 메모리에 로드
-        this.refreshToken = refreshToken;
-        const expiresAtStr = localStorage.getItem('token_expires_at');
-        if (expiresAtStr) {
-          this.expiresAt = parseInt(expiresAtStr, 10);
-        }
-        return true;
+    // 메모리에 없으면 StoragePort에서 확인 (페이지 리로드 후)
+    const refreshToken = this.storage.get('refresh_token');
+    if (refreshToken) {
+      // StoragePort에 있으면 메모리에 로드
+      this.refreshToken = refreshToken;
+      const expiresAtStr = this.storage.get('token_expires_at');
+      if (expiresAtStr) {
+        this.expiresAt = parseInt(expiresAtStr, 10);
       }
+      return true;
     }
     
     return false;
@@ -279,8 +280,8 @@ class TokenManager {
     // expiresAt이 0이거나 유효하지 않으면 0 반환 (폴백)
     if (!this.expiresAt || this.expiresAt === 0) return 0;
     
-    // Date.now()가 유효하지 않으면 Infinity 반환 (폴백)
-    const now = Date.now();
+    // clock.now()가 유효하지 않으면 Infinity 반환 (폴백)
+    const now = this.clock.now();
     if (!isFinite(now)) return Infinity;
     
     // 계산 결과가 유효하지 않으면 0 반환 (폴백)
@@ -297,9 +298,44 @@ class TokenManager {
   }
 }
 
-// 싱글톤 인스턴스
-export const tokenManager = new TokenManager();
+/**
+ * TokenManager 팩토리 함수
+ * Port를 주입받아 TokenManager 인스턴스 생성
+ * 
+ * 정석 원칙: core 로직은 Port 인터페이스에만 의존하고,
+ * 실제 구현(localStorage/memory)은 adapter에서 주입받음
+ */
+export function createTokenManager(
+  storage?: StoragePort,
+  sessionStorage?: SessionStoragePort,
+  clock?: ClockPort,
+  location?: LocationPort | null
+): TokenManager {
+  // 기본값: 브라우저 환경이면 browser adapter, 아니면 memory adapter
+  const defaultStorage = storage ?? (typeof window !== 'undefined' && browserLocalStoragePort
+    ? browserLocalStoragePort
+    : createMemoryStoragePort());
+  
+  const defaultSessionStorage = sessionStorage ?? (typeof window !== 'undefined' && browserSessionStoragePort
+    ? browserSessionStoragePort
+    : createMemorySessionStoragePort());
+  
+  const defaultClock = clock ?? (typeof window !== 'undefined'
+    ? createBrowserClockPort()
+    : createMemoryClockPort());
+  
+  const defaultLocation = location ?? (typeof window !== 'undefined'
+    ? createBrowserLocationPort()
+    : null);
+  
+  return new TokenManager(defaultStorage, defaultSessionStorage, defaultClock, defaultLocation);
+}
+
+// 싱글톤 인스턴스 (기존 호환성 유지)
+// 브라우저 환경에서만 사용 가능
+export const tokenManager = typeof window !== 'undefined'
+  ? createTokenManager()
+  : createTokenManager(createMemoryStoragePort(), createMemorySessionStoragePort(), createMemoryClockPort(), null);
 
 // ✅ 제품 코드는 순수하게 유지
 // 테스트 훅(__test)은 frontend/e2e/tokenManager-test-entry.ts에서 부착
-
