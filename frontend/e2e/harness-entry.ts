@@ -147,11 +147,21 @@ try {
       // ✅ clearSession 호출 횟수 리셋
       testHook.resetClearSessionCalledCount();
       
+      // ✅ 2-A) runS4 시작에 "강제 fetch" 한 번 (스모크 테스트)
+      // initScript/route/네트워크가 정상 작동하는지 1초 안에 확정
+      try {
+        await fetch('/api/auth/refresh', { method: 'POST' });
+      } catch (e) {
+        // 네트워크 에러는 예상됨 (route가 401을 반환하거나 abort)
+      }
+      
       // ✅ refresh 호출 계측 시작 (__FETCH_CALLS 초기화)
       const fetchCallsBefore = (window.__FETCH_CALLS || []).length;
       
-      // ✅ refreshToken 세팅 (refreshOnce()가 직접 호출하므로 만료 판단 로직에 의존하지 않음)
+      // ✅ 2-B) 만료 조건을 실제로 refresh를 트리거하도록 강제
+      // expiresAt을 Date.now() - 1000 같이 확실히 만료 상태로 설정
       testHook.setRefreshToken('test-refresh-token');
+      testHook.setExpiresAt(Date.now() - 1000); // 확실히 만료된 상태
       sessionStorage.setItem('csrf_token', 'test-csrf-token');
       
       // ✅ refresh를 직접 호출 (만료 판단 로직에 의존하지 않음)

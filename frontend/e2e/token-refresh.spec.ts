@@ -195,6 +195,7 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     let refreshCallCount = 0;
     let refreshStatusSeen: number | null = null;
     
+    // ✅ 2-A) route는 injectHarness 이전에 설정 (스모크 테스트용)
     // ✅ B-2) route 패턴을 **/api/auth/refresh**로 고정 (절대/상대 경로 모두 매칭)
     await context.route('**/api/auth/refresh**', async (route) => {
       refreshCallCount++;

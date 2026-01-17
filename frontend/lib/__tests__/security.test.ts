@@ -1,5 +1,6 @@
 /**
  * security.ts 테스트
+ * @jest-environment jsdom
  */
 
 import {
@@ -216,7 +217,8 @@ describe('security', () => {
         postMessage: jest.fn(),
         close: jest.fn(),
       }
-      global.BroadcastChannel = jest.fn().mockImplementation(() => mockChannel) as any
+      // ✅ globalThis.BroadcastChannel로 mock (node/jsdom 어디서든 작동)
+      (globalThis as any).BroadcastChannel = jest.fn().mockImplementation(() => mockChannel) as any
 
       forceLogout('test reason')
 

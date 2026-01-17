@@ -91,13 +91,13 @@ export async function apiRequest<T>(
     : 0;
 
   // 강제 로깅 - 항상 출력 (콘솔 필터링 우회)
-  window.console.log('[API Request] ====== START ======');
-  window.console.log('[API Request] URL:', url);
-  window.console.log('[API Request] Method:', method);
-  window.console.log('[API Request] Endpoint:', endpoint);
-  window.console.log('[API Request] Has Auth:', !!accessToken);
-  window.console.log('[API Request] Has CSRF:', !!csrfToken);
-  window.console.log('[API Request] Full URL:', `${apiUrl}${endpoint}`);
+  console.log('[API Request] ====== START ======');
+  console.log('[API Request] URL:', url);
+  console.log('[API Request] Method:', method);
+  console.log('[API Request] Endpoint:', endpoint);
+  console.log('[API Request] Has Auth:', !!accessToken);
+  console.log('[API Request] Has CSRF:', !!csrfToken);
+  console.log('[API Request] Full URL:', `${apiUrl}${endpoint}`);
   
   // 디버그 로그 (개발 환경만)
   logger.log('[API Request]', {
@@ -143,7 +143,7 @@ export async function apiRequest<T>(
       });
       
       // 강제 로깅 - fetch 호출 전
-      window.console.log('[executeRequest] About to fetch:', {
+      console.log('[executeRequest] About to fetch:', {
         url,
         method,
         headers: Object.keys(headers),
@@ -161,7 +161,7 @@ export async function apiRequest<T>(
       });
       
       const fetchDuration = Date.now() - fetchStartTime;
-      window.console.log('[executeRequest] Fetch completed:', {
+      console.log('[executeRequest] Fetch completed:', {
         url,
         status: response.status,
         statusText: response.statusText,
@@ -322,7 +322,7 @@ async function handleResponse<T>(
       throw waitError;
     }
     
-    window.console.error('[handleResponse] 500 Internal Server Error:', {
+    console.error('[handleResponse] 500 Internal Server Error:', {
       endpoint,
       url,
       method,
