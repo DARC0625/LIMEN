@@ -81,10 +81,16 @@ window.runS4 = async function() {
     sessionStorage.setItem('csrf_token', 'test-csrf-token');
     
     // tokenManager.getAccessToken() 호출 → 자동 refresh 시도
-    try {
-      await tokenManager.getAccessToken();
-    } catch (error) {
-      console.log('[HARNESS] runS4: Refresh failed as expected:', error);
+    // ✅ unknown 타입이므로 타입 가드 필요
+    if (tokenManager && typeof tokenManager === 'object' && 'getAccessToken' in tokenManager) {
+      const getAccessToken = (tokenManager as { getAccessToken: () => Promise<string> }).getAccessToken;
+      try {
+        await getAccessToken();
+      } catch (error) {
+        console.log('[HARNESS] runS4: Refresh failed as expected:', error);
+      }
+    } else {
+      throw new Error('tokenManager.getAccessToken is not available');
     }
     
     // 세션 정리 완료 확인
