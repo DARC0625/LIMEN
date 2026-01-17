@@ -249,6 +249,22 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     expect(refreshCallCount).toBe(1);
     
     // ✅ T+0 ~ T+2h: 테스트 종료 직전에 __FETCH_CALLS를 dump하여 refresh 요청 실제 URL 확정
+    const fetchCalls1 = await page1.evaluate(() => window.__FETCH_CALLS || []);
+    const fetchCalls2 = await page2.evaluate(() => window.__FETCH_CALLS || []);
+    console.log('[E2E] S3 PAGE1 FETCH_CALLS:', fetchCalls1);
+    console.log('[E2E] S3 PAGE2 FETCH_CALLS:', fetchCalls2);
+    
+    // refresh 요청이 실제로 호출되었는지 확인
+    const refreshCalls1 = fetchCalls1.filter((url: string) => 
+      typeof url === 'string' && url.includes('refresh')
+    );
+    const refreshCalls2 = fetchCalls2.filter((url: string) => 
+      typeof url === 'string' && url.includes('refresh')
+    );
+    console.log('[E2E] S3 PAGE1 REFRESH_CALLS:', refreshCalls1);
+    console.log('[E2E] S3 PAGE2 REFRESH_CALLS:', refreshCalls2);
+    
+    // ✅ T+0 ~ T+2h: 테스트 종료 직전에 __FETCH_CALLS를 dump하여 refresh 요청 실제 URL 확정
     const fetchCalls = await page.evaluate(() => window.__FETCH_CALLS || []);
     console.log('[E2E] S4 FETCH_CALLS:', fetchCalls);
     
