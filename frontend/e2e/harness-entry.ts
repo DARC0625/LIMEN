@@ -134,12 +134,17 @@ try {
         setExpiresAt: (msEpoch: number | null) => void;
         clearSession: () => void;
         getStorageSnapshot: () => { refreshToken: string | null; expiresAt: string | null; csrfToken: string | null };
+        getClearSessionCalledCount: () => number;
+        resetClearSessionCalledCount: () => void;
         getAccessToken?: () => Promise<string | null>;
       } }).__test;
       
       if (!testHook) {
         return { ok: false, reason: 'tokenManager.__test is not available' };
       }
+      
+      // ✅ clearSession 호출 횟수 리셋
+      testHook.resetClearSessionCalledCount();
       
       // ✅ refreshToken 세팅 + expiresAt을 "만료 상태"로 세팅
       testHook.setRefreshToken('test-refresh-token');
@@ -148,21 +153,7 @@ try {
       
       // ✅ await tokenManager.getAccessToken() 호출 (실패 기대)
       // refresh route를 401로 1회 강제 (테스트 코드에서 route 설정)
-      if (testHook.getAccessToken) {
-        const getAccessTokenResult = await withTimeout(
-          testHook.getAccessToken(),
-          3000,
-          'getAccessToken (expected to fail with 401)'
-        );
-        
-        // 401 에러는 예상된 동작이므로 무시
-        if (!getAccessTokenResult.ok && getAccessTokenResult.reason.includes('401')) {
-          // 정상적인 실패
-        } else if (!getAccessTokenResult.ok) {
-          // 예상치 못한 에러
-          console.log('[HARNESS] runS4: Unexpected error:', getAccessTokenResult.reason);
-        }
-      } else if (tokenManager && typeof tokenManager === 'object' && 'getAccessToken' in tokenManager) {
+      if (tokenManager && typeof tokenManager === 'object' && 'getAccessToken' in tokenManager) {
         const getAccessToken = (tokenManager as { getAccessToken: () => Promise<string | null> }).getAccessToken;
         const getAccessTokenResult = await withTimeout(
           getAccessToken(),
@@ -179,15 +170,29 @@ try {
         }
       }
       
-      // ✅ clearSession()이 호출됐는지(또는 storage가 비었는지) 확인해서 결과 반환
-      // S4의 목적은 "제품이 실패 처리에서 세션 정리한다" 검증이니까,
-      // 검증은 __test.getStorageSnapshot() 같은 걸로 "결과"만 보면 된다
-      const snapshot = testHook.getStorageSnapshot();
-      const sessionCleared = !snapshot.refreshToken && !snapshot.expiresAt && !snapshot.csrfToken;
+      // ✅ S4에서 snapshot 찍는 위치를 2개로 쪼개
+      // refresh 실패 직후 snapshot A
+      const snapshotA = testHook.getStorageSnapshot();
+      const clearSessionCalledCountA = testHook.getClearSessionCalledCount();
+      
+      // await Promise.resolve() 한 번 (microtask flush) 후 snapshot B
+      await Promise.resolve();
+      const snapshotB = testHook.getStorageSnapshot();
+      const clearSessionCalledCountB = testHook.getClearSessionCalledCount();
+      
+      // 만약 A에서는 null인데 B에서 다시 토큰이 생기면 "재세팅" 문제고,
+      // A부터 토큰이 남아있으면 "정리 자체가 안 됨" 문제
+      const sessionClearedA = !snapshotA.refreshToken && !snapshotA.expiresAt && !snapshotA.csrfToken;
+      const sessionClearedB = !snapshotB.refreshToken && !snapshotB.expiresAt && !snapshotB.csrfToken;
       
       return {
         ok: true,
-        sessionCleared,
+        sessionCleared: sessionClearedB, // 최종 상태
+        clearSessionCalledCount: clearSessionCalledCountB,
+        snapshotA,
+        snapshotB,
+        clearSessionCalledCountA,
+        clearSessionCalledCountB,
       };
     } catch (error) {
       // ✅ 어떤 예외도 밖으로 던지지 말고 { ok:false, reason:String(e) } 로 반환

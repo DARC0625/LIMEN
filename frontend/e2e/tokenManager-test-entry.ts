@@ -9,6 +9,17 @@
 
 import { tokenManager } from '../lib/tokenManager';
 
+// ✅ clearSession 호출 계측 (테스트용)
+let clearSessionCalledCount = 0;
+
+// clearTokens() 호출을 감지하기 위해 원본 함수를 래핑
+const originalClearTokens = tokenManager.clearTokens.bind(tokenManager);
+tokenManager.clearTokens = function() {
+  clearSessionCalledCount++;
+  console.log('[TEST] clearTokens called, count:', clearSessionCalledCount);
+  return originalClearTokens();
+};
+
 // ✅ 테스트 전용 훅을 top-level에서 강제 할당
 // 번들러가 tree-shake로 제거하지 않도록 side-effect로 명시
 (tokenManager as Record<string, unknown>).__test = {
@@ -130,6 +141,21 @@ import { tokenManager } from '../lib/tokenManager';
       expiresAt: localStorage.getItem('token_expires_at'),
       csrfToken: sessionStorage.getItem('csrf_token'),
     };
+  },
+  
+  /**
+   * clearSession 호출 횟수 (테스트용)
+   * S4에서 '정리 함수가 호출됐는지'를 직접 계측
+   */
+  getClearSessionCalledCount: (): number => {
+    return clearSessionCalledCount;
+  },
+  
+  /**
+   * clearSession 호출 횟수 리셋 (테스트용)
+   */
+  resetClearSessionCalledCount: (): void => {
+    clearSessionCalledCount = 0;
   },
 };
 
