@@ -280,6 +280,15 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       }
     });
     
+    // ✅ Command 2: __S4_TRACE 로그 출력 (timeout 시 어디서 멈췄는지 확정)
+    const trace = await page.evaluate(() => window.__S4_TRACE || []);
+    console.log('[E2E] S4_TRACE:', trace);
+    
+    // ✅ Command 2: abort된 URL 목록 출력
+    if (abortedUrls.length > 0) {
+      console.log('[E2E] Aborted URLs (not in allowlist):', abortedUrls);
+    }
+    
     // ✅ 계약 기반 검증
     if (!result.ok) {
       console.error('[E2E] S4 TEST FAILED - result:', result);
