@@ -21,183 +21,93 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 /**
- * ✅ 명령 1) harness 파일은 레포에 두지 말고 테스트에서 route로 서빙
- * Lint 영구 종결: 파일이 없으니 ESLint/TSConfig/빌드 규칙에 걸리지 않음
- */
-const HARNESS_JS = `
-/**
- * ✅ Hermetic E2E 테스트 전용 Harness
+ * ✅ 명령 2) tokenManager는 브라우저에서 import 가능하게 ESM 번들로 만들어 route로 서빙
  * 
- * PR Gate hermetic은 "브라우저 + origin + storage + 네트워크"만 쓰고,
- * Next 앱 라우팅/번들/페이지(/login, /dashboard)에 기대지 않음.
- * 
- * 이 harness가 tokenManager 흐름을 직접 호출해서 refresh/정리/브로드캐스트를 발생시킴
+ * ✅ A안: esbuild 번들링에서 process/env 완전 치환
+ * 브라우저 번들에서 process 자체가 사라지게 만들기
  */
-
-// 전역 상태 플래그 (테스트에서 관측 가능)
-window.__SESSION_CLEARED = false;
-window.__REFRESH_COMPLETED = false;
-window.__REDIRECT_TO_LOGIN = null;
-window.__REFRESH_CALL_COUNT = 0;
-
-// location.href monkeypatch (리다이렉트 감지)
-Object.defineProperty(window.location, 'href', {
-  set: function(url) {
-    if (url.includes('/login')) {
-      window.__REDIRECT_TO_LOGIN = url;
-      console.log('[HARNESS] location.href set to:', url);
-      // 실제 리다이렉트는 하지 않음 (테스트 환경)
-    }
-  },
-  get: function() {
-    return window.__CURRENT_URL || 'http://local.test/';
-  },
-  configurable: true,
-});
-
-// BroadcastChannel 메시지 수신 (멀티탭 동기화 감지)
-let broadcastChannel = null;
-if (typeof BroadcastChannel !== 'undefined') {
-  broadcastChannel = new BroadcastChannel('token-refresh');
-  broadcastChannel.onmessage = (event) => {
-    console.log('[HARNESS] BroadcastChannel message received:', event.data);
-    if (event.data.type === 'refresh-completed') {
-      window.__REFRESH_COMPLETED = true;
-    }
-  };
-}
-
-// tokenManager 인스턴스 (동적 로드)
-let tokenManagerInstance = null;
-
-async function loadTokenManager() {
-  if (tokenManagerInstance) return tokenManagerInstance;
+async function buildTokenManagerESM(): Promise<string> {
+  const tokenManagerPath = join(__dirname, '../lib/tokenManager.ts');
   
-  // E2E 테스트 환경에서는 실제 프로덕션 코드를 사용
-  // 테스트 코드에서 주입된 tokenManager 사용
-  if (window.__TOKEN_MANAGER) {
-    tokenManagerInstance = window.__TOKEN_MANAGER;
-    console.log('[HARNESS] tokenManager loaded from window.__TOKEN_MANAGER');
-    return tokenManagerInstance;
-  }
+  const result = await esbuild.build({
+    entryPoints: [tokenManagerPath],
+    bundle: true,
+    write: false,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2020',
+    external: ['next'], // Next.js는 외부 의존성으로 처리
+    // ✅ process.env 완전 치환 (브라우저에서 process가 사라지게)
+    define: {
+      'process.env.NODE_ENV': '"test"',
+      'process.env.NEXT_PUBLIC_API_URL': '"/api"',
+      'process.env.NEXT_PUBLIC_SENTRY_DSN': 'undefined',
+      'process.env.NEXT_PUBLIC_ERROR_TRACKING_API': 'undefined',
+      'process.env': '{}', // 나머지 모든 process.env 접근은 {}로 치환
+    },
+  });
   
-  // fallback: 직접 import 시도
-  try {
-    const module = await import('/lib/tokenManager.js');
-    tokenManagerInstance = module.tokenManager;
-    console.log('[HARNESS] tokenManager loaded from import');
-    return tokenManagerInstance;
-  } catch (error) {
-    console.error('[HARNESS] Failed to load tokenManager:', error);
-    throw error;
-  }
+  return result.outputFiles[0].text;
 }
 
 /**
- * S4: refresh 실패 시 전역 세션 정리 및 강제 로그아웃
+ * ✅ 명령 1) harness는 IIFE로 번들링하여 window에 전역 함수 등록
+ * 
+ * 원인 A 해결: esbuild 번들이 ESM(export) 형태라 <script>로 넣어도 전역이 안 생김
+ * 해결: harness 번들을 IIFE로 만들고 window에 명시적으로 붙이기
  */
-window.runS4 = async function() {
-  console.log('[HARNESS] runS4: Starting refresh failure test');
+async function buildHarnessIIFE(): Promise<string> {
+  const harnessPath = join(__dirname, 'harness-entry.ts');
   
-  try {
-    const tokenManager = await loadTokenManager();
-    
-    window.__SESSION_CLEARED = false;
-    window.__REDIRECT_TO_LOGIN = null;
-    
-    // 만료된 토큰 상태로 설정 (refresh 트리거)
-    const expiresAt = Date.now() - 1000;
-    localStorage.setItem('refresh_token', 'test-refresh-token');
-    localStorage.setItem('token_expires_at', expiresAt.toString());
-    sessionStorage.setItem('csrf_token', 'test-csrf-token');
-    
-    // tokenManager.getAccessToken() 호출 → 자동 refresh 시도
-    try {
-      await tokenManager.getAccessToken();
-    } catch (error) {
-      console.log('[HARNESS] runS4: Refresh failed as expected:', error);
-    }
-    
-    // 세션 정리 완료 확인
-    const refreshToken = localStorage.getItem('refresh_token');
-    const expiresAtAfter = localStorage.getItem('token_expires_at');
-    const csrfToken = sessionStorage.getItem('csrf_token');
-    
-    if (!refreshToken && !expiresAtAfter && !csrfToken) {
-      window.__SESSION_CLEARED = true;
-      console.log('[HARNESS] runS4: Session cleared successfully');
-    }
-    
-    // 리다이렉트 확인 (tokenManager가 location.href = '/login' 호출)
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    return {
-      sessionCleared: window.__SESSION_CLEARED,
-      redirectToLogin: window.__REDIRECT_TO_LOGIN,
-    };
-  } catch (error) {
-    console.error('[HARNESS] runS4: Error:', error);
-    throw error;
-  }
-};
+  const result = await esbuild.build({
+    entryPoints: [harnessPath],
+    bundle: true,
+    write: false,
+    format: 'iife', // ✅ IIFE로 변경 (전역 함수 생성)
+    platform: 'browser',
+    target: 'es2020',
+    globalName: '__E2E__', // 필요시 전역 이름 지정
+  });
+  
+  return result.outputFiles[0].text;
+}
 
 /**
- * S3: 멀티탭 동시 refresh 경합 방지 (single-flight)
+ * ✅ 명령 3) page.setContent()로 완전 격리된 페이지 생성
+ * 
+ * 서버/라우팅/네트워크 없이도 100% 재현 가능
+ * CI에서 네트워크/라우팅/정적파일/도메인 관련 변수가 싹 사라짐
  */
-window.runS3 = async function() {
-  console.log('[HARNESS] runS3: Starting multi-tab refresh test');
+async function injectHarness(
+  page: Page,
+  tokenManagerESM: string,
+  harnessIIFE: string
+): Promise<void> {
+  // ✅ 완전 격리된 페이지 생성
+  await page.setContent('<html><head></head><body></body></html>', {
+    waitUntil: 'domcontentloaded',
+  });
   
-  try {
-    const tokenManager = await loadTokenManager();
-    
-    window.__REFRESH_COMPLETED = false;
-    
-    // 만료된 토큰 상태로 설정 (refresh 트리거)
-    const expiresAt = Date.now() - 1000;
-    localStorage.setItem('refresh_token', 'test-refresh-token');
-    localStorage.setItem('token_expires_at', expiresAt.toString());
-    sessionStorage.setItem('csrf_token', 'test-csrf-token');
-    
-    window.__REFRESH_CALL_COUNT++;
-    
-    // tokenManager.getAccessToken() 호출 → 자동 refresh 시도
-    const accessToken = await tokenManager.getAccessToken();
-    
-    window.__REFRESH_COMPLETED = true;
-    
-    // BroadcastChannel로 다른 탭에 알림
-    if (broadcastChannel) {
-      broadcastChannel.postMessage({ type: 'refresh-completed' });
-    }
-    
-    // 최종 토큰 상태 확인
-    const refreshToken = localStorage.getItem('refresh_token');
-    const expiresAtAfter = localStorage.getItem('token_expires_at');
-    
-    return {
-      accessToken: accessToken ? 'present' : null,
-      refreshToken: refreshToken,
-      expiresAt: expiresAtAfter,
-      refreshCompleted: window.__REFRESH_COMPLETED,
-    };
-  } catch (error) {
-    console.error('[HARNESS] runS3: Error:', error);
-    throw error;
-  }
-};
-
-console.log('[HARNESS] Test harness loaded');
-`;
-
-const HARNESS_HTML = `<!doctype html>
-<html>
-<head>
-  <script src="/harness.js"></script>
-</head>
-<body>
-  <h1>Hermetic E2E Test</h1>
-</body>
-</html>`;
+  // ✅ tokenManager 주입 (ESM)
+  await page.addScriptTag({
+    content: tokenManagerESM,
+    type: 'module',
+  });
+  
+  // ✅ harness 주입 (IIFE - 전역 함수 자동 등록)
+  await page.addScriptTag({
+    content: harnessIIFE,
+  });
+  
+  // ✅ 명령 1) harness는 반드시 페이지에 주입되고, 전역 함수가 생길 때까지 기다린다
+  // harness JS가 실행됨
+  // window.runS4 === 'function' / window.runS3 === 'function'이 됨
+  // 그 다음에만 호출
+  await page.waitForFunction(() => {
+    return typeof (window as any).runS4 === 'function' &&
+           typeof (window as any).runS3 === 'function';
+  }, { timeout: 5000 });
+}
 
 /**
  * ✅ 명령 2) tokenManager는 브라우저에서 import 가능하게 ESM 번들로 만들어 route로 서빙
@@ -229,64 +139,16 @@ async function buildTokenManagerESM(): Promise<string> {
   return result.outputFiles[0].text;
 }
 
-/**
- * ✅ Hermetic E2E 표준: route-fulfill로 "가짜 HTTP origin" 생성 + harness.js 제공
- * 
- * ✅ 명령 4) route 모킹 규칙: "허용 리스트 방식"
- * 반드시 아래 3개는 항상 허용:
- * - / (HTML)
- * - /harness.js
- * - /lib/tokenManager.js
- * 
- * 그리고 나머지 API만 시나리오별로 mock
- */
-async function setupHermeticRoutes(
-  page: Page,
-  tokenManagerESM: string,
-  refreshMock: (route: any) => Promise<void>
-) {
-  await page.route('**/*', async (route) => {
-    const url = route.request().url();
-    const req = route.request();
-    
-    // ✅ 허용 리스트 1: / (HTML)
-    if (url === 'http://local.test/' && req.resourceType() === 'document') {
-      return route.fulfill({
-        status: 200,
-        contentType: 'text/html',
-        body: HARNESS_HTML,
-      });
-    }
-    
-    // ✅ 허용 리스트 2: /harness.js
-    if (url === 'http://local.test/harness.js') {
-      return route.fulfill({
-        status: 200,
-        contentType: 'text/javascript',
-        body: HARNESS_JS,
-      });
-    }
-    
-    // ✅ 허용 리스트 3: /lib/tokenManager.js
-    if (url === 'http://local.test/lib/tokenManager.js') {
-      return route.fulfill({
-        status: 200,
-        contentType: 'text/javascript',
-        body: tokenManagerESM,
-      });
-    }
-    
-    // ✅ 나머지 API만 시나리오별로 mock
-    await refreshMock(route);
-  });
-}
 
 test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', () => {
   // ✅ 명령 2) tokenManager ESM 번들 (한 번만 빌드)
   let tokenManagerESM: string;
+  // ✅ 명령 1) harness IIFE 번들 (한 번만 빌드)
+  let harnessIIFE: string;
   
   test.beforeAll(async () => {
     tokenManagerESM = await buildTokenManagerESM();
+    harnessIIFE = await buildHarnessIIFE();
   });
 
   /**
@@ -296,7 +158,7 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     // ✅ 네트워크 모킹: refresh endpoint만 정확히 fulfill (전부 204 금지)
     let refreshCallCount = 0;
     
-    const refreshMock = async (route: any) => {
+    await context.route('**/*', async (route) => {
       const url = route.request().url();
       
       // ✅ S4: refresh 엔드포인트만 401로 강제 실패
@@ -315,13 +177,10 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       
       // ✅ 다른 모든 요청은 abort (hermetic: 실서버 의존 제거)
       await route.abort();
-    };
+    });
     
-    // ✅ 허용 리스트 방식으로 route 설정
-    await setupHermeticRoutes(page, tokenManagerESM, refreshMock);
-    
-    // ✅ 명령 3) hermetic에서 페이지 이동은 local.test 한 번만
-    await page.goto('http://local.test/', { waitUntil: 'domcontentloaded' });
+    // ✅ 명령 3) page.setContent()로 완전 격리된 페이지 생성
+    await injectHarness(page, tokenManagerESM, harnessIIFE);
 
     // ✅ localStorage 접근은 boot 이후에만 (HTTP origin 확보 후)
     await page.evaluate(() => {
@@ -343,19 +202,28 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     expect(storageStateBefore.expiresAt).toBeTruthy();
     expect(storageStateBefore.csrfToken).toBe('test-csrf-token');
 
-    // ✅ tokenManager를 주입 (harness.js가 사용)
-    await page.evaluate(async () => {
-      const mod = await import('/lib/tokenManager.js');
+  // ✅ tokenManager를 주입 (harness.js가 사용)
+  // page.setContent()에서는 origin이 없어서 import가 실패할 수 있으므로
+  // 주입된 ESM 번들을 직접 실행하여 window에 할당
+  await page.evaluate(async (tokenManagerCode) => {
+    // ESM 코드를 실행하여 모듈 가져오기
+    const blob = new Blob([tokenManagerCode], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    try {
+      const mod = await import(url);
       (window as any).__TOKEN_MANAGER = mod.tokenManager;
-    });
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }, tokenManagerESM);
+
+    // ✅ 명령 1) harness는 반드시 페이지에 주입되고, 전역 함수가 생길 때까지 기다린다
+    // injectHarness에서 이미 waitForFunction으로 보장했지만, 추가 확인
+    await page.waitForFunction(() => typeof (window as any).runS4 === 'function', { timeout: 5000 });
 
     // ✅ 명령 3) S4는 window.runS4() 호출로 트리거 (페이지 이동으로 트리거 ❌)
     await page.evaluate(async () => {
-      if (typeof (window as any).runS4 === 'function') {
-        await (window as any).runS4();
-      } else {
-        throw new Error('runS4 function not found');
-      }
+      await (window as any).runS4();
     });
 
     // ✅ 명령 3) 검증은 polling(localStorage waitForFunction) 금지
@@ -400,7 +268,7 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     let refreshCallCount = 0;
     const refreshCalls: Array<{ timestamp: number }> = [];
     
-    const refreshMock = async (route: any) => {
+    await context.route('**/*', async (route) => {
       const url = route.request().url();
       
       // ✅ S3: refresh 엔드포인트만 200 + 성공 응답
@@ -425,15 +293,12 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       
       // ✅ 다른 모든 요청은 abort (hermetic: 실서버 의존 제거)
       await route.abort();
-    };
+    });
     
-    // ✅ 허용 리스트 방식으로 route 설정
-    await setupHermeticRoutes(page1, tokenManagerESM, refreshMock);
-    await setupHermeticRoutes(page2, tokenManagerESM, refreshMock);
-
-    // ✅ 명령 3) hermetic에서 페이지 이동은 local.test 한 번만
-    await page1.goto('http://local.test/', { waitUntil: 'domcontentloaded' });
-    await page2.goto('http://local.test/', { waitUntil: 'domcontentloaded' });
+    // ✅ 명령 3) page.setContent()로 완전 격리된 페이지 생성
+    // ✅ S3는 page1/page2 둘 다 동일하게 주입 + 각각 존재성 체크
+    await injectHarness(page1, tokenManagerESM, harnessIIFE);
+    await injectHarness(page2, tokenManagerESM, harnessIIFE);
 
     // ✅ localStorage 접근은 boot 이후에만 (HTTP origin 확보 후)
     await page1.evaluate(() => {
@@ -456,31 +321,42 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     expect(storageStateBefore.csrfToken).toBe('test-csrf-token');
 
     // ✅ tokenManager를 주입 (harness.js가 사용)
-    await page1.evaluate(async () => {
-      const mod = await import('/lib/tokenManager.js');
-      (window as any).__TOKEN_MANAGER = mod.tokenManager;
-    });
+    // page.setContent()에서는 origin이 없어서 import가 실패할 수 있으므로
+    // 주입된 ESM 번들을 직접 실행하여 window에 할당
+    await page1.evaluate(async (tokenManagerCode) => {
+      const blob = new Blob([tokenManagerCode], { type: 'application/javascript' });
+      const url = URL.createObjectURL(blob);
+      try {
+        const mod = await import(url);
+        (window as any).__TOKEN_MANAGER = mod.tokenManager;
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }, tokenManagerESM);
     
-    await page2.evaluate(async () => {
-      const mod = await import('/lib/tokenManager.js');
-      (window as any).__TOKEN_MANAGER = mod.tokenManager;
-    });
+    await page2.evaluate(async (tokenManagerCode) => {
+      const blob = new Blob([tokenManagerCode], { type: 'application/javascript' });
+      const url = URL.createObjectURL(blob);
+      try {
+        const mod = await import(url);
+        (window as any).__TOKEN_MANAGER = mod.tokenManager;
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }, tokenManagerESM);
+
+    // ✅ 명령 1) harness는 반드시 페이지에 주입되고, 전역 함수가 생길 때까지 기다린다
+    // injectHarness에서 이미 waitForFunction으로 보장했지만, 추가 확인
+    await page1.waitForFunction(() => typeof (window as any).runS3 === 'function', { timeout: 5000 });
+    await page2.waitForFunction(() => typeof (window as any).runS3 === 'function', { timeout: 5000 });
 
     // ✅ 명령 3) 두 페이지에서 동시에 window.runS3() 호출 (함수 호출로 트리거)
     const promise1 = page1.evaluate(async () => {
-      if (typeof (window as any).runS3 === 'function') {
-        return await (window as any).runS3();
-      } else {
-        throw new Error('runS3 function not found');
-      }
+      await (window as any).runS3();
     });
     
     const promise2 = page2.evaluate(async () => {
-      if (typeof (window as any).runS3 === 'function') {
-        return await (window as any).runS3();
-      } else {
-        throw new Error('runS3 function not found');
-      }
+      await (window as any).runS3();
     });
     
     await Promise.all([promise1, promise2]);
