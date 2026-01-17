@@ -59,6 +59,21 @@ async function injectHarness(
   // ✅ tokenManager 주입과 harness-entry 주입 순서를 강제
   // harness-entry는 내부에서 window.__TOKEN_MANAGER를 참조할 가능성이 높음
   // 순서: tokenManager initScript → harness-entry initScript → goto(local.test)
+  
+  // ✅ T+0 ~ T+2h: fetch 캡처 인스트루먼트를 initScript로 추가
+  // refresh 요청 실제 URL을 확정하기 위해 fetch 호출을 캡처
+  await context.addInitScript({
+    content: `
+      window.__FETCH_CALLS = [];
+      const _fetch = window.fetch;
+      window.fetch = function(...args) {
+        const url = args[0] instanceof Request ? args[0].url : String(args[0]);
+        window.__FETCH_CALLS.push(url);
+        return _fetch.apply(this, args);
+      };
+    `,
+  });
+  
   await context.addInitScript({ content: tokenManagerIIFE });
   await context.addInitScript({ content: harnessIIFE });
 
@@ -145,7 +160,9 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       }
       
       // ✅ S4: refresh 엔드포인트만 401로 강제 실패
-      if (url.includes('/api/auth/refresh')) {
+      // ✅ T+0 ~ T+2h: page.route 패턴을 실제 URL에 맞게 수정
+      // fetch 캡처로 실제 refresh URL을 확인한 후 패턴 수정
+      if (url.includes('/auth/refresh') || url.includes('/api/auth/refresh')) {
         refreshCallCount++;
         await route.fulfill({
           status: 401,
@@ -230,6 +247,16 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     
     // ✅ refresh 호출 횟수 확인 (정확히 1회)
     expect(refreshCallCount).toBe(1);
+    
+    // ✅ T+0 ~ T+2h: 테스트 종료 직전에 __FETCH_CALLS를 dump하여 refresh 요청 실제 URL 확정
+    const fetchCalls = await page.evaluate(() => window.__FETCH_CALLS || []);
+    console.log('[E2E] S4 FETCH_CALLS:', fetchCalls);
+    
+    // refresh 요청이 실제로 호출되었는지 확인
+    const refreshCalls = fetchCalls.filter((url: string) => 
+      typeof url === 'string' && url.includes('refresh')
+    );
+    console.log('[E2E] S4 REFRESH_CALLS:', refreshCalls);
   });
 
   /**
@@ -256,7 +283,9 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       }
       
       // ✅ S3: refresh 엔드포인트만 200 + 성공 응답
-      if (url.includes('/api/auth/refresh')) {
+      // ✅ T+0 ~ T+2h: page.route 패턴을 실제 URL에 맞게 수정
+      // fetch 캡처로 실제 refresh URL을 확인한 후 패턴 수정
+      if (url.includes('/auth/refresh') || url.includes('/api/auth/refresh')) {
         refreshCallCount++;
         refreshCalls.push({ timestamp: Date.now() });
         
