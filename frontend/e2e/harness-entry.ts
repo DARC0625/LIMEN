@@ -146,6 +146,9 @@ try {
       // ✅ clearSession 호출 횟수 리셋
       testHook.resetClearSessionCalledCount();
       
+      // ✅ refresh 호출 계측 시작 (__FETCH_CALLS 초기화)
+      const fetchCallsBefore = (window.__FETCH_CALLS || []).length;
+      
       // ✅ refreshToken 세팅 + expiresAt을 "만료 상태"로 세팅
       // ⚠️ 핵심: accessToken도 명시적으로 만료 처리해야 getAccessToken()이 refreshAccessToken()을 호출함
       // setExpiresAt()만으로는 accessToken이 유효한 상태로 남아있을 수 있음
@@ -171,6 +174,13 @@ try {
         }
       }
       
+      // ✅ refresh 호출 계측 (__FETCH_CALLS에서 refresh URL 추출)
+      const fetchCallsAfter = (window.__FETCH_CALLS || []);
+      const refreshUrls = fetchCallsAfter
+        .filter((url: string) => typeof url === 'string' && (url.includes('/auth/refresh') || url.includes('/api/auth/refresh')))
+        .slice(fetchCallsBefore); // getAccessToken 호출 이후의 refresh 호출만
+      const refreshCallCount = refreshUrls.length;
+      
       // ✅ S4에서 snapshot 찍는 위치를 2개로 쪼개
       // refresh 실패 직후 snapshot A
       const snapshotA = testHook.getStorageSnapshot();
@@ -189,6 +199,10 @@ try {
         snapshotB,
         clearSessionCalledCountA,
         clearSessionCalledCountB,
+        // ✅ 확정 판정용 최소 계측
+        refreshCallCount,
+        refreshUrls,
+        // refreshStatuses는 테스트 코드에서 route handler에서 기록하므로 여기서는 URL만 반환
       };
     } catch (error) {
       // ✅ 어떤 예외도 밖으로 던지지 말고 { ok:false, reason:String(e) } 로 반환
