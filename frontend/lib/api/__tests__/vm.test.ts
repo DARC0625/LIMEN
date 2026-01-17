@@ -61,8 +61,8 @@ describe('vmAPI', () => {
 
   it('lists VMs', async () => {
     const mockVMs = [
-      { id: 1, name: 'VM1', status: 'running', boot_order: 'hdd-only' },
-      { id: 2, name: 'VM2', status: 'stopped', boot_order: 'hdd-only' },
+      { id: 1, name: 'VM1', status: 'running' },
+      { id: 2, name: 'VM2', status: 'stopped' },
     ]
 
     mockApiRequest.mockResolvedValue(mockVMs)
@@ -70,13 +70,7 @@ describe('vmAPI', () => {
     const result = await vmAPI.list()
 
     expect(mockApiRequest).toHaveBeenCalledWith('/vms')
-    // ✅ 유연 계약: 핵심 필드만 검증 (boot_order는 서버/정책에 의해 늘 수 있는 확장 필드)
-    expect(result).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: 1, name: 'VM1', status: 'running' }),
-        expect.objectContaining({ id: 2, name: 'VM2', status: 'stopped' }),
-      ])
-    )
+    expect(result).toEqual(mockVMs)
   })
 
   it('creates VM', async () => {

@@ -169,6 +169,15 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
    * S4: refresh 실패 시 강제 로그아웃 테스트
    */
   test('S4: refresh 실패 시 전역 세션 정리 및 강제 로그아웃', async ({ page, context }) => {
+    // ✅ 브라우저 콘솔 로그 캡처
+    const consoleLogs: string[] = [];
+    page.on('console', (msg) => {
+      const text = msg.text();
+      if (text.includes('[tokenManager') || text.includes('[authAPI') || text.includes('[TEST]') || text.includes('[HARNESS]')) {
+        consoleLogs.push(text);
+        console.log('[BROWSER]', text);
+      }
+    });
     // ✅ 네트워크 모킹: refresh endpoint만 정확히 fulfill (전부 204 금지)
     // ✅ PR Gate Hermetic에서는 절대 임의 도메인 실네트워크 접속 금지
     let refreshCallCount = 0;
@@ -276,6 +285,13 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     
     // ✅ 1) refresh route fulfill이 "반드시 401"을 주는지 재확인
     expect(refreshStatusSeen).toBe(401);
+    
+    // ✅ 브라우저 콘솔 로그 출력 (디버깅)
+    if (result.clearSessionCalledCount === 0) {
+      console.error('[E2E] S4 DEBUG - clearTokens() not called. Console logs:');
+      consoleLogs.forEach(log => console.error('  ', log));
+      console.error('[E2E] S4 DEBUG - result:', JSON.stringify(result, null, 2));
+    }
     
     expect(result).toEqual({
       ok: true,

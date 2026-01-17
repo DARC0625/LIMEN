@@ -281,7 +281,9 @@ export const authAPI = {
     });
 
     if (!response.ok) {
+      console.log('[authAPI.refreshToken] Response NOT OK - status:', response.status, 'statusText:', response.statusText);
       const errorData = await response.json().catch(() => ({ message: 'Token refresh failed' }));
+      console.log('[authAPI.refreshToken] Error data:', errorData);
       logger.error(new Error(errorData.message || 'Token refresh failed'), {
         component: 'authAPI',
         action: 'refreshToken',
@@ -289,8 +291,12 @@ export const authAPI = {
         statusText: response.statusText,
         error: errorData,
       });
-      throw new Error(errorData.message || 'Token refresh failed');
+      const error = new Error(errorData.message || 'Token refresh failed');
+      console.log('[authAPI.refreshToken] Throwing error:', error.message);
+      throw error;
     }
+    
+    console.log('[authAPI.refreshToken] Response OK - status:', response.status);
 
     const data = await response.json() as TokenRefreshResponse;
     

@@ -18,9 +18,7 @@ import { test, expect } from '@playwright/test';
 const TEST_USERNAME = process.env.TEST_USERNAME || 'test';
 const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test';
 
-// ✅ 통합 E2E 태그: CI Gate에서 제외
-// 실서버/계정 의존이 있으므로 CI에서는 제외, 별도 러너/야간으로 분리
-test.describe('브라우저 호환성 진단', { tag: '@integration' }, () => {
+test.describe('브라우저 호환성 진단', () => {
   test('최소 시나리오: 페이지 로드 + 로그인 + 콘솔 연결 버튼', async ({ page, browserName }) => {
     const logs: string[] = [];
     const errors: string[] = [];

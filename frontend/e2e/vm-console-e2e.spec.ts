@@ -11,9 +11,6 @@ function mustEnv(name: string, val: string) {
   if (!val) throw new Error(`Missing required env: ${name}`);
 }
 
-// ✅ 통합 E2E 태그: CI Gate에서 제외
-// 실서버/계정 의존이 있으므로 CI에서는 제외, 별도 러너/야간으로 분리
-
 // UUID 추출 함수
 function extractVmUuid(payload: any): string | null {
   if (!payload) return null;

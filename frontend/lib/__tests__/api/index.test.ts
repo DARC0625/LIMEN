@@ -1,9 +1,6 @@
 /**
  * lib/api/index.ts 테스트
- * @jest-environment jsdom
- * 
- * 브라우저 계약(localStorage/CSRF/header)을 검증하므로 jsdom 환경 필요
- * setToken/removeToken/setTokens가 typeof window === 'undefined' 가드에 걸리지 않도록
+ * @jest-environment node
  */
 
 import { getUserRole, isApproved, isAdmin, setToken, removeToken, setTokens } from '../../api/index'
@@ -48,51 +45,9 @@ const { getUserRoleFromToken, isUserApprovedFromToken } = require('../../../lib/
 const mockGetUserRoleFromToken = getUserRoleFromToken as jest.MockedFunction<typeof getUserRoleFromToken>
 const mockIsUserApprovedFromToken = isUserApprovedFromToken as jest.MockedFunction<typeof isUserApprovedFromToken>
 
-// LocalStorageMock 클래스 (Node 테스트용)
-class LocalStorageMock implements Storage {
-  private store = new Map<string, string>()
-
-  getItem(key: string): string | null {
-    return this.store.has(key) ? this.store.get(key)! : null
-  }
-
-  setItem(key: string, value: string): void {
-    this.store.set(key, String(value))
-  }
-
-  removeItem(key: string): void {
-    this.store.delete(key)
-  }
-
-  clear(): void {
-    this.store.clear()
-  }
-
-  key(index: number): string | null {
-    return Array.from(this.store.keys())[index] ?? null
-  }
-
-  get length(): number {
-    return this.store.size
-  }
-}
-
 describe('lib/api/index', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    
-    // ✅ window/localStorage mock은 import보다 먼저 (jsdom 환경이지만 안전하게)
-    // jsdom 환경에서는 window가 이미 존재하지만, localStorage는 명시적으로 초기화
-    if (typeof localStorage !== 'undefined') {
-      localStorage.clear()
-    } else {
-      Object.defineProperty(globalThis, 'localStorage', {
-        value: new LocalStorageMock(),
-        configurable: true,
-        writable: true,
-      })
-    }
-    
     mockTokenManager.getAccessToken.mockResolvedValue(null)
     mockTokenManager.getCSRFToken.mockReturnValue(null)
     mockGetUserRoleFromToken.mockReturnValue(null)
@@ -101,6 +56,11 @@ describe('lib/api/index', () => {
       ok: true,
       json: async () => ({}),
     } as Response)
+    
+    // localStorage 모킹
+    Storage.prototype.setItem = jest.fn()
+    Storage.prototype.removeItem = jest.fn()
+    Storage.prototype.getItem = jest.fn()
   })
 
   describe('getUserRole', () => {
@@ -232,13 +192,10 @@ describe('lib/api/index', () => {
 
     it('sets token in localStorage', () => {
       mockTokenManager.getCSRFToken.mockReturnValue(null)
-      localStorage.clear()
-
       setToken('test-token')
 
-      // ✅ 계약 검증 - 토큰이 저장되었는지 확인 (구현 디테일인 setItem 호출 검증 제거)
-      expect(localStorage.getItem('auth_token')).toBe('test-token')
-      expect(localStorage.getItem('auth_token_timestamp')).toBeTruthy()
+      expect(localStorage.setItem).toHaveBeenCalledWith('auth_token', 'test-token')
+      expect(localStorage.setItem).toHaveBeenCalledWith('auth_token_timestamp', expect.any(String))
     })
 
     it('creates session with token', async () => {
@@ -262,14 +219,13 @@ describe('lib/api/index', () => {
 
     it('handles session creation failure gracefully', async () => {
       ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Session creation failed'))
-      localStorage.clear()
 
       setToken('test-token')
 
       await new Promise(resolve => setTimeout(resolve, 100))
 
-      // ✅ 계약 검증 - 에러가 발생해도 토큰은 저장되어야 함
-      expect(localStorage.getItem('auth_token')).toBe('test-token')
+      // 에러가 발생해도 예외가 발생하지 않아야 함
+      expect(localStorage.setItem).toHaveBeenCalled()
     })
   })
 
@@ -283,16 +239,11 @@ describe('lib/api/index', () => {
     })
 
     it('clears tokens and removes from localStorage', () => {
-      // Given: 토큰이 localStorage에 존재
-      localStorage.setItem('auth_token', 'test-token')
-      localStorage.setItem('auth_token_timestamp', '123456')
-
       removeToken()
 
-      // Then: ✅ 계약 검증 - 토큰이 제거되었는지 확인
       expect(mockTokenManager.clearTokens).toHaveBeenCalled()
-      expect(localStorage.getItem('auth_token')).toBeNull()
-      expect(localStorage.getItem('auth_token_timestamp')).toBeNull()
+      expect(localStorage.removeItem).toHaveBeenCalledWith('auth_token')
+      expect(localStorage.removeItem).toHaveBeenCalledWith('auth_token_timestamp')
     })
 
     it('deletes session', async () => {
@@ -377,14 +328,13 @@ describe('lib/api/index', () => {
     it('handles setToken without CSRF token', async () => {
       mockTokenManager.getCSRFToken.mockReturnValue(null)
       ;(global.fetch as jest.Mock).mockClear()
-      localStorage.clear()
+      Storage.prototype.setItem = jest.fn()
 
       setToken('test-token')
 
       await new Promise(resolve => setTimeout(resolve, 50))
 
-      // ✅ localStorage 인스턴스를 직접 사용
-      expect(localStorage.getItem('auth_token')).toBe('test-token')
+      expect(Storage.prototype.setItem).toHaveBeenCalledWith('auth_token', 'test-token')
       
       // CSRF 토큰이 없어도 fetch는 호출되어야 함
       expect(global.fetch).toHaveBeenCalled()
@@ -393,14 +343,13 @@ describe('lib/api/index', () => {
     it('handles setToken with CSRF token', async () => {
       mockTokenManager.getCSRFToken.mockReturnValue('csrf-token')
       ;(global.fetch as jest.Mock).mockClear()
-      localStorage.clear()
+      Storage.prototype.setItem = jest.fn()
 
       setToken('test-token')
 
       await new Promise(resolve => setTimeout(resolve, 50))
 
-      // ✅ localStorage 인스턴스를 직접 사용
-      expect(localStorage.getItem('auth_token')).toBe('test-token')
+      expect(Storage.prototype.setItem).toHaveBeenCalledWith('auth_token', 'test-token')
       
       // CSRF 토큰이 있으면 헤더에 포함되어야 함
       await waitFor(() => {

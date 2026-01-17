@@ -139,6 +139,17 @@ class TokenManager {
     try {
       const newAccessToken = await this.refreshPromise;
       return newAccessToken;
+    } catch (error) {
+      // ✅ 디버깅: getAccessToken에서 refreshAccessToken 에러를 catch
+      // refreshAccessToken의 catch에서 이미 clearTokens()를 호출했지만,
+      // 여기서도 로그를 남겨서 흐름을 추적
+      logger.error(error instanceof Error ? error : new Error(String(error)), { 
+        component: 'tokenManager', 
+        action: 'getAccessToken',
+        note: 'refreshAccessToken failed, error propagated'
+      });
+      // refreshAccessToken의 catch에서 이미 clearTokens()를 호출했으므로 여기서는 throw만
+      throw error;
     } finally {
       this.refreshPromise = null;
     }
@@ -146,12 +157,15 @@ class TokenManager {
 
   // Access Token 갱신
   private async refreshAccessToken(): Promise<string> {
+    console.log('[tokenManager.refreshAccessToken] START - refreshToken exists:', !!this.refreshToken);
+    
     if (!this.refreshToken) {
       throw new Error('No refresh token available');
     }
     
     try {
       // authAPI 사용 (순환 참조 방지를 위해 동적 import)
+      console.log('[tokenManager.refreshAccessToken] Calling authAPI.refreshToken...');
       const { authAPI } = await import('./api/auth');
       const data = await authAPI.refreshToken(this.refreshToken);
       
@@ -174,14 +188,18 @@ class TokenManager {
         expiresIn
       );
       
+      console.log('[tokenManager.refreshAccessToken] SUCCESS');
       return data.access_token;
     } catch (error) {
+      console.log('[tokenManager.refreshAccessToken] ERROR caught:', error instanceof Error ? error.message : String(error));
       logger.error(error instanceof Error ? error : new Error(String(error)), { component: 'tokenManager', action: 'refresh_token' });
       
       // ✅ 해결책(제품 코드): refreshAccessToken에 "실패면 무조건 throw" 보장
       // catch에서 무조건 clearTokens():
       // 모든 에러에 대해 세션 정리 보장
+      console.log('[tokenManager.refreshAccessToken] Calling clearTokens()...');
       this.clearTokens();
+      console.log('[tokenManager.refreshAccessToken] clearTokens() called');
       
       // Refresh token이 만료되었거나 유효하지 않은 경우
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -204,6 +222,7 @@ class TokenManager {
       throw error;
     } finally {
       // ✅ finally에서 refreshPromise = null 보장
+      console.log('[tokenManager.refreshAccessToken] FINALLY - setting refreshPromise = null');
       this.refreshPromise = null;
     }
   }

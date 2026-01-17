@@ -1,39 +1,24 @@
 /**
  * API 클라이언트 테스트
- * @jest-environment jsdom
- * 
- * trackPerformanceMetric은 브라우저에서만 동작하므로 jsdom 환경 필요
- * performance.now도 브라우저 API이므로 jsdom에서 제공
+ * @jest-environment node
  */
-
-// ✅ mock 먼저, import 나중 원칙
-// 의존성 모킹
-jest.mock('../../tokenManager')
-jest.mock('../../errorTracking')
-jest.mock('../../analytics')
-
-// fetch 모킹 (jsdom 환경에서 제공되지만 명시적으로 mock)
-global.fetch = jest.fn()
-
-// ✅ jsdom 환경에서 performance.now 제공
-// client.ts의 trackPerformanceMetric이 typeof window !== 'undefined' && typeof performance !== 'undefined' 체크를 하므로
-// jsdom 환경에서 performance.now를 제공해야 함
-beforeAll(() => {
-  if (typeof global.performance === 'undefined') {
-    global.performance = {
-      now: jest.fn(() => Date.now()),
-    } as any
-  }
-})
 
 import { apiRequest } from '../client'
 import { tokenManager } from '../../tokenManager'
 import { trackAPIError } from '../../errorTracking'
 import { trackPerformanceMetric } from '../../analytics'
 
+// 의존성 모킹
+jest.mock('../../tokenManager')
+jest.mock('../../errorTracking')
+jest.mock('../../analytics')
+
 const mockTokenManager = tokenManager as jest.Mocked<typeof tokenManager>
 const mockTrackAPIError = trackAPIError as jest.MockedFunction<typeof trackAPIError>
 const mockTrackPerformanceMetric = trackPerformanceMetric as jest.MockedFunction<typeof trackPerformanceMetric>
+
+// fetch 모킹
+global.fetch = jest.fn()
 
 describe('apiRequest', () => {
   beforeEach(() => {
@@ -41,18 +26,10 @@ describe('apiRequest', () => {
     mockTokenManager.getAccessToken = jest.fn().mockResolvedValue('test-access-token')
     mockTokenManager.getCSRFToken = jest.fn().mockReturnValue('test-csrf-token')
     
-    // ✅ jsdom 환경에서 performance.now 제공 (브라우저 계약)
-    // client.ts의 trackPerformanceMetric이 performance.now를 사용하므로 필수
+    // performance 모킹
     global.performance = {
-      now: jest.fn()
-        .mockReturnValueOnce(100)  // startTime
-        .mockReturnValueOnce(250),  // endTime
+      now: jest.fn().mockReturnValue(100),
     } as any
-
-    // ✅ env 설정 (필요한 경우)
-    if (!process.env.NEXT_PUBLIC_API_URL) {
-      process.env.NEXT_PUBLIC_API_URL = '/api'
-    }
   })
 
   afterEach(() => {
@@ -508,23 +485,16 @@ describe('apiRequest', () => {
 
     ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
     
-    // ✅ performance.now를 jest.fn()으로 재모킹 (브라우저 계약)
-    // client.ts의 trackPerformanceMetric이 typeof window !== 'undefined' && typeof performance !== 'undefined' 체크를 하므로
-    // jsdom 환경에서 performance.now를 제공해야 함
+    // performance.now를 jest.fn()으로 재모킹
     const mockPerformanceNow = jest.fn()
-      .mockReturnValueOnce(100)  // startTime
-      .mockReturnValueOnce(250)  // endTime
+      .mockReturnValueOnce(100)
+      .mockReturnValueOnce(250)
     global.performance = {
       now: mockPerformanceNow,
     } as any
 
-    // ✅ window가 존재하는지 확인 (jsdom 환경에서 제공됨)
-    // client.ts의 trackPerformanceMetric이 typeof window !== 'undefined' 체크를 하므로
-    expect(typeof window).not.toBe('undefined')
-
     await apiRequest('/test')
 
-    // ✅ trackPerformanceMetric이 호출되었는지 확인 (브라우저 계약)
     expect(mockTrackPerformanceMetric).toHaveBeenCalledWith(
       expect.stringContaining('api_get'),
       expect.any(Number)

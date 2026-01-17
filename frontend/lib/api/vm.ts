@@ -129,8 +129,7 @@ export const vmAPI = {
       vmData.vnc_enabled = vm.vnc_enabled;
     } else {
       // Default: Enable VNC for GUI OS
-      // windows10과 windows 모두 지원 (백엔드 호환성 변환 후에도 체크)
-      const guiOS = ['ubuntu-desktop', 'kali', 'windows10', 'windows'];
+      const guiOS = ['ubuntu-desktop', 'kali', 'windows10'];
       if (vm.os_type && guiOS.includes(vm.os_type)) {
         vmData.vnc_enabled = true;
         vmData.graphics_type = 'vnc';
@@ -138,7 +137,7 @@ export const vmAPI = {
     }
     
     // VM 생성 요청 전 로깅
-    console.log('[vmAPI.create] Creating VM with data:', {
+    window.console.log('[vmAPI.create] Creating VM with data:', {
       name: vmData.name,
       cpu: vmData.cpu,
       memory: vmData.memory,
@@ -154,7 +153,7 @@ export const vmAPI = {
         body: JSON.stringify(vmData),
       });
       
-      console.log('[vmAPI.create] VM created successfully:', {
+      window.console.log('[vmAPI.create] VM created successfully:', {
         uuid: result.uuid,
         name: result.name,
         status: result.status,
@@ -200,7 +199,7 @@ export const vmAPI = {
           }
         }
         
-        console.error('[vmAPI.create] 500 Internal Server Error:', {
+        window.console.error('[vmAPI.create] 500 Internal Server Error:', {
           endpoint: '/vms',
           method: 'POST',
           errorMessage: actualErrorMessage,
@@ -324,7 +323,7 @@ export const vmAPI = {
           }
         : { error: String(error) };
       
-      console.error('[vmAPI.action] API error details:', {
+      window.console.error('[vmAPI.action] API error details:', {
         uuid,
         action,
         ...errorContext,
@@ -427,7 +426,7 @@ export const vmAPI = {
           }
         : { error: String(error) };
       
-      console.error('[vmAPI.setBootOrder] API error details:', {
+      window.console.error('[vmAPI.setBootOrder] API error details:', {
         uuid,
         bootOrder,
         ...errorContext,
@@ -519,7 +518,7 @@ export const vmAPI = {
           }
         : { error: String(error) };
       
-      console.error('[vmAPI.finalizeInstall] API error details:', {
+      window.console.error('[vmAPI.finalizeInstall] API error details:', {
         uuid,
         ...errorContext,
       });

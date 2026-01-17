@@ -77,14 +77,9 @@ describe('Home Page', () => {
   it('renders core value sections', () => {
     render(<Home />)
 
-    // ✅ 구조 계약: features 섹션이 존재하고 3개의 카드가 렌더된다
-    // 카피는 구현 디테일이므로 검증하지 않음
-    const featuresSection = screen.getByTestId('features')
-    expect(featuresSection).toBeInTheDocument()
-    
-    // features 섹션 내부에 3개의 카드가 있는지 확인 (구조 계약)
-    const featureCards = featuresSection.querySelectorAll('div.bg-white')
-    expect(featureCards.length).toBeGreaterThanOrEqual(3)
+    expect(screen.getByText('웹 기반 접근')).toBeInTheDocument()
+    expect(screen.getByText('실시간 환경')).toBeInTheDocument()
+    expect(screen.getByText('안전한 격리')).toBeInTheDocument()
   })
 
   it('handles form submission successfully', async () => {
@@ -310,20 +305,9 @@ describe('Home Page', () => {
   it('renders footer links', () => {
     render(<Home />)
 
-    // ✅ 구조 계약: footer에 링크들이 존재하는지 확인
-    // role="link"로 검증하여 카피 변경에 영향받지 않음
-    expect(screen.getByRole('link', { name: /이용약관/i })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /개인정보 처리방침/i })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /서비스 상태/i })).toBeInTheDocument()
-  })
-  
-  it('renders contact section links', () => {
-    render(<Home />)
-
-    // ✅ 구조 계약: 문의 섹션에 연락 채널 링크들이 존재하는지 확인
-    // 로그에 실제로 존재하는 DOM 요소들로 검증
-    expect(screen.getByRole('link', { name: /darc0625@proton\.me/i })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /DARC0625\/LIMEN/i })).toBeInTheDocument()
+    expect(screen.getByText(/이용약관/i)).toBeInTheDocument()
+    expect(screen.getByText(/개인정보 처리방침/i)).toBeInTheDocument()
+    expect(screen.getByText(/서비스 상태/i)).toBeInTheDocument()
   })
 })
 

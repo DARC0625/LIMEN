@@ -2,7 +2,7 @@
   "config": {
     "configFile": "/home/darc/LIMEN/frontend/playwright.config.ts",
     "rootDir": "/home/darc/LIMEN/frontend/e2e",
-    "forbidOnly": false,
+    "forbidOnly": true,
     "fullyParallel": true,
     "globalSetup": null,
     "globalTeardown": null,
@@ -48,39 +48,7 @@
         "testDir": "/home/darc/LIMEN/frontend/e2e",
         "testIgnore": [],
         "testMatch": [
-          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
-        ],
-        "timeout": 30000
-      },
-      {
-        "outputDir": "/home/darc/LIMEN/frontend/test-results",
-        "repeatEach": 1,
-        "retries": 0,
-        "metadata": {
-          "actualWorkers": 1
-        },
-        "id": "firefox",
-        "name": "firefox",
-        "testDir": "/home/darc/LIMEN/frontend/e2e",
-        "testIgnore": [],
-        "testMatch": [
-          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
-        ],
-        "timeout": 30000
-      },
-      {
-        "outputDir": "/home/darc/LIMEN/frontend/test-results",
-        "repeatEach": 1,
-        "retries": 0,
-        "metadata": {
-          "actualWorkers": 1
-        },
-        "id": "webkit",
-        "name": "webkit",
-        "testDir": "/home/darc/LIMEN/frontend/e2e",
-        "testIgnore": [],
-        "testMatch": [
-          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+          "**/token-refresh.spec.ts"
         ],
         "timeout": 30000
       }
@@ -90,587 +58,120 @@
     "updateSnapshots": "missing",
     "updateSourceMethod": "patch",
     "version": "1.57.0",
-    "workers": 2,
+    "workers": 1,
     "webServer": null
   },
   "suites": [
     {
-      "title": "vm-console-e2e.spec.ts",
-      "file": "vm-console-e2e.spec.ts",
+      "title": "token-refresh.spec.ts",
+      "file": "token-refresh.spec.ts",
       "column": 0,
       "line": 0,
-      "specs": [
+      "specs": [],
+      "suites": [
         {
-          "title": "VM create -> console -> WS open + frames + basic input (no fake PASS)",
-          "ok": true,
-          "tags": [],
-          "tests": [
+          "title": "토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)",
+          "file": "token-refresh.spec.ts",
+          "line": 157,
+          "column": 6,
+          "specs": [
             {
-              "timeout": 60000,
-              "annotations": [],
-              "expectedStatus": "passed",
-              "projectId": "firefox",
-              "projectName": "firefox",
-              "results": [
+              "title": "S4: refresh 실패 시 전역 세션 정리 및 강제 로그아웃",
+              "ok": false,
+              "tags": [],
+              "tests": [
                 {
-                  "workerIndex": 0,
-                  "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 21661,
-                  "errors": [],
-                  "stdout": [
-                    {
-                      "text": "=== [E2E] header: X-Limen-E2E=1 applied ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:warning] [JavaScript Warning: \"downloadable font: name: name records are not sorted. (font-family: \"Pretendard\" style:normal weight:400 stretch:100 src index:1) source: https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/packages/pretendard/dist/web/static/woff2/Pretendard-Regular.woff2\"] ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:warning] [JavaScript Warning: \"downloadable font: name: name records are not sorted. (font-family: \"Pretendard\" style:normal weight:700 stretch:100 src index:1) source: https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/packages/pretendard/dist/web/static/woff2/Pretendard-Bold.woff2\"] ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:warning] [JavaScript Warning: \"downloadable font: name: name records are not sorted. (font-family: \"Pretendard\" style:normal weight:500 stretch:100 src index:1) source: https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/packages/pretendard/dist/web/static/woff2/Pretendard-Medium.woff2\"] ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] after login url === https://limen.kr/login\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:warning] [JavaScript Warning: \"downloadable font: name: name records are not sorted. (font-family: \"Pretendard\" style:normal weight:600 stretch:100 src index:1) source: https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/packages/pretendard/dist/web/static/woff2/Pretendard-SemiBold.woff2\"] ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] ====== START ====== ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] URL: /api/quota ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Method: GET ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Endpoint: /quota ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has Auth: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has CSRF: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Full URL: /api/quota ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] About to fetch: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] ====== START ====== ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] URL: /api/vms ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Method: GET ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Endpoint: /vms ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has Auth: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has CSRF: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Full URL: /api/vms ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] About to fetch: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] Fetch completed: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] Fetch completed: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] openCreateVm: clicking candidate #3 ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] openCreateVm: form opened ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] vmName === e2e-1768052369747\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [vmAPI.create] Creating VM with data: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] ====== START ====== ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] URL: /api/vms ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Method: POST ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Endpoint: /vms ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has Auth: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has CSRF: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Full URL: /api/vms ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] About to fetch: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] VM create button clicked ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] Waiting for VM creation response... ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] VM CREATE API REQUEST (captured) ===\n"
-                    },
-                    {
-                      "text": "Method: POST\n"
-                    },
-                    {
-                      "text": "Endpoint: https://limen.kr/api/vms\n"
-                    },
-                    {
-                      "text": "Request Body: {\n  \"name\": \"e2e-1768052369747\",\n  \"cpu\": 1,\n  \"memory\": 1024,\n  \"os_type\": \"ubuntu-desktop\",\n  \"vnc_enabled\": true,\n  \"graphics_type\": \"vnc\"\n}\n"
-                    },
-                    {
-                      "text": "Headers: {\n  \"host\": \"limen.kr\",\n  \"user-agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0.2) Gecko/20100101 Firefox/144.0.2\",\n  \"accept\": \"*/*\",\n  \"accept-language\": \"en-US\",\n  \"accept-encoding\": \"gzip, deflate, br, zstd\",\n  \"content-type\": \"application/json\",\n  \"content-length\": \"118\",\n  \"referer\": \"https://limen.kr/dashboard\",\n  \"x-csrf-token\": \"7e90eddbba8cfffce6e3cb0653590b60dafa4dfb51521eb903412ea01dc611a1\",\n  \"origin\": \"https://limen.kr\",\n  \"x-limen-e2e\": \"1\",\n  \"sec-fetch-dest\": \"empty\",\n  \"sec-fetch-mode\": \"cors\",\n  \"sec-fetch-site\": \"same-origin\",\n  \"authorization\": \"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiYXBwcm92ZWQiOnRydWUsImJldGFfYWNjZXNzIjp0cnVlLCJpc3MiOiJsaW1lbiIsImV4cCI6MTc2ODA1MzI1NywiaWF0IjoxNzY4MDUyMzU3fQ.5YCeCamATyyvLetADBIU9E5rgT8x_75gEsr9oljQX1A\",\n  \"connection\": \"keep-alive\",\n  \"cookie\": \"refresh_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiYXBwcm92ZWQiOnRydWUsImJldGFfYWNjZXNzIjp0cnVlLCJ0b2tlbl9pZCI6Il9zOWFHczk3NUhVSEo0ejdwQkVEb2c9PSIsImlzcyI6ImxpbWVuIiwiZXhwIjoxNzY4NjU3MTU3LCJpYXQiOjE3NjgwNTIzNTd9.jM9iXc_INGYV6JO_B4ZEqehoKuJd_fGGqo1_rHqEolY; csrf_token=-UbGm6Ts_ymZ9L680hRV_BVODW2wczM4Um9f0UGxxEA=\"\n}\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] Fetch completed: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [vmAPI.create] VM created successfully: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] VM create response json parse failed === Error: response.json: Protocol error (Network.getResponseBody): Component returned failure code: 0x804b001b (NS_ERROR_INVALID_CONTENT_ENCODING) [nsIStreamListener.onDataAvailable]\n"
-                    },
-                    {
-                      "text": "=== [E2E] VM create response status === \u001b[33m201\u001b[39m\n"
-                    },
-                    {
-                      "text": "=== [E2E] VM create response keys === null\n"
-                    },
-                    {
-                      "text": "=== [E2E] fallback: list vms via APIRequestContext === { hasAuth: \u001b[33mtrue\u001b[39m }\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] ====== START ====== ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] URL: /api/quota ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Method: GET ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Endpoint: /quota ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has Auth: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has CSRF: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Full URL: /api/quota ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] About to fetch: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] Fetch completed: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] GET /api/vms status (APIRequestContext) === \u001b[33m200\u001b[39m\n"
-                    },
-                    {
-                      "text": "=== [E2E] VM UUID resolved === 3d4fccaa-bb49-4692-986d-6f5f9a33e065 ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] navigating to console url === https://limen.kr/vnc/3d4fccaa-bb49-4692-986d-6f5f9a33e065\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] ====== START ====== ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] URL: /api/vms/3d4fccaa-bb49-4692-986d-6f5f9a33e065/media ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Method: GET ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Endpoint: /vms/3d4fccaa-bb49-4692-986d-6f5f9a33e065/media ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has Auth: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has CSRF: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Full URL: /api/vms/3d4fccaa-bb49-4692-986d-6f5f9a33e065/media ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] About to fetch: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] ====== START ====== ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] URL: /api/vms/isos ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Method: GET ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Endpoint: /vms/isos ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has Auth: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has CSRF: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Full URL: /api/vms/isos ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] About to fetch: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] ====== START ====== ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] URL: /api/vms/3d4fccaa-bb49-4692-986d-6f5f9a33e065/console ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Method: GET ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Endpoint: /vms/3d4fccaa-bb49-4692-986d-6f5f9a33e065/console ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has Auth: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has CSRF: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Full URL: /api/vms/3d4fccaa-bb49-4692-986d-6f5f9a33e065/console ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] About to fetch: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] Fetch completed: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] Fetch completed: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] Fetch completed: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] ====== START ====== ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] console endpoint response parse failed === Error: response.text: Protocol error (Network.getResponseBody): Component returned failure code: 0x804b001b (NS_ERROR_INVALID_CONTENT_ENCODING) [nsIStreamListener.onDataAvailable]\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] URL: /api/vms ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Method: GET ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Endpoint: /vms ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has Auth: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Has CSRF: true ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [API Request] Full URL: /api/vms ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] About to fetch: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:log] [executeRequest] Fetch completed: JSHandle@object ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket event: wss://limen.kr/vnc/3d4fccaa-bb49-4692-986d-6f5f9a33e065?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiYXBwcm92ZWQiOnRydWUsImJldGFfYWNjZXNzIjpmYWxzZSwiaXNzIjoibGltZW4iLCJleHAiOjE3NjgwNTI2NzEsImlhdCI6MTc2ODA1MjM3MX0.sMHAaT743ClP26jjTqUQgDBGID8X6Siee1H94TZCBsA ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] UI WebSocket detected (before force test): wss://limen.kr/vnc/3d4fccaa-bb49-4692-986d-6f5f9a33e065?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiYXBwcm92ZWQiOnRydWUsImJldGFfYWNjZXNzIjpmYWxzZSwiaXNzIjoibGltZW4iLCJleHAiOjE3NjgwNTI2NzEsImlhdCI6MTc2ODA1MjM3MX0.sMHAaT743ClP26jjTqUQgDBGID8X6Siee1H94TZCBsA ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket matched: wss://limen.kr/vnc/3d4fccaa-bb49-4692-986d-6f5f9a33e065?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiYXBwcm92ZWQiOnRydWUsImJldGFfYWNjZXNzIjpmYWxzZSwiaXNzIjoibGltZW4iLCJleHAiOjE3NjgwNTI2NzEsImlhdCI6MTc2ODA1MjM3MX0.sMHAaT743ClP26jjTqUQgDBGID8X6Siee1H94TZCBsA ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 1) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 2) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 3) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 4) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 5) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 1) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 6) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 2) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 7) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 3) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 8) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 4) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 5) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 6) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 9) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 10) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 7) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 8) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 9) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 10) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 11) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 11) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] Console page found at: https://limen.kr/vnc/3d4fccaa-bb49-4692-986d-6f5f9a33e065 ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] Console URL reached: https://limen.kr/vnc/3d4fccaa-bb49-4692-986d-6f5f9a33e065 ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] VNCViewer root visible ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] F-3: Waiting for UI-initiated WebSocket (10 seconds) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] Waiting for WebSocket frames... ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 12) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 12) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 13) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 13) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 14) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 14) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 15) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 15) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 16) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 16) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 17) ===\n"
-                    },
-                    {
-                      "text": "=== [BROWSER:warning] [JavaScript Warning: \"Element.setCapture() is deprecated. Use Element.setPointerCapture() instead. For more help https://developer.mozilla.org/docs/Web/API/Element/setPointerCapture\" {file: \"https://limen.kr/_next/static/chunks/6965d0886d48d395.js\" line: 1}] ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 18) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 19) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 20) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 21) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 22) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 23) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 24) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 25) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 26) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 27) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 28) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 29) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 30) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 31) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] F-P1-2: Product PASS Criteria Check ===\n"
-                    },
-                    {
-                      "text": "(A) Console endpoint called: YES\n"
-                    },
-                    {
-                      "text": "(A) Console endpoint status: 200\n"
-                    },
-                    {
-                      "text": "(A) Console ws_url prefix: NONE\n"
-                    },
-                    {
-                      "text": "(B) UI WebSocket opened: YES\n"
-                    },
-                    {
-                      "text": "(B) UI WS URL: wss://limen.kr/vnc/3d4fccaa-bb49-4692-986d-6f5f9a33e065?token=REDACTED\n"
-                    },
-                    {
-                      "text": "(C) UI WS frames received: 16\n"
-                    },
-                    {
-                      "text": "=== [E2E] Firefox: console ws_url not captured, but UI WS URL confirms console endpoint worked ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] PRODUCT PASS: All criteria met ===\n"
-                    },
-                    {
-                      "text": "{\n  \"baseUrl\": \"https://limen.kr\",\n  \"vmName\": \"e2e-1768052369747\",\n  \"wsSeen\": true,\n  \"wsUrl\": \"wss://limen.kr/vnc/3d4fccaa-bb49-4692-986d-6f5f9a33e065?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiYXBwcm92ZWQiOnRydWUsImJldGFfYWNjZXNzIjpmYWxzZSwiaXNzIjoibGltZW4iLCJleHAiOjE3NjgwNTI2NzEsImlhdCI6MTc2ODA1MjM3MX0.sMHAaT743ClP26jjTqUQgDBGID8X6Siee1H94TZCBsA\",\n  \"frameSent\": 31,\n  \"frameReceived\": 16\n}\n"
-                    },
-                    {
-                      "text": "=== [E2E] VM CREATE PAYLOAD (captured) ===\n"
-                    },
-                    {
-                      "text": "Endpoint: https://limen.kr/api/vms\n"
-                    },
-                    {
-                      "text": "Method: POST\n"
-                    },
-                    {
-                      "text": "Request Body: {\n  \"name\": \"e2e-1768052369747\",\n  \"cpu\": 1,\n  \"memory\": 1024,\n  \"os_type\": \"ubuntu-desktop\",\n  \"vnc_enabled\": true,\n  \"graphics_type\": \"vnc\"\n}\n"
-                    },
-                    {
-                      "text": "CPU: \u001b[33m1\u001b[39m\n"
-                    },
-                    {
-                      "text": "Memory: \u001b[33m1024\u001b[39m\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame received (total: 17) ===\n"
-                    },
-                    {
-                      "text": "=== [E2E] WebSocket frame sent (total: 32) ===\n"
-                    }
-                  ],
-                  "stderr": [
-                    {
-                      "text": "(node:862197) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
-                    }
-                  ],
-                  "retry": 0,
-                  "startTime": "2026-01-10T13:39:16.854Z",
+                  "timeout": 30000,
                   "annotations": [],
-                  "attachments": [
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
                     {
-                      "name": "trace",
-                      "contentType": "application/zip",
-                      "path": "/home/darc/LIMEN/frontend/test-results/vm-console-e2e-VM-create---1979e-s-basic-input-no-fake-PASS--firefox/trace.zip"
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 319,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\n    at /home/darc/LIMEN/frontend/e2e/token-refresh.spec.ts:263:44",
+                        "location": {
+                          "file": "/home/darc/LIMEN/frontend/e2e/token-refresh.spec.ts",
+                          "column": 44,
+                          "line": 263
+                        },
+                        "snippet": "  261 |     // ✅ 1순위: tokenManager의 refresh 실패 catch에서 clearSession()을 \"반드시\" 실행하게 만들기\n  262 |     // refresh 실패 이후 clearSessionCalledCount === 1 이어야 한다\n> 263 |     expect(result.clearSessionCalledCount).toBe(1);\n      |                                            ^\n  264 |     console.log('[E2E] S4 clearSessionCalledCount:', result.clearSessionCalledCount);\n  265 |     console.log('[E2E] S4 snapshotA:', result.snapshotA);\n  266 |     console.log('[E2E] S4 snapshotB:', result.snapshotB);"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/darc/LIMEN/frontend/e2e/token-refresh.spec.ts",
+                            "column": 44,
+                            "line": 263
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\n\n  261 |     // ✅ 1순위: tokenManager의 refresh 실패 catch에서 clearSession()을 \"반드시\" 실행하게 만들기\n  262 |     // refresh 실패 이후 clearSessionCalledCount === 1 이어야 한다\n> 263 |     expect(result.clearSessionCalledCount).toBe(1);\n      |                                            ^\n  264 |     console.log('[E2E] S4 clearSessionCalledCount:', result.clearSessionCalledCount);\n  265 |     console.log('[E2E] S4 snapshotA:', result.snapshotA);\n  266 |     console.log('[E2E] S4 snapshotB:', result.snapshotB);\n    at /home/darc/LIMEN/frontend/e2e/token-refresh.spec.ts:263:44"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "[E2E] TOKEN_MANAGER_TEST_HOOK {\n  hasTest: \u001b[33mtrue\u001b[39m,\n  keys: [\n    \u001b[32m'accessToken'\u001b[39m,\n    \u001b[32m'refreshToken'\u001b[39m,\n    \u001b[32m'expiresAt'\u001b[39m,\n    \u001b[32m'csrfToken'\u001b[39m,\n    \u001b[32m'refreshPromise'\u001b[39m,\n    \u001b[32m'clearTokens'\u001b[39m,\n    \u001b[32m'__test'\u001b[39m\n  ],\n  constructorName: \u001b[32m'TokenManager'\u001b[39m,\n  hasGetAccessToken: \u001b[33mtrue\u001b[39m\n}\n"
+                        },
+                        {
+                          "text": "[E2E] HARNESS DIAG {\n  typeofTokenManager: \u001b[32m'object'\u001b[39m,\n  harnessLoadedAt: \u001b[33m1768660729975\u001b[39m,\n  harnessError: \u001b[1mnull\u001b[22m,\n  harnessReady: \u001b[33mtrue\u001b[39m,\n  hasRunS3: \u001b[32m'function'\u001b[39m,\n  hasRunS4: \u001b[32m'function'\u001b[39m\n}\n"
+                        }
+                      ],
+                      "stderr": [
+                        {
+                          "text": "(node:1336373) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+                        }
+                      ],
+                      "retry": 0,
+                      "startTime": "2026-01-17T14:38:49.754Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/darc/LIMEN/frontend/test-results/token-refresh-토큰-꼬임-P0---R-da8a5-esh-실패-시-전역-세션-정리-및-강제-로그아웃-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/home/darc/LIMEN/frontend/test-results/token-refresh-토큰-꼬임-P0---R-da8a5-esh-실패-시-전역-세션-정리-및-강제-로그아웃-chromium/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/darc/LIMEN/frontend/test-results/token-refresh-토큰-꼬임-P0---R-da8a5-esh-실패-시-전역-세션-정리-및-강제-로그아웃-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/darc/LIMEN/frontend/e2e/token-refresh.spec.ts",
+                        "column": 44,
+                        "line": 263
+                      }
                     }
-                  ]
+                  ],
+                  "status": "unexpected"
                 }
               ],
-              "status": "expected"
+              "id": "96d843c6f595c1983a23-b6e5d4cdb084524bfd1a",
+              "file": "token-refresh.spec.ts",
+              "line": 171,
+              "column": 7
             }
-          ],
-          "id": "e101ddd3f4ecc2982c24-f823d3da8ba8e967ca6c",
-          "file": "vm-console-e2e.spec.ts",
-          "line": 602,
-          "column": 7
+          ]
         }
       ]
     }
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-01-10T13:39:16.179Z",
-    "duration": 23839.778000000002,
-    "expected": 1,
+    "startTime": "2026-01-17T14:38:49.117Z",
+    "duration": 1134.764,
+    "expected": 0,
     "skipped": 0,
-    "unexpected": 0,
+    "unexpected": 1,
     "flaky": 0
   }
 }

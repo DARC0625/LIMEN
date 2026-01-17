@@ -147,8 +147,9 @@ try {
       testHook.resetClearSessionCalledCount();
       
       // ✅ refreshToken 세팅 + expiresAt을 "만료 상태"로 세팅
-      testHook.setRefreshToken('test-refresh-token');
-      testHook.setExpiresAt(Date.now() - 1000); // 이미 만료됨
+      // ⚠️ 핵심: accessToken도 명시적으로 만료 처리해야 getAccessToken()이 refreshAccessToken()을 호출함
+      // setExpiresAt()만으로는 accessToken이 유효한 상태로 남아있을 수 있음
+      testHook.setTokens('expired-access-token', 'test-refresh-token', -1); // expiresIn: -1 (즉시 만료)
       sessionStorage.setItem('csrf_token', 'test-csrf-token');
       
       // ✅ await tokenManager.getAccessToken() 호출 (실패 기대)
