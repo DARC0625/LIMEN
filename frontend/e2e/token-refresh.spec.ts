@@ -248,21 +248,33 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     // ✅ refresh 호출 횟수 확인 (정확히 1회)
     expect(refreshCallCount).toBe(1);
     
-    // ✅ T+0 ~ T+2h: 테스트 종료 직전에 __FETCH_CALLS를 dump하여 refresh 요청 실제 URL 확정
+    // ✅ Step 4: fetch dump를 "테스트 실패 시" 강제 출력
+    // 지금은 로그가 안 보이니, 실패 시 console.error(__FETCH_CALLS)를 반드시 찍고 끝내게 해
     const fetchCalls1 = await page1.evaluate(() => window.__FETCH_CALLS || []);
     const fetchCalls2 = await page2.evaluate(() => window.__FETCH_CALLS || []);
-    console.log('[E2E] S3 PAGE1 FETCH_CALLS:', fetchCalls1);
-    console.log('[E2E] S3 PAGE2 FETCH_CALLS:', fetchCalls2);
     
-    // refresh 요청이 실제로 호출되었는지 확인
     const refreshCalls1 = fetchCalls1.filter((url: string) => 
       typeof url === 'string' && url.includes('refresh')
     );
     const refreshCalls2 = fetchCalls2.filter((url: string) => 
       typeof url === 'string' && url.includes('refresh')
     );
-    console.log('[E2E] S3 PAGE1 REFRESH_CALLS:', refreshCalls1);
-    console.log('[E2E] S3 PAGE2 REFRESH_CALLS:', refreshCalls2);
+    
+    // ✅ 테스트 실패 시 무조건 로그로 찍기
+    if (refreshCallCount !== 1 || !refreshCompleted1 || !refreshCompleted2) {
+      console.error('[E2E] S3 TEST FAILED - PAGE1 FETCH_CALLS:', fetchCalls1);
+      console.error('[E2E] S3 TEST FAILED - PAGE2 FETCH_CALLS:', fetchCalls2);
+      console.error('[E2E] S3 TEST FAILED - PAGE1 REFRESH_CALLS:', refreshCalls1);
+      console.error('[E2E] S3 TEST FAILED - PAGE2 REFRESH_CALLS:', refreshCalls2);
+      console.error('[E2E] S3 TEST FAILED - refreshCallCount:', refreshCallCount);
+      console.error('[E2E] S3 TEST FAILED - refreshCompleted1:', refreshCompleted1);
+      console.error('[E2E] S3 TEST FAILED - refreshCompleted2:', refreshCompleted2);
+    } else {
+      console.log('[E2E] S3 PAGE1 FETCH_CALLS:', fetchCalls1);
+      console.log('[E2E] S3 PAGE2 FETCH_CALLS:', fetchCalls2);
+      console.log('[E2E] S3 PAGE1 REFRESH_CALLS:', refreshCalls1);
+      console.log('[E2E] S3 PAGE2 REFRESH_CALLS:', refreshCalls2);
+    }
     
     // ✅ Step 4: fetch dump를 "테스트 실패 시" 강제 출력
     // 지금은 로그가 안 보이니, 실패 시 console.log(__FETCH_CALLS)를 반드시 찍고 끝내게 해
