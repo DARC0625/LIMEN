@@ -5,8 +5,42 @@
 ### 환경 독립성
 
 #### ❌ 절대 금지 사항
-- `BASE_URL`, `ADMIN_USER`, `ADMIN_PASS` 같은 환경 변수 요구 금지
-- `page.goto()` 원칙적으로 금지
+- `BASE_URL`, `ADMIN_USER`, `ADMIN_PASS` 같은 환경 변수 요구 금지 (Hermetic 테스트)
+- `page.goto(BASE_URL)` 원칙적으로 금지 (실서버 의존 금지)
+
+#### ✅ route-fulfill로 "가짜 HTTP origin" 생성 (표준 패턴)
+Hermetic E2E는 route-fulfill을 표준으로 채택합니다. 실서버 없이도 `http://local.test` 같은 origin을 Playwright가 '문서로 인식'하도록 fulfill합니다.
+
+```typescript
+// token-refresh.spec.ts 상단에 공용 헬퍼로 고정
+async function bootHermeticOrigin(page: Page) {
+  // 모든 요청을 네트워크 없이 fulfill (문서 포함)
+  await page.route('**/*', async (route) => {
+    const req = route.request();
+    // document 요청은 최소 HTML로
+    if (req.resourceType() === 'document') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><html><head></head><body>hermetic</body></html>',
+      });
+    }
+    // 나머지는 필요 시 케이스별로 mock
+    return route.fulfill({ status: 204, body: '' });
+  });
+
+  // ✅ HTTP origin 확보 (실서버 불필요: route가 fulfill)
+  await page.goto('http://local.test/', { waitUntil: 'domcontentloaded' });
+}
+
+// 사용법: localStorage 접근은 boot 이후에만
+await bootHermeticOrigin(page);
+await page.evaluate(() => localStorage.setItem('access_token', 'fake'));
+
+// 멀티탭은 같은 context면 origin 공유
+await bootHermeticOrigin(page1);
+await bootHermeticOrigin(page2);
+```
 
 #### ✅ 네트워크 모킹 필수
 ```typescript
@@ -19,17 +53,24 @@ await page.route('**/*', route => {
 ### 스토리지 접근
 
 #### ✅ localStorage 접근 규칙
-localStorage 접근은 반드시 `page.addInitScript()` 또는 `context.addInitScript()` 사용:
+localStorage 접근은 반드시 **HTTP origin 확보 후**에만 가능합니다:
 
 ```typescript
-await context.addInitScript(() => {
+// ✅ 올바른 패턴: bootHermeticOrigin 후 접근
+await bootHermeticOrigin(page);
+await page.evaluate(() => {
   localStorage.setItem('key', 'value');
 });
+
+// ❌ 잘못된 패턴: origin 없이 접근 (SecurityError 발생)
+await page.setContent('<html></html>');
+await page.evaluate(() => localStorage.setItem('key', 'value')); // ❌ 금지
 ```
 
 #### ❌ 금지 사항
 - cross-origin 상태에서 localStorage 접근 금지
 - blank page 상태에서 localStorage 접근 금지
+- `bootHermeticOrigin()` 호출 전 localStorage 접근 금지
 
 ### 브라우저 중립성
 

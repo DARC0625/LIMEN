@@ -29,7 +29,34 @@
  * npx playwright test e2e/token-refresh.spec.ts
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page, type BrowserContext } from '@playwright/test';
+
+/**
+ * ✅ Hermetic E2E 표준: route-fulfill로 "가짜 HTTP origin" 생성
+ * 
+ * 핵심: 실서버 없이도 http://local.test 같은 origin을 Playwright가 '문서로 인식'하도록 fulfill
+ * - localStorage/쿠키/탭 동기화 테스트를 정석대로 계속 밀어붙일 수 있음
+ * - hermetic 원칙 유지 (실서버 의존 없음)
+ */
+async function bootHermeticOrigin(page: Page) {
+  // 모든 요청을 네트워크 없이 fulfill (문서 포함)
+  await page.route('**/*', async (route) => {
+    const req = route.request();
+    // document 요청은 최소 HTML로
+    if (req.resourceType() === 'document') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><html><head></head><body>hermetic</body></html>',
+      });
+    }
+    // 나머지는 필요 시 케이스별로 mock
+    return route.fulfill({ status: 204, body: '' });
+  });
+
+  // ✅ HTTP origin 확보 (실서버 불필요: route가 fulfill)
+  await page.goto('http://local.test/', { waitUntil: 'domcontentloaded' });
+}
 
 test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', () => {
   /**
@@ -44,20 +71,22 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
    * ✅ Hermetic: 실제 네비게이션 없이 API 레벨에서만 테스트
    */
   test('S4: refresh 실패 시 전역 세션 정리 및 강제 로그아웃', async ({ page, context }) => {
-    // ✅ Given: 로그인 상태 (토큰이 localStorage에 있음)
-    // ✅ Hermetic: page.goto 제거, setContent로 빈 페이지 생성
-    await page.setContent('<html><body></body></html>');
+    // ✅ Hermetic origin 부팅 (route-fulfill로 가짜 HTTP origin 생성)
+    await bootHermeticOrigin(page);
     
-    // ✅ initScript로 goto 이전에 localStorage 주입 (SecurityError 방지)
-    await context.addInitScript(() => {
-      localStorage.setItem('refresh_token', 'test-refresh-token');
-      localStorage.setItem('token_expires_at', (Date.now() - 1000).toString()); // 만료된 상태 (refresh 트리거)
-      sessionStorage.setItem('csrf_token', 'test-csrf-token');
-    });
-
     // ✅ 완전 모킹: 모든 네트워크를 차단하고 필요한 API만 허용
     await context.route('**/*', async (route) => {
       const url = route.request().url();
+      const req = route.request();
+      
+      // document 요청은 bootHermeticOrigin에서 처리
+      if (req.resourceType() === 'document') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'text/html',
+          body: '<!doctype html><html><head></head><body>hermetic</body></html>',
+        });
+      }
       
       // ✅ refresh 엔드포인트만 401로 강제 실패
       if (url.includes('/api/auth/refresh')) {
@@ -74,6 +103,13 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       
       // ✅ 다른 모든 요청은 차단 (hermetic: 실서버 의존 제거)
       await route.abort();
+    });
+
+    // ✅ localStorage 접근은 boot 이후에만 (HTTP origin 확보 후)
+    await page.evaluate(() => {
+      localStorage.setItem('refresh_token', 'test-refresh-token');
+      localStorage.setItem('token_expires_at', (Date.now() - 1000).toString()); // 만료된 상태 (refresh 트리거)
+      sessionStorage.setItem('csrf_token', 'test-csrf-token');
     });
 
     // ✅ Given: 초기 저장소 상태 확인 (명확한 단계별 상태 명명)
@@ -150,30 +186,9 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     const page1 = await context.newPage();
     const page2 = await context.newPage();
 
-    // ✅ Hermetic: page.goto 제거, setContent로 빈 페이지 생성
-    await page1.setContent('<html><body></body></html>');
-    await page2.setContent('<html><body></body></html>');
-
-    // ✅ initScript로 goto 이전에 localStorage 주입 (SecurityError 방지)
-    // page.evaluate(localStorage) 접근은 반드시 동일 origin에서만
-    await context.addInitScript(() => {
-      localStorage.setItem('refresh_token', 'test-refresh-token');
-      localStorage.setItem('token_expires_at', (Date.now() - 1000).toString()); // 만료된 상태
-      sessionStorage.setItem('csrf_token', 'test-csrf-token');
-    });
-    
-    // ✅ Given: 초기 저장소 상태 확인 (명확한 단계별 상태 명명)
-    const storageStateBefore = await page1.evaluate(() => {
-      return {
-        refreshToken: localStorage.getItem('refresh_token'),
-        expiresAt: localStorage.getItem('token_expires_at'),
-        csrfToken: sessionStorage.getItem('csrf_token'),
-      };
-    });
-    
-    expect(storageStateBefore.refreshToken).toBe('test-refresh-token');
-    expect(storageStateBefore.expiresAt).toBeTruthy();
-    expect(storageStateBefore.csrfToken).toBe('test-csrf-token');
+    // ✅ Hermetic origin 부팅 (같은 context면 origin 공유)
+    await bootHermeticOrigin(page1);
+    await bootHermeticOrigin(page2);
 
     // ✅ 완전 모킹: 모든 네트워크를 차단하고 필요한 API만 허용
     let refreshCallCount = 0;
@@ -181,6 +196,16 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     
     await context.route('**/*', async (route) => {
       const url = route.request().url();
+      const req = route.request();
+      
+      // document 요청은 bootHermeticOrigin에서 처리
+      if (req.resourceType() === 'document') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'text/html',
+          body: '<!doctype html><html><head></head><body>hermetic</body></html>',
+        });
+      }
       
       // ✅ refresh 엔드포인트만 성공 응답
       if (url.includes('/api/auth/refresh')) {
@@ -205,6 +230,27 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       // ✅ 다른 모든 요청은 차단 (hermetic: 실서버 의존 제거)
       await route.abort();
     });
+
+    // ✅ localStorage 접근은 boot 이후에만 (HTTP origin 확보 후)
+    // 같은 context면 page1에서 설정해도 page2에서 공유됨
+    await page1.evaluate(() => {
+      localStorage.setItem('refresh_token', 'test-refresh-token');
+      localStorage.setItem('token_expires_at', (Date.now() - 1000).toString()); // 만료된 상태
+      sessionStorage.setItem('csrf_token', 'test-csrf-token');
+    });
+    
+    // ✅ Given: 초기 저장소 상태 확인 (명확한 단계별 상태 명명)
+    const storageStateBefore = await page1.evaluate(() => {
+      return {
+        refreshToken: localStorage.getItem('refresh_token'),
+        expiresAt: localStorage.getItem('token_expires_at'),
+        csrfToken: sessionStorage.getItem('csrf_token'),
+      };
+    });
+    
+    expect(storageStateBefore.refreshToken).toBe('test-refresh-token');
+    expect(storageStateBefore.expiresAt).toBeTruthy();
+    expect(storageStateBefore.csrfToken).toBe('test-csrf-token');
 
     // ✅ When: 두 페이지에서 동시에 API 호출 (refresh 트리거)
     // ✅ Hermetic: fetch를 직접 호출하여 refresh 트리거

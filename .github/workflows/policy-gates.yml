@@ -62,7 +62,9 @@ jobs:
 
           echo "[5/6] Ensure .github/workflows only contains allowed workflow files"
           # ***핵심: workflows 디렉토리만, yml/yaml만 검사***
-          allowed_regex='^(policy-gates\.yml|ci-backend\.yml|ci-frontend\.yml)$'
+          # ✅ nightly-e2e.yml 추가: Nightly Cross-Browser + Integration Sweep
+          # 정책은 자동화를 보호하는 장치, 발목 잡는 장치 아님
+          allowed_regex='^(policy-gates\.yml|ci-backend\.yml|ci-frontend\.yml|nightly-e2e\.yml)$'
           bad="$(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -printf '%f\n' \
             | grep -Ev "${allowed_regex}" || true)"
           if [ -n "$bad" ]; then

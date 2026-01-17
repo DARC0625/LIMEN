@@ -11,16 +11,18 @@
 다음 워크플로 파일들이 repo policy에서 허용되어야 합니다:
 
 1. `ci-frontend.yml` - PR Gate (Lint, Test, Build, E2E Hermetic)
-2. `nightly-e2e.yml` - Nightly Cross-Browser + Integration Sweep
+2. `ci-backend.yml` - Backend CI
+3. `nightly-e2e.yml` - Nightly Cross-Browser + Integration Sweep ✅ **추가됨**
+4. `policy-gates.yml` - Repo-level policy enforcement
 
 ## Policy 업데이트 방법
 
-### 방법 1: Allowlist에 추가 (정석)
+### 방법 1: Allowlist에 추가 (정석) ✅ **완료**
 
 1. Repository Settings → Actions → General
 2. Workflow permissions 섹션에서 "Allow specific actions and reusable workflows" 확인
 3. 또는 Organization/Repository level policy에서 allowlist 업데이트
-4. `nightly-e2e.yml` 추가
+4. `nightly-e2e.yml` 추가 ✅ **policy-gates.yml에 반영됨**
 
 ### 방법 2: 허용 패턴에 맞게 rename (우회, 비권장)
 
