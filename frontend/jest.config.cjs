@@ -42,6 +42,10 @@ const coreConfig = {
     '!lib/**/*.ui.test.{ts,tsx}',
   ],
   setupFilesAfterEnv: [], // core는 브라우저 의존 제거
+  // ✅ Core 프로젝트에도 TypeScript transform 명시적으로 설정
+  transform: {
+    '^.+\\.(ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
+  },
 };
 
 // UI 프로젝트 설정 (jsdom 환경) - nextJest로 설정
@@ -81,13 +85,13 @@ module.exports = async () => {
   // UI 프로젝트에만 nextJest 설정 적용
   const baseConfig = await createJestConfig(uiConfig);
   
-  // Core 프로젝트에도 TypeScript transform 설정 추가
+  // Core 프로젝트 설정 (transform은 이미 coreConfig에 포함)
   const coreWithTransform = {
     ...coreConfig,
-    transform: baseConfig.transform,
+    // baseConfig의 moduleNameMapper도 병합 (필요한 경우)
     moduleNameMapper: {
       ...coreConfig.moduleNameMapper,
-      ...baseConfig.moduleNameMapper,
+      ...(baseConfig.moduleNameMapper || {}),
     },
   };
   
