@@ -272,210 +272,21 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     expect(refreshCallCount).toBe(1);
     
     // ✅ Step 4: fetch dump를 "테스트 실패 시" 강제 출력
-    // 지금은 로그가 안 보이니, 실패 시 console.error(__FETCH_CALLS)를 반드시 찍고 끝내게 해
-    const fetchCalls1 = await page1.evaluate(() => window.__FETCH_CALLS || []);
-    const fetchCalls2 = await page2.evaluate(() => window.__FETCH_CALLS || []);
-    
-    const refreshCalls1 = fetchCalls1.filter((url: string) => 
-      typeof url === 'string' && url.includes('refresh')
-    );
-    const refreshCalls2 = fetchCalls2.filter((url: string) => 
+    const fetchCalls = await page.evaluate(() => window.__FETCH_CALLS || []);
+    const refreshCalls = fetchCalls.filter((url: string) => 
       typeof url === 'string' && url.includes('refresh')
     );
     
     // ✅ 테스트 실패 시 무조건 로그로 찍기
-    if (refreshCallCount !== 1 || !refreshCompleted1 || !refreshCompleted2) {
-      console.error('[E2E] S3 TEST FAILED - PAGE1 FETCH_CALLS:', fetchCalls1);
-      console.error('[E2E] S3 TEST FAILED - PAGE2 FETCH_CALLS:', fetchCalls2);
-      console.error('[E2E] S3 TEST FAILED - PAGE1 REFRESH_CALLS:', refreshCalls1);
-      console.error('[E2E] S3 TEST FAILED - PAGE2 REFRESH_CALLS:', refreshCalls2);
-      console.error('[E2E] S3 TEST FAILED - refreshCallCount:', refreshCallCount);
-      console.error('[E2E] S3 TEST FAILED - refreshCompleted1:', refreshCompleted1);
-      console.error('[E2E] S3 TEST FAILED - refreshCompleted2:', refreshCompleted2);
+    if (refreshCallCount !== 1 || !result.ok) {
+      console.error('[E2E] S4 TEST FAILED - FETCH_CALLS:', fetchCalls);
+      console.error('[E2E] S4 TEST FAILED - REFRESH_CALLS:', refreshCalls);
+      console.error('[E2E] S4 TEST FAILED - refreshCallCount:', refreshCallCount);
+      console.error('[E2E] S4 TEST FAILED - result:', result);
     } else {
-      console.log('[E2E] S3 PAGE1 FETCH_CALLS:', fetchCalls1);
-      console.log('[E2E] S3 PAGE2 FETCH_CALLS:', fetchCalls2);
-      console.log('[E2E] S3 PAGE1 REFRESH_CALLS:', refreshCalls1);
-      console.log('[E2E] S3 PAGE2 REFRESH_CALLS:', refreshCalls2);
+      console.log('[E2E] S4 FETCH_CALLS:', fetchCalls);
+      console.log('[E2E] S4 REFRESH_CALLS:', refreshCalls);
     }
-    
   });
 
-  /**
-   * S3: 멀티탭 동시 refresh 경합 테스트
-   * 
-   * ✅ 2) runS3에서 "멀티탭 대기"를 제거하고, single-flight의 본질만 검증해라
-   * single-flight 본질은 이거 하나다:
-   * - 동시에 getAccessToken() 을 호출했을 때
-   * - refresh fetch가 정확히 1회만 나가고
-   * - 두 호출이 동일한 결과를 받는다
-   * 
-   * Promise.allSettled([tokenManager.getAccessToken(), tokenManager.getAccessToken()])
-   * 같은 페이지에서 "동시 2회 호출"로 single-flight를 증명 가능
-   * 
-   * 즉, S3에서 page2 자체를 없애라.
-   * (멀티탭은 nightly/cross-browser에서만 돌려도 된다. PR Gate는 hermetic+deterministic이 우선)
-   */
-  test('S3: 멀티탭 동시 refresh 경합 방지 (single-flight)', async ({ page, context }) => {
-
-    // ✅ 네트워크 모킹: refresh endpoint만 정확히 fulfill
-    let refreshCallCount = 0;
-    const refreshCalls: Array<{ timestamp: number }> = [];
-    
-    await context.route('**/*', async (route) => {
-      const url = route.request().url();
-      
-      // ✅ http://local.test/*는 injectHarness에서 처리하므로 여기서는 건너뛰기
-      // 멀티탭(S3)면 page1, page2 둘 다 route를 걸어야 한다 (라우트는 Page 단위로 등록되니까)
-      // injectHarness 내부에서 각 page.route를 설정하므로 여기서는 건너뛰기
-      if (url.startsWith('http://local.test/')) {
-        // injectHarness의 page.route가 처리
-        return;
-      }
-      
-      // ✅ S3: refresh 엔드포인트만 200 + 성공 응답
-      // ✅ T+0 ~ T+2h: page.route 패턴을 실제 URL에 맞게 수정
-      // fetch 캡처로 실제 refresh URL을 확인한 후 패턴 수정
-      if (url.includes('/auth/refresh') || url.includes('/api/auth/refresh')) {
-        refreshCallCount++;
-        refreshCalls.push({ timestamp: Date.now() });
-        
-        // 약간의 지연을 두어 동시 호출 시뮬레이션
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            access_token: 'new-access-token',
-            refresh_token: 'new-refresh-token',
-            expires_in: 900,
-          }),
-        });
-        return;
-      }
-      
-      // ✅ 다른 모든 요청은 abort (hermetic: 실서버 의존 제거)
-      await route.abort();
-    });
-    
-    // ✅ 정석 harness 주입 템플릿
-    // ✅ S3는 page1/page2 둘 다 동일하게 주입 + 각각 존재성 체크
-    // ✅ 3) 주입은 무조건 context.addInitScript({ content })로 통일
-    // 멀티탭(S3)면 page1, page2 둘 다 route를 걸어야 한다 (라우트는 Page 단위로 등록되니까)
-    // 하지만 context.addInitScript는 context 단위로 등록되므로 한 번만 호출하면 됨
-    await context.addInitScript({ content: tokenManagerIIFE });
-    await context.addInitScript({ content: harnessIIFE });
-    
-    // page1, page2 각각 route 설정
-    await page1.route('http://local.test/*', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'text/html',
-        body: '<!doctype html><html><body>e2e</body></html>',
-      });
-    });
-    await page2.route('http://local.test/*', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'text/html',
-        body: '<!doctype html><html><body>e2e</body></html>',
-      });
-    });
-    
-    // 그 다음에 "새 문서"를 열어서 initScript가 적용되게 함
-    await page1.goto('http://local.test/', { waitUntil: 'domcontentloaded' });
-    await page2.goto('http://local.test/', { waitUntil: 'domcontentloaded' });
-    
-    // ✅ assert 순서를 바꿔라 (원인 분리)
-    // page1 검증
-    expect(await page1.evaluate(() => typeof window.__TOKEN_MANAGER !== 'undefined')).toBe(true);
-    expect(await page1.evaluate(() => window.__HARNESS_LOADED_AT)).toBeDefined();
-    expect(await page1.evaluate(() => window.__HARNESS_ERROR)).toBeNull();
-    expect(await page1.evaluate(() => typeof window.runS3)).toBe('function');
-    
-    // page2 검증
-    expect(await page2.evaluate(() => typeof window.__TOKEN_MANAGER !== 'undefined')).toBe(true);
-    expect(await page2.evaluate(() => window.__HARNESS_LOADED_AT)).toBeDefined();
-    expect(await page2.evaluate(() => window.__HARNESS_ERROR)).toBeNull();
-    expect(await page2.evaluate(() => typeof window.runS3)).toBe('function');
-
-    // ✅ localStorage 접근은 boot 이후에만 (HTTP origin 확보 후)
-    await page1.evaluate(() => {
-      localStorage.setItem('refresh_token', 'test-refresh-token');
-      localStorage.setItem('token_expires_at', (Date.now() - 1000).toString());
-      sessionStorage.setItem('csrf_token', 'test-csrf-token');
-    });
-    
-    // ✅ Given: 초기 저장소 상태 확인
-    const storageStateBefore = await page1.evaluate(() => {
-      return {
-        refreshToken: localStorage.getItem('refresh_token'),
-        expiresAt: localStorage.getItem('token_expires_at'),
-        csrfToken: sessionStorage.getItem('csrf_token'),
-      };
-    });
-    
-    expect(storageStateBefore.refreshToken).toBe('test-refresh-token');
-    expect(storageStateBefore.expiresAt).toBeTruthy();
-    expect(storageStateBefore.csrfToken).toBe('test-csrf-token');
-
-    // ✅ 명령 3) 두 페이지에서 동시에 window.runS3() 호출 (함수 호출로 트리거)
-    const promise1 = page1.evaluate(async () => {
-      if (window.runS3) {
-        await window.runS3();
-      } else {
-        throw new Error('runS3 function not found');
-      }
-    });
-    
-    const promise2 = page2.evaluate(async () => {
-      if (window.runS3) {
-        await window.runS3();
-      } else {
-        throw new Error('runS3 function not found');
-      }
-    });
-    
-    await Promise.all([promise1, promise2]);
-    
-    // ✅ Then: refresh 호출 횟수 확인 (정확히 1회 - single-flight)
-    console.log(`[E2E] Refresh call count: ${refreshCallCount}, calls:`, refreshCalls);
-    expect(refreshCallCount).toBe(1);
-    
-    // ✅ 명령 3) 검증은 명시적 이벤트/결과로 (localStorage polling 금지)
-    const refreshCompleted1 = await page1.evaluate(() => {
-      return window.__REFRESH_COMPLETED === true;
-    });
-    
-    const refreshCompleted2 = await page2.evaluate(() => {
-      return window.__REFRESH_COMPLETED === true;
-    });
-    
-    expect(refreshCompleted1).toBe(true);
-    expect(refreshCompleted2).toBe(true);
-    
-    // ✅ 최종 토큰 상태 확인
-    const storageStateAfter = await page1.evaluate(() => {
-      return {
-        refreshToken: localStorage.getItem('refresh_token'),
-        expiresAt: localStorage.getItem('token_expires_at'),
-        csrfToken: sessionStorage.getItem('csrf_token'),
-      };
-    });
-    
-    const storageStateAfter2 = await page2.evaluate(() => {
-      return {
-        refreshToken: localStorage.getItem('refresh_token'),
-        expiresAt: localStorage.getItem('token_expires_at'),
-        csrfToken: sessionStorage.getItem('csrf_token'),
-      };
-    });
-    
-    expect(storageStateAfter.refreshToken).toBe('new-refresh-token');
-    expect(storageStateAfter2.refreshToken).toBe('new-refresh-token');
-    
-    await page1.close();
-    await page2.close();
-  });
 });
