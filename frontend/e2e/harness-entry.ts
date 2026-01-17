@@ -203,30 +203,56 @@ try {
         // refreshOnce 내부에서 fetch를 호출하므로, 
         // 원본 fetch를 래핑하여 AbortController를 자동으로 추가
         const originalFetch = window.fetch;
+        let pendingUrl: string | null = null;
         const wrappedFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-          // 이미 signal이 있으면 그대로 사용, 없으면 abortController.signal 사용
+          const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
+          pendingUrl = url;
+          window.__S4_TRACE.push('fetch called: ' + url);
           const signal = init?.signal || abortController.signal;
-          return originalFetch(input, { ...init, signal });
+          try {
+            return await originalFetch(input, { ...init, signal });
+          } catch (error) {
+            window.__S4_TRACE.push('fetch error: ' + String(error));
+            throw error;
+          }
         };
         window.fetch = wrappedFetch as typeof fetch;
         
         try {
+          window.__S4_TRACE.push('before refreshOnce call');
           const refreshResult = await withTimeout(
             testHook.refreshOnce(),
             3000,
             'refreshOnce (expected to fail with 401)'
           );
           
+          window.__S4_TRACE.push('after refreshOnce call: ' + (refreshResult.ok ? 'ok' : refreshResult.reason));
           // 401 에러는 예상된 동작이므로 무시
           if (!refreshResult.ok && refreshResult.reason.includes('401')) {
             // 정상적인 실패
+            window.__S4_TRACE.push('refreshOnce failed with 401 (expected)');
           } else if (!refreshResult.ok) {
             // 예상치 못한 에러
             console.log('[HARNESS] runS4: Unexpected error:', refreshResult.reason);
+            window.__S4_TRACE.push('refreshOnce failed with unexpected error: ' + refreshResult.reason);
           }
+        } catch (error) {
+          // ✅ Command 3: fetch timeout 시 {ok:false, reason:'fetch_timeout', trace, pendingUrl} 반환
+          // throw 금지, 항상 결과 반환
+          window.__S4_TRACE.push('refreshOnce exception: ' + String(error));
+          const timeoutReason = pendingUrl 
+            ? `fetch_timeout: ${pendingUrl}`
+            : 'fetch_timeout: unknown url';
+          return {
+            ok: false,
+            reason: timeoutReason,
+            trace: window.__S4_TRACE || [],
+            pendingUrl: pendingUrl || null,
+          };
         } finally {
           clearTimeout(timeoutId);
           window.fetch = originalFetch; // 원본 fetch 복원
+          window.__S4_TRACE.push('fetch wrapper restored');
         }
       } else {
         return { ok: false, reason: 'testHook.refreshOnce is not available' };
