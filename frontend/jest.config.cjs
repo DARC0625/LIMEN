@@ -8,6 +8,7 @@
  * Next.js 통합: nextJest를 사용하여 Next.js 설정 로드
  * 
  * ✅ Jest config를 JS로 유지하여 ts-node 요구사항 제거
+ * ✅ Next/jest 타입 꼬임 제거: 순수 객체 export로 단일화
  */
 const nextJest = require('next/jest');
 
@@ -43,7 +44,7 @@ const coreConfig = {
   setupFilesAfterEnv: [], // core는 브라우저 의존 제거
 };
 
-// UI 프로젝트 설정 (jsdom 환경)
+// UI 프로젝트 설정 (jsdom 환경) - nextJest로 설정
 const uiConfig = {
   displayName: 'ui',
   testEnvironment: 'jest-environment-jsdom',
@@ -75,6 +76,7 @@ const uiConfig = {
 };
 
 // Jest 설정 생성 (비동기)
+// ✅ 정석: nextJest를 사용하여 UI 프로젝트 설정 생성
 module.exports = async () => {
   // UI 프로젝트에만 nextJest 설정 적용
   const baseConfig = await createJestConfig(uiConfig);
@@ -89,7 +91,7 @@ module.exports = async () => {
     },
   };
   
-  // UI 프로젝트 설정 병합
+  // UI 프로젝트 설정 병합 (nextJest 설정 포함)
   const uiWithNext = {
     ...baseConfig,
     ...uiConfig,
