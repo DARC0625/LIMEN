@@ -15,62 +15,10 @@
  * npx playwright test e2e/token-refresh.spec.ts
  */
 
+/// <reference path="./global.d.ts" />
+
 import { test, expect, type Page } from '@playwright/test';
-import * as esbuild from 'esbuild';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-
-/**
- * ✅ 명령 2) tokenManager는 브라우저에서 import 가능하게 ESM 번들로 만들어 route로 서빙
- * 
- * ✅ A안: esbuild 번들링에서 process/env 완전 치환
- * 브라우저 번들에서 process 자체가 사라지게 만들기
- */
-async function buildTokenManagerESM(): Promise<string> {
-  const tokenManagerPath = join(__dirname, '../lib/tokenManager.ts');
-  
-  const result = await esbuild.build({
-    entryPoints: [tokenManagerPath],
-    bundle: true,
-    write: false,
-    format: 'esm',
-    platform: 'browser',
-    target: 'es2020',
-    external: ['next'], // Next.js는 외부 의존성으로 처리
-    // ✅ process.env 완전 치환 (브라우저에서 process가 사라지게)
-    define: {
-      'process.env.NODE_ENV': '"test"',
-      'process.env.NEXT_PUBLIC_API_URL': '"/api"',
-      'process.env.NEXT_PUBLIC_SENTRY_DSN': 'undefined',
-      'process.env.NEXT_PUBLIC_ERROR_TRACKING_API': 'undefined',
-      'process.env': '{}', // 나머지 모든 process.env 접근은 {}로 치환
-    },
-  });
-  
-  return result.outputFiles[0].text;
-}
-
-/**
- * ✅ 명령 1) harness는 IIFE로 번들링하여 window에 전역 함수 등록
- * 
- * 원인 A 해결: esbuild 번들이 ESM(export) 형태라 <script>로 넣어도 전역이 안 생김
- * 해결: harness 번들을 IIFE로 만들고 window에 명시적으로 붙이기
- */
-async function buildHarnessIIFE(): Promise<string> {
-  const harnessPath = join(__dirname, 'harness-entry.ts');
-  
-  const result = await esbuild.build({
-    entryPoints: [harnessPath],
-    bundle: true,
-    write: false,
-    format: 'iife', // ✅ IIFE로 변경 (전역 함수 생성)
-    platform: 'browser',
-    target: 'es2020',
-    globalName: '__E2E__', // 필요시 전역 이름 지정
-  });
-  
-  return result.outputFiles[0].text;
-}
+import { buildTokenManagerESM, buildHarnessIIFE } from './_bundles';
 
 /**
  * ✅ 명령 3) page.setContent()로 완전 격리된 페이지 생성
@@ -103,42 +51,12 @@ async function injectHarness(
   // harness JS가 실행됨
   // window.runS4 === 'function' / window.runS3 === 'function'이 됨
   // 그 다음에만 호출
+  // ✅ global.d.ts로 타입 선언되어 있으므로 any 불필요
   await page.waitForFunction(() => {
-    return typeof (window as any).runS4 === 'function' &&
-           typeof (window as any).runS3 === 'function';
+    return typeof window.runS4 === 'function' &&
+           typeof window.runS3 === 'function';
   }, { timeout: 5000 });
 }
-
-/**
- * ✅ 명령 2) tokenManager는 브라우저에서 import 가능하게 ESM 번들로 만들어 route로 서빙
- * 
- * ✅ A안: esbuild 번들링에서 process/env 완전 치환
- * 브라우저 번들에서 process 자체가 사라지게 만들기
- */
-async function buildTokenManagerESM(): Promise<string> {
-  const tokenManagerPath = join(__dirname, '../lib/tokenManager.ts');
-  
-  const result = await esbuild.build({
-    entryPoints: [tokenManagerPath],
-    bundle: true,
-    write: false,
-    format: 'esm',
-    platform: 'browser',
-    target: 'es2020',
-    external: ['next'], // Next.js는 외부 의존성으로 처리
-    // ✅ process.env 완전 치환 (브라우저에서 process가 사라지게)
-    define: {
-      'process.env.NODE_ENV': '"test"',
-      'process.env.NEXT_PUBLIC_API_URL': '"/api"',
-      'process.env.NEXT_PUBLIC_SENTRY_DSN': 'undefined',
-      'process.env.NEXT_PUBLIC_ERROR_TRACKING_API': 'undefined',
-      'process.env': '{}', // 나머지 모든 process.env 접근은 {}로 치환
-    },
-  });
-  
-  return result.outputFiles[0].text;
-}
-
 
 test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', () => {
   // ✅ 명령 2) tokenManager ESM 번들 (한 번만 빌드)
@@ -202,38 +120,43 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     expect(storageStateBefore.expiresAt).toBeTruthy();
     expect(storageStateBefore.csrfToken).toBe('test-csrf-token');
 
-  // ✅ tokenManager를 주입 (harness.js가 사용)
-  // page.setContent()에서는 origin이 없어서 import가 실패할 수 있으므로
-  // 주입된 ESM 번들을 직접 실행하여 window에 할당
-  await page.evaluate(async (tokenManagerCode) => {
-    // ESM 코드를 실행하여 모듈 가져오기
-    const blob = new Blob([tokenManagerCode], { type: 'application/javascript' });
-    const url = URL.createObjectURL(blob);
-    try {
-      const mod = await import(url);
-      (window as any).__TOKEN_MANAGER = mod.tokenManager;
-    } finally {
-      URL.revokeObjectURL(url);
-    }
-  }, tokenManagerESM);
+    // ✅ tokenManager를 주입 (harness.js가 사용)
+    // page.setContent()에서는 origin이 없어서 import가 실패할 수 있으므로
+    // 주입된 ESM 번들을 직접 실행하여 window에 할당
+    await page.evaluate(async (tokenManagerCode) => {
+      // ESM 코드를 실행하여 모듈 가져오기
+      const blob = new Blob([tokenManagerCode], { type: 'application/javascript' });
+      const url = URL.createObjectURL(blob);
+      try {
+        const mod = await import(url);
+        // ✅ global.d.ts로 타입 선언되어 있으므로 unknown 캐스팅만
+        window.__TOKEN_MANAGER = mod.tokenManager as unknown;
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }, tokenManagerESM);
 
     // ✅ 명령 1) harness는 반드시 페이지에 주입되고, 전역 함수가 생길 때까지 기다린다
     // injectHarness에서 이미 waitForFunction으로 보장했지만, 추가 확인
-    await page.waitForFunction(() => typeof (window as any).runS4 === 'function', { timeout: 5000 });
+    await page.waitForFunction(() => typeof window.runS4 === 'function', { timeout: 5000 });
 
     // ✅ 명령 3) S4는 window.runS4() 호출로 트리거 (페이지 이동으로 트리거 ❌)
     await page.evaluate(async () => {
-      await (window as any).runS4();
+      if (window.runS4) {
+        await window.runS4();
+      } else {
+        throw new Error('runS4 function not found');
+      }
     });
 
     // ✅ 명령 3) 검증은 polling(localStorage waitForFunction) 금지
     // ✅ 명시적 이벤트/결과로 검증
     const sessionCleared = await page.evaluate(() => {
-      return (window as any).__SESSION_CLEARED === true;
+      return window.__SESSION_CLEARED === true;
     });
     
     const redirectToLogin = await page.evaluate(() => {
-      return (window as any).__REDIRECT_TO_LOGIN;
+      return window.__REDIRECT_TO_LOGIN ?? null;
     });
 
     expect(sessionCleared).toBe(true);
@@ -328,7 +251,8 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       const url = URL.createObjectURL(blob);
       try {
         const mod = await import(url);
-        (window as any).__TOKEN_MANAGER = mod.tokenManager;
+        // ✅ global.d.ts로 타입 선언되어 있으므로 unknown 캐스팅만
+        window.__TOKEN_MANAGER = mod.tokenManager as unknown;
       } finally {
         URL.revokeObjectURL(url);
       }
@@ -339,7 +263,8 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       const url = URL.createObjectURL(blob);
       try {
         const mod = await import(url);
-        (window as any).__TOKEN_MANAGER = mod.tokenManager;
+        // ✅ global.d.ts로 타입 선언되어 있으므로 unknown 캐스팅만
+        window.__TOKEN_MANAGER = mod.tokenManager as unknown;
       } finally {
         URL.revokeObjectURL(url);
       }
@@ -347,16 +272,24 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
 
     // ✅ 명령 1) harness는 반드시 페이지에 주입되고, 전역 함수가 생길 때까지 기다린다
     // injectHarness에서 이미 waitForFunction으로 보장했지만, 추가 확인
-    await page1.waitForFunction(() => typeof (window as any).runS3 === 'function', { timeout: 5000 });
-    await page2.waitForFunction(() => typeof (window as any).runS3 === 'function', { timeout: 5000 });
+    await page1.waitForFunction(() => typeof window.runS3 === 'function', { timeout: 5000 });
+    await page2.waitForFunction(() => typeof window.runS3 === 'function', { timeout: 5000 });
 
     // ✅ 명령 3) 두 페이지에서 동시에 window.runS3() 호출 (함수 호출로 트리거)
     const promise1 = page1.evaluate(async () => {
-      await (window as any).runS3();
+      if (window.runS3) {
+        await window.runS3();
+      } else {
+        throw new Error('runS3 function not found');
+      }
     });
     
     const promise2 = page2.evaluate(async () => {
-      await (window as any).runS3();
+      if (window.runS3) {
+        await window.runS3();
+      } else {
+        throw new Error('runS3 function not found');
+      }
     });
     
     await Promise.all([promise1, promise2]);
@@ -367,11 +300,11 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     
     // ✅ 명령 3) 검증은 명시적 이벤트/결과로 (localStorage polling 금지)
     const refreshCompleted1 = await page1.evaluate(() => {
-      return (window as any).__REFRESH_COMPLETED === true;
+      return window.__REFRESH_COMPLETED === true;
     });
     
     const refreshCompleted2 = await page2.evaluate(() => {
-      return (window as any).__REFRESH_COMPLETED === true;
+      return window.__REFRESH_COMPLETED === true;
     });
     
     expect(refreshCompleted1).toBe(true);
