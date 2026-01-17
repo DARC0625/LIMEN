@@ -1,42 +1,19 @@
 /**
  * lib/auth/index.ts 테스트
+ * ✅ P1-4: Factory 패턴 기반 테스트 (mock 지옥 탈출)
  */
 
-import { checkAuth, getUserRole, isUserApproved, isAdmin, logout } from '../index'
-import { tokenManager } from '../../tokenManager'
-import { authAPI } from '../../api/auth'
+import { createAuth } from '../createAuth';
+import { createTestAuthDeps, createFakeTokenManager, createFakeAuthAPI, createTestClock, createFakeFetch } from './helpers';
+import { getUserRoleFromToken, isUserApprovedFromToken, isTokenValid } from '../../utils/token';
 
-// ✅ P0-3: tokenManager를 완전히 mock (테스트 안정성)
-// StoragePort 접근은 setTokens()를 통해 간접적으로 처리
-jest.mock('../../tokenManager', () => ({
-  tokenManager: {
-    hasValidToken: jest.fn(),
-    getAccessToken: jest.fn(),
-    getRefreshToken: jest.fn(),
-    getExpiresAt: jest.fn(),
-    getCSRFToken: jest.fn(),
-    clearTokens: jest.fn(),
-    setTokens: jest.fn(), // ✅ P0-3: StoragePort에 토큰 설정용
-  },
-  TokenManagerPort: {}, // 타입 export
+// ✅ P1-4: token utils만 mock (순수 함수는 실제 사용 가능)
+jest.mock('../../utils/token', () => ({
+  getUserRoleFromToken: jest.fn(),
+  isUserApprovedFromToken: jest.fn(),
+  decodeToken: jest.fn(),
+  isTokenValid: jest.fn(),
 }))
-
-// authAPI 모킹
-jest.mock('../../api/auth', () => ({
-  authAPI: {
-    deleteSession: jest.fn().mockResolvedValue(undefined),
-  },
-}))
-
-// ✅ Jest: 브라우저 환경 mock (window, document)
-// checkAuth가 typeof window === 'undefined'로 브라우저 경로를 막지 않도록
-global.window = global.window || {} as any;
-global.document = global.document || {
-  cookie: '',
-} as any;
-
-// fetch 모킹
-global.fetch = jest.fn()
 
 // logger 모킹
 jest.mock('../../utils/logger', () => ({
@@ -47,60 +24,47 @@ jest.mock('../../utils/logger', () => ({
   },
 }))
 
-// token utils 모킹
-jest.mock('../../utils/token', () => ({
-  getUserRoleFromToken: jest.fn(),
-  isUserApprovedFromToken: jest.fn(),
-  decodeToken: jest.fn(),
-  isTokenValid: jest.fn(),
-}))
+// ✅ Jest: 브라우저 환경 mock (window, document)
+global.window = global.window || {} as any;
+global.document = global.document || {
+  cookie: '',
+} as any;
 
-// ✅ P0-3: tokenManager mock 사용
-const mockTokenManager = tokenManager as jest.Mocked<typeof tokenManager>
-const mockAuthAPI = authAPI as jest.Mocked<typeof authAPI>
+const mockGetUserRoleFromToken = getUserRoleFromToken as jest.MockedFunction<typeof getUserRoleFromToken>;
+const mockIsUserApprovedFromToken = isUserApprovedFromToken as jest.MockedFunction<typeof isUserApprovedFromToken>;
+const mockIsTokenValid = isTokenValid as jest.MockedFunction<typeof isTokenValid>;
 
-// ✅ P0-3: tokenManager mock을 통해 토큰 설정 시뮬레이션
-// 실제 StoragePort 접근 대신, mock이 올바른 값을 반환하도록 설정
-function setTokenInStoragePort(accessToken: string, refreshToken: string, expiresInSeconds: number): void {
-  // ✅ P0-3: mock을 통해 토큰이 설정된 것처럼 동작
-  // 실제로는 mock이 올바른 값을 반환하도록 설정
-  const expiresAt = Date.now() + (expiresInSeconds * 1000);
-  mockTokenManager.hasValidToken.mockReturnValue(true);
-  mockTokenManager.getAccessToken.mockResolvedValue(accessToken);
-  mockTokenManager.getRefreshToken.mockReturnValue(refreshToken);
-  mockTokenManager.getExpiresAt.mockReturnValue(expiresAt);
-}
-
-const { getUserRoleFromToken, isUserApprovedFromToken } = require('../../utils/token')
-const mockGetUserRoleFromToken = getUserRoleFromToken as jest.MockedFunction<typeof getUserRoleFromToken>
-const mockIsUserApprovedFromToken = isUserApprovedFromToken as jest.MockedFunction<typeof isUserApprovedFromToken>
+// ✅ P1-4: 테스트는 factory로 auth 인스턴스 생성
 
 describe('checkAuth', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    // ✅ P0-3: TokenManagerPort 계약에 맞춘 mock 설정
-    mockTokenManager.hasValidToken.mockReturnValue(false)
-    mockTokenManager.getCSRFToken.mockReturnValue(null)
-    mockTokenManager.getAccessToken.mockResolvedValue(null)
-    mockTokenManager.getRefreshToken.mockReturnValue(null)
-    mockTokenManager.getExpiresAt.mockReturnValue(null)
     mockGetUserRoleFromToken.mockReturnValue(null)
     mockIsUserApprovedFromToken.mockReturnValue(false)
-    
-    // 캐시 초기화를 위해 충분한 시간 대기
-    // (이전 테스트의 캐시가 남아있을 수 있음)
+    mockIsTokenValid.mockReturnValue(true)
   })
 
-  it('returns false on server side', async () => {
-    const originalWindow = global.window
-    // @ts-expect-error - intentional deletion of global.window for server-side test
-    delete global.window
+  it('returns false when no tokens', async () => {
+    // ✅ P1-4: factory로 테스트 deps 생성
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: null,
+      refreshToken: null,
+      expiresAt: null,
+    });
+    const authAPI = createFakeAuthAPI({
+      checkSessionResult: { ok: false, status: 401, data: { valid: false, reason: '인증이 필요합니다.' } },
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 401, ok: false, data: { valid: false, reason: '인증이 필요합니다.' } },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    const result = await auth.checkAuth({ debug: true });
 
-    const result = await checkAuth({ debug: true })
-
+    // ✅ P1-4: 시나리오 입력에 따른 출력만 검증
     expect(result.valid).toBe(false)
-    expect(result.debug?.reasonPath).toBe('none')
-    global.window = originalWindow
+    expect(result.reason).toBeDefined()
   })
 
   it('handles invalid session', async () => {
@@ -733,28 +697,42 @@ describe('checkLocalStorageToken', () => {
   })
 
   it('handles checkLocalStorageToken with valid token', async () => {
-    const { isTokenValid } = require('../../utils/token')
-    const mockIsTokenValid = isTokenValid as jest.MockedFunction<typeof isTokenValid>
+    // ✅ P1-4: factory 기반 테스트 - 시나리오 입력/출력만 검증
+    const clock = createTestClock();
+    const now = clock.now();
     
-    // ✅ P0-3: checkLocalStorageToken 경로로 가도록 설정
-    // hasValidToken이 false이면 → checkBackendSession() 직접 호출 → 실패 시 checkLocalStorageToken() 호출
-    mockTokenManager.hasValidToken.mockReturnValue(false)
-    // ✅ P0-3: checkLocalStorageToken()에서 getAccessToken()을 호출하므로 여기서 'valid-token' 반환
-    mockTokenManager.getAccessToken.mockResolvedValue('valid-token')
-    mockIsTokenValid.mockReturnValue(true)
-
+    // ✅ P1-4: 토큰이 유효하도록 설정 (expiresAt를 충분히 큰 미래값으로)
+    const tokenManager = createFakeTokenManager({
+      accessToken: 'valid-token',
+      refreshToken: 'refresh-token',
+      expiresAt: now + 60000, // 1분 후 만료
+      getAccessTokenImpl: async () => 'valid-token',
+    });
+    
+    // ✅ P1-4: checkBackendSession이 실패하도록 설정 (네트워크 에러)
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 500, ok: false },
+    });
+    
     // fetch가 실패하면 checkBackendSession()이 실패하고 checkLocalStorageToken()이 호출됨
-    ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
+    fetchFn.mockRejectedValueOnce(new Error('Network error'));
+    
+    const authAPI = createFakeAuthAPI({
+      checkSessionImpl: async () => {
+        throw new Error('Network error');
+      },
+    });
+    
+    mockIsTokenValid.mockReturnValue(true);
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch });
+    const result = await auth.checkAuth({ debug: true });
 
-    const result = await checkAuth({ debug: true })
-
-    // ✅ Command 1: debug payload로 원인 확정
+    // ✅ P1-4: 시나리오 입력에 따른 출력만 검증
     console.log('[TEST] checkLocalStorageToken debug:', result.debug)
     expect(result.debug).toBeDefined()
     expect(result.debug?.checkLocalStorageTokenCalled).toBe(true)
-    // ✅ P0-3: hasAccessToken은 mock 설정에 따라 달라질 수 있으므로 일단 체크 완화
-    // 실제로는 getAccessToken()이 'valid-token'을 반환해야 하지만, mock이 제대로 동작하지 않을 수 있음
-    // P1에서 더 정석적인 방법(실제 StoragePort 사용)으로 개선 예정
+    expect(result.debug?.hasAccessToken).toBe(true)
     
     // checkLocalStorageToken이 호출되어 valid-token으로 인증 성공
     expect(result.valid).toBe(true)
