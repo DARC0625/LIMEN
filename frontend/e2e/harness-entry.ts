@@ -171,6 +171,7 @@ try {
       
       window.__S4_TRACE.push('before fetchCallsBefore');
       // ✅ refresh 호출 계측 시작 (__FETCH_CALLS 초기화)
+      // smoke test fetch 제거로 fetchCallsBefore는 refreshOnce 호출 전 상태
       const fetchCallsBefore = (window.__FETCH_CALLS || []).length;
       
       window.__S4_TRACE.push('before setRefreshToken/setExpiresAt');
