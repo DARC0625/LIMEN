@@ -2,13 +2,13 @@
 // 비정상 접근 감지 및 자동 로그아웃 기능
 
 import { logger } from './utils/logger';
-import { StoragePort } from './ports/storagePort';
+import { StoragePort, SessionStoragePort } from './ports/storagePort';
 import { LocationPort } from './ports/locationPort';
 import { BroadcastPort } from './ports/broadcastPort';
-import { createBrowserStoragePort, browserLocalStoragePort } from './adapters/browserStoragePort';
+import { createBrowserStoragePort, browserLocalStoragePort, browserSessionStoragePort } from './adapters/browserStoragePort';
 import { createBrowserLocationPort } from './adapters/browserLocationPort';
 import { createBrowserBroadcastPort } from './adapters/browserBroadcastPort';
-import { createMemoryStoragePort } from './adapters/memoryStoragePort';
+import { createMemoryStoragePort, createMemorySessionStoragePort } from './adapters/memoryStoragePort';
 import { createMemoryLocationPort } from './adapters/memoryLocationPort';
 import { createNoopBroadcastPort } from './adapters/noopBroadcastPort';
 
@@ -173,14 +173,19 @@ export function forceLogoutBrowser(reason?: string): void {
   }
 }
 
-// 세션 ID 생성 (탭별 고유 ID)
-export function getSessionId(): string {
-  if (typeof window === 'undefined') return '';
+/**
+ * 세션 ID 생성 (탭별 고유 ID)
+ * Port 주입 방식으로 변경 (정석)
+ */
+export function getSessionId(sessionStorage?: SessionStoragePort): string {
+  const storage = sessionStorage ?? (typeof window !== 'undefined' && browserSessionStoragePort
+    ? browserSessionStoragePort
+    : createMemorySessionStoragePort());
   
-  let sessionId = sessionStorage.getItem('session_id');
+  let sessionId = storage.get('session_id');
   if (!sessionId) {
     sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    sessionStorage.setItem('session_id', sessionId);
+    storage.set('session_id', sessionId);
   }
   return sessionId;
 }
@@ -206,22 +211,32 @@ export function checkRequestRateLimit(): boolean {
   // return true;
 }
 
-// 비정상 활동 감지 - 패시브 모니터링만 (차단 없음)
-export function detectAbnormalActivity(): {
+/**
+ * 비정상 활동 감지 - 패시브 모니터링만 (차단 없음)
+ * Port 주입 방식으로 변경 (정석)
+ */
+export function detectAbnormalActivity(
+  storage?: StoragePort,
+  location?: LocationPort | null
+): {
   isAbnormal: boolean;
   reason?: string;
 } {
-  if (typeof window === 'undefined') {
-    return { isAbnormal: false };
-  }
+  const defaultStorage = storage ?? (typeof window !== 'undefined' && browserLocalStoragePort
+    ? browserLocalStoragePort
+    : createMemoryStoragePort());
+  
+  const defaultLocation = location ?? (typeof window !== 'undefined'
+    ? createBrowserLocationPort()
+    : null);
   
   // 패시브 모니터링: 로깅만 수행, 차단하지 않음
-  const token = localStorage.getItem('auth_token');
+  const token = defaultStorage.get('auth_token');
   if (token && !validateTokenIntegrity(token)) {
     // 차단하지 않고 로깅만
     logger.warn('[Security Log] Token integrity check failed (passive monitoring):', {
       timestamp: new Date().toISOString(),
-      pathname: window.location.pathname,
+      pathname: defaultLocation?.getPathname() ?? '/',
     });
     // 차단하지 않음 - 항상 false 반환
     return { isAbnormal: false };
@@ -234,9 +249,21 @@ export function detectAbnormalActivity(): {
   return { isAbnormal: false };
 }
 
-// 차단된 계정 확인 및 해제 (패시브 모니터링)
-export function checkAndUnblockAccount(): void {
-  if (typeof window === 'undefined') return;
+/**
+ * 차단된 계정 확인 및 해제 (패시브 모니터링)
+ * Port 주입 방식으로 변경 (정석)
+ */
+export function checkAndUnblockAccount(
+  storage?: StoragePort,
+  sessionStorage?: SessionStoragePort
+): void {
+  const defaultStorage = storage ?? (typeof window !== 'undefined' && browserLocalStoragePort
+    ? browserLocalStoragePort
+    : createMemoryStoragePort());
+  
+  const defaultSessionStorage = sessionStorage ?? (typeof window !== 'undefined' && browserSessionStoragePort
+    ? browserSessionStoragePort
+    : createMemorySessionStoragePort());
   
   // 차단 관련 플래그 확인 및 제거
   const blockedFlags = [
@@ -250,17 +277,17 @@ export function checkAndUnblockAccount(): void {
   
   let hasBlockedFlag = false;
   blockedFlags.forEach(flag => {
-    if (localStorage.getItem(flag)) {
+    if (defaultStorage.get(flag)) {
       logger.warn('[Security Log] Removing block flag (passive monitoring):', flag);
-      localStorage.removeItem(flag);
+      defaultStorage.remove(flag);
       hasBlockedFlag = true;
     }
   });
   
   // 세션 스토리지의 차단 플래그도 제거
-  if (sessionStorage.getItem('logout_redirect')) {
+  if (defaultSessionStorage.get('logout_redirect')) {
     logger.warn('[Security Log] Removing logout redirect flag (passive monitoring)');
-    sessionStorage.removeItem('logout_redirect');
+    defaultSessionStorage.remove('logout_redirect');
     hasBlockedFlag = true;
   }
   
@@ -271,21 +298,33 @@ export function checkAndUnblockAccount(): void {
   }
 }
 
-// 세션 초기화 (로그인 시 호출)
-export function initializeSession(): void {
-  if (typeof window === 'undefined') return;
+/**
+ * 세션 초기화 (로그인 시 호출)
+ * Port 주입 방식으로 변경 (정석)
+ */
+export function initializeSession(
+  storage?: StoragePort,
+  sessionStorage?: SessionStoragePort
+): void {
+  const defaultStorage = storage ?? (typeof window !== 'undefined' && browserLocalStoragePort
+    ? browserLocalStoragePort
+    : createMemoryStoragePort());
+  
+  const defaultSessionStorage = sessionStorage ?? (typeof window !== 'undefined' && browserSessionStoragePort
+    ? browserSessionStoragePort
+    : createMemorySessionStoragePort());
   
   // 차단 플래그 제거 (로그인 시 자동 해제)
-  checkAndUnblockAccount();
+  checkAndUnblockAccount(defaultStorage, defaultSessionStorage);
   
   // 브라우저 핑거프린트 저장 (다중 기기 접근 허용)
   // 각 기기마다 고유한 핑거프린트를 저장하되, 다른 기기 접근을 차단하지 않음
   const currentFingerprint = getBrowserFingerprint();
-  localStorage.setItem('browser_fingerprint', currentFingerprint);
+  defaultStorage.set('browser_fingerprint', currentFingerprint);
   
   // 세션 ID 생성 및 저장 (다중 기기 접근 추적용)
-  const sessionId = getSessionId();
-  localStorage.setItem('last_session_id', sessionId);
+  const sessionId = getSessionId(defaultSessionStorage);
+  defaultStorage.set('last_session_id', sessionId);
   
   // 요청 타임스탬프 초기화
   requestTimestamps.length = 0;

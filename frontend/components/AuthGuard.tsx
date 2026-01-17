@@ -3,7 +3,7 @@
 import { useEffect, useState, createContext, useContext, useRef, startTransition } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
-  forceLogout, 
+  forceLogoutBrowser, 
   checkAndUnblockAccount
 } from '@/lib/security';
 import { checkAuth } from '@/lib/auth';
@@ -197,7 +197,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       
       if (event.data?.type === 'FORCE_LOGOUT' || event.data?.type === 'AUTH_EVENT') {
         if (event.data?.action === 'log') {
-          forceLogout(event.data?.reason || '인증 이벤트가 발생했습니다.');
+          forceLogoutBrowser(event.data?.reason || '인증 이벤트가 발생했습니다.');
         }
       }
     };
@@ -237,7 +237,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       if (e.key === 'force_logout' && e.newValue) {
         try {
           const data = JSON.parse(e.newValue);
-          forceLogout(data.reason || '인증 이벤트가 발생했습니다.');
+          forceLogoutBrowser(data.reason || '인증 이벤트가 발생했습니다.');
         } catch {
           // JSON 파싱 실패 시 무시
         }
@@ -285,7 +285,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         const timeSinceLastActivity = Date.now() - lastActivityRef.current;
         if (timeSinceLastActivity >= INACTIVE_TIMEOUT_MS && isAuthenticatedRef.current) {
           // 10분 비활성 시 자동 로그아웃
-          forceLogout('10분 동안 활동이 없어 세션이 만료되었습니다.');
+          forceLogoutBrowser('10분 동안 활동이 없어 세션이 만료되었습니다.');
           isAuthenticatedRef.current = false;
           // 상태 업데이트를 다음 틱으로 지연하여 무한 루프 방지
           setTimeout(() => {
@@ -329,7 +329,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         const currentAuth = isAuthenticatedRef.current;
         
         if (!authCheck.valid && currentAuth) {
-          forceLogout(authCheck.reason || '세션이 만료되었습니다.');
+          forceLogoutBrowser(authCheck.reason || '세션이 만료되었습니다.');
           // ref 업데이트는 setInterval 내부에서만 (렌더링 중 업데이트 방지)
           isAuthenticatedRef.current = false;
           // 상태 업데이트를 다음 틱으로 지연하여 무한 루프 방지
