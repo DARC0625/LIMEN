@@ -56,10 +56,10 @@ try {
   // 원인 찾을 때까지는 욕심내지 마
   // runS3/runS4 내부에서 tokenManager를 쓰더라도, 바인딩 자체는 반드시 성공해야 함
   // 지금은 의존성 0으로 만들었으므로 loadTokenManager는 나중에 사용
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // (의존성 0 단계에서는 사용하지 않으므로 주석 처리)
+  /*
   let tokenManagerInstance: unknown = null;
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function loadTokenManager(): Promise<unknown> {
     if (tokenManagerInstance) return tokenManagerInstance;
     
@@ -75,6 +75,7 @@ try {
     // (page.setContent()에서는 origin이 없어서 import가 실패할 수 있음)
     throw new Error('tokenManager not found in window.__TOKEN_MANAGER. Make sure to inject tokenManager before calling runS4/runS3.');
   }
+  */
 
   // ✅ 4) harness-entry를 의존성 0으로 먼저 만들어서 바인딩만 성공
   // 원인 찾을 때까지는 욕심내지 마
