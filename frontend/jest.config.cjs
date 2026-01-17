@@ -76,7 +76,7 @@ const uiConfig = {
     '!components/**/*.test.{ts,tsx}',
     '!hooks/**/*.test.{ts,tsx}',
   ],
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
 };
 
 // Jest 설정 생성 (비동기)
