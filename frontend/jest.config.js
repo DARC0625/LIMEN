@@ -34,6 +34,10 @@ const customJestConfig = {
         '!lib/**/*.ui.test.{ts,tsx}',
       ],
       setupFilesAfterEnv: [], // core는 브라우저 의존 제거
+      // TypeScript 파싱을 위해 nextJest의 transform 설정 사용
+      transform: {
+        '^.+\\.(ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
+      },
     },
     // UI 프로젝트 (jsdom 환경)
     {
@@ -70,8 +74,6 @@ const customJestConfig = {
     '/node_modules/',
     '/e2e/', // Playwright E2E 전부 제외
   ],
-  // API/유틸 테스트는 각 파일에 /** @jest-environment node */ 주석 추가
-  // 또는 testEnvironment를 조건부로 설정 (nextJest 제약으로 주석 방식 권장)
 }
 
 // createJestConfig는 next/jest가 비동기적으로 Next.js 구성을 로드할 수 있도록 하는 함수를 내보냅니다
@@ -79,8 +81,24 @@ const customJestConfig = {
 module.exports = async () => {
   const baseConfig = await createJestConfig(customJestConfig);
   
+  // Core 프로젝트에도 TypeScript transform 설정 추가
+  const coreProject = baseConfig.projects?.find((p) => p.displayName === 'core');
+  if (coreProject) {
+    // nextJest의 transform 설정을 core 프로젝트에도 적용
+    if (baseConfig.transform) {
+      coreProject.transform = baseConfig.transform;
+    }
+    // moduleNameMapper도 적용
+    if (baseConfig.moduleNameMapper) {
+      coreProject.moduleNameMapper = {
+        ...coreProject.moduleNameMapper,
+        ...baseConfig.moduleNameMapper,
+      };
+    }
+  }
+  
   // UI 프로젝트에만 nextJest 설정 적용
-  const uiProject = baseConfig.projects?.find((p: any) => p.displayName === 'ui');
+  const uiProject = baseConfig.projects?.find((p) => p.displayName === 'ui');
   if (uiProject) {
     // nextJest가 이미 적용된 설정을 UI 프로젝트에 병합
     Object.assign(uiProject, baseConfig);
