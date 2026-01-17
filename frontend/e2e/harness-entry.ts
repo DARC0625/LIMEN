@@ -172,20 +172,43 @@ try {
       }
       
       // ✅ refresh를 직접 호출 (만료 판단 로직에 의존하지 않음)
+      // ✅ P0-3: fetch 자체에 AbortController timeout을 걸어 절대 무한대기하지 않게
       // refresh route를 401로 1회 강제 (테스트 코드에서 route 설정)
       if (testHook.refreshOnce) {
-        const refreshResult = await withTimeout(
-          testHook.refreshOnce(),
-          3000,
-          'refreshOnce (expected to fail with 401)'
-        );
+        // ✅ AbortController로 fetch timeout 보장
+        // withTimeout만으로는 fetch가 영원히 pending이면 잡히지 않는 경우가 있어
+        // fetch 자체에 AbortController를 걸고 시간 지나면 abort하도록 해
+        const abortController = new AbortController();
+        const timeoutId = setTimeout(() => {
+          abortController.abort();
+        }, 2000); // 2초 타임아웃
         
-        // 401 에러는 예상된 동작이므로 무시
-        if (!refreshResult.ok && refreshResult.reason.includes('401')) {
-          // 정상적인 실패
-        } else if (!refreshResult.ok) {
-          // 예상치 못한 에러
-          console.log('[HARNESS] runS4: Unexpected error:', refreshResult.reason);
+        // refreshOnce 내부에서 fetch를 호출하므로, 
+        // 원본 fetch를 래핑하여 AbortController를 자동으로 추가
+        const originalFetch = window.fetch;
+        const wrappedFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+          const signal = init?.signal || abortController.signal;
+          return originalFetch(input, { ...init, signal });
+        };
+        window.fetch = wrappedFetch as typeof fetch;
+        
+        try {
+          const refreshResult = await withTimeout(
+            testHook.refreshOnce(),
+            3000,
+            'refreshOnce (expected to fail with 401)'
+          );
+        
+          // 401 에러는 예상된 동작이므로 무시
+          if (!refreshResult.ok && refreshResult.reason.includes('401')) {
+            // 정상적인 실패
+          } else if (!refreshResult.ok) {
+            // 예상치 못한 에러
+            console.log('[HARNESS] runS4: Unexpected error:', refreshResult.reason);
+          }
+        } finally {
+          clearTimeout(timeoutId);
+          window.fetch = originalFetch; // 원본 fetch 복원
         }
       } else {
         return { ok: false, reason: 'testHook.refreshOnce is not available' };
@@ -278,30 +301,59 @@ try {
       // ✅ Promise.allSettled([tokenManager.getAccessToken(), tokenManager.getAccessToken()])
       // 같은 페이지에서 "동시 2회 호출"로 single-flight를 증명 가능
       // 그리고 내부에서 fetch 캡처된 refresh 호출 횟수만 반환
+      // ✅ P0-3: fetch 자체에 AbortController timeout을 걸어 절대 무한대기하지 않게
       const fetchCallsBefore = (window.__FETCH_CALLS || []).length;
       
-      const results = await Promise.allSettled([
-        withTimeout(getAccessToken(), 3000, 'getAccessToken (call 1)'),
-        withTimeout(getAccessToken(), 3000, 'getAccessToken (call 2)'),
-      ]);
+      // ✅ AbortController로 fetch timeout 보장
+      const abortController1 = new AbortController();
+      const abortController2 = new AbortController();
+      const timeoutId1 = setTimeout(() => abortController1.abort(), 2000);
+      const timeoutId2 = setTimeout(() => abortController2.abort(), 2000);
       
-      const fetchCallsAfter = (window.__FETCH_CALLS || []);
-      const refreshUrls = fetchCallsAfter
-        .filter((url: string) => typeof url === 'string' && (url.includes('/auth/refresh') || url.includes('/api/auth/refresh')))
-        .slice(fetchCallsBefore); // getAccessToken 호출 이후의 refresh 호출만
-      const refreshCallCount = refreshUrls.length;
-      
-      // 두 호출이 모두 완료되었는지 확인
-      const allSettled = results.every(r => r.status === 'fulfilled');
-      
-      if (!allSettled) {
-        return { ok: false, reason: 'Some getAccessToken calls did not settle' };
-      }
-      
-      return {
-        ok: true,
-        refreshCallCount,
+      // 원본 fetch를 래핑하여 AbortController를 자동으로 추가
+      const originalFetch = window.fetch;
+      const wrappedFetch1 = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const signal = init?.signal || abortController1.signal;
+        return originalFetch(input, { ...init, signal });
       };
+      const wrappedFetch2 = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const signal = init?.signal || abortController2.signal;
+        return originalFetch(input, { ...init, signal });
+      };
+      
+      try {
+        // 첫 번째 호출은 wrappedFetch1 사용
+        window.fetch = wrappedFetch1 as typeof fetch;
+        const promise1 = withTimeout(getAccessToken(), 3000, 'getAccessToken (call 1)');
+        
+        // 두 번째 호출은 wrappedFetch2 사용 (동시 호출 시뮬레이션)
+        window.fetch = wrappedFetch2 as typeof fetch;
+        const promise2 = withTimeout(getAccessToken(), 3000, 'getAccessToken (call 2)');
+        
+        const results = await Promise.allSettled([promise1, promise2]);
+      
+        const fetchCallsAfter = (window.__FETCH_CALLS || []);
+        const refreshUrls = fetchCallsAfter
+          .filter((url: string) => typeof url === 'string' && (url.includes('/auth/refresh') || url.includes('/api/auth/refresh')))
+          .slice(fetchCallsBefore); // getAccessToken 호출 이후의 refresh 호출만
+        const refreshCallCount = refreshUrls.length;
+        
+        // 두 호출이 모두 완료되었는지 확인
+        const allSettled = results.every(r => r.status === 'fulfilled');
+        
+        if (!allSettled) {
+          return { ok: false, reason: 'Some getAccessToken calls did not settle' };
+        }
+        
+        return {
+          ok: true,
+          refreshCallCount,
+        };
+      } finally {
+        clearTimeout(timeoutId1);
+        clearTimeout(timeoutId2);
+        window.fetch = originalFetch; // 원본 fetch 복원
+      }
     } catch (error) {
       // ✅ 어떤 예외도 밖으로 던지지 말고 { ok:false, reason:String(e) } 로 반환
       return { ok: false, reason: String(error) };

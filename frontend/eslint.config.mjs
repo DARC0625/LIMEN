@@ -55,24 +55,25 @@ export default [
   {
     files: [
       "next.config.js",
+      "next.config.*",
       "postcss.config.js",
       "tailwind.config.js",
       "scripts/**/*.js",
       "jest.config.js",
+      "jest.config.cjs",
+      "jest.config.*",
       "jest.setup.js",
       "extract-trace-payload.js",
       "ecosystem.config.js",
+      "playwright.config.ts",
+      "playwright.config.*",
+      "*.config.cjs",
+      "*.config.js",
     ],
     languageOptions: {
       globals: {
-        process: "readonly",
-        module: "readonly",
-        require: "readonly",
-        __dirname: "readonly",
-        __filename: "readonly",
+        ...globals.node, // module, exports, require, process 등 Node 글로벌
         console: "readonly",
-        Buffer: "readonly",
-        global: "readonly",
       },
     },
     rules: {

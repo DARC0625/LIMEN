@@ -214,18 +214,29 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       });
     });
     
-    // ✅ 다른 모든 요청은 abort (hermetic: 실서버 의존 제거)
-    // 단, http://local.test/*는 injectHarness에서 처리하므로 건너뛰기
+    // ✅ P0-3: "허용된 API 외엔 즉시 실패" 정책을 route 레벨에서 강제
+    // (a) 문서 로딩(local.test)은 항상 즉시 fulfill(HTML) - injectHarness에서 처리
+    // (b) /api/**는 "허용 목록"만 fulfill
+    // (c) 그 외 모든 요청은 즉시 abort (pending 금지)
     await context.route('**/*', async (route) => {
       const url = route.request().url();
+      const request = route.request();
       
-      // ✅ http://local.test/*는 injectHarness에서 처리하므로 여기서는 건너뛰기
+      // ✅ (a) http://local.test/*는 injectHarness에서 처리하므로 여기서는 건너뛰기
       if (url.startsWith('http://local.test/')) {
         // injectHarness의 page.route가 처리
         return;
       }
       
-      // refresh는 위에서 이미 처리했으므로 여기서는 abort
+      // ✅ (b) 허용 목록: /api/auth/refresh만 허용 (이미 위에서 처리)
+      if (url.includes('/api/auth/refresh')) {
+        // 위의 route handler가 처리
+        return;
+      }
+      
+      // ✅ (c) 그 외 모든 요청은 즉시 abort (pending 금지)
+      // 이렇게 하면 "몰래 나가는 요청"이 있으면 바로 실패하고,
+      // runS4는 영원히 안 멈추는 대신 즉시 {ok:false, reason}으로 떨어진다
       await route.abort();
     });
     

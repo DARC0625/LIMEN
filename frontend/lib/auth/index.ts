@@ -22,7 +22,8 @@ export interface AuthCheckResult {
  */
 export async function checkAuth(): Promise<AuthCheckResult> {
   if (typeof window === 'undefined') {
-    return { valid: false };
+    // ✅ P0-2: result.valid === false면 reason은 무조건 string이 되도록 보장
+    return { valid: false, reason: '서버 환경에서는 인증을 확인할 수 없습니다.' };
   }
 
   // 중요: 로그인 페이지에서는 세션 확인 요청을 보내지 않음
@@ -62,6 +63,7 @@ export async function checkAuth(): Promise<AuthCheckResult> {
     if (sessionResult.reason && !sessionResult.reason.includes('네트워크')) {
       tokenManager.clearTokens();
     }
+    // ✅ P0-2: result.valid === false면 reason은 무조건 string이 되도록 보장
     return { valid: false, reason: sessionResult.reason || '세션이 유효하지 않습니다.' };
   } catch (error) {
     // 네트워크 오류 - localStorage 토큰으로 폴백
@@ -205,13 +207,15 @@ async function checkBackendSession(): Promise<AuthCheckResult> {
  */
 async function checkLocalStorageToken(): Promise<AuthCheckResult> {
   if (typeof window === 'undefined') {
-    return { valid: false };
+    // ✅ P0-2: result.valid === false면 reason은 무조건 string이 되도록 보장
+    return { valid: false, reason: '서버 환경에서는 인증을 확인할 수 없습니다.' };
   }
 
   try {
     const accessToken = await tokenManager.getAccessToken();
     if (!accessToken?.trim()) {
-      return { valid: false };
+      // ✅ P0-2: result.valid === false면 reason은 무조건 string이 되도록 보장
+      return { valid: false, reason: '토큰이 없습니다.' };
     }
 
     // 토큰 유효성 확인
@@ -223,7 +227,8 @@ async function checkLocalStorageToken(): Promise<AuthCheckResult> {
     // 백엔드 연결 실패 시 임시로 토큰 기반 인증 허용
     return { valid: true };
   } catch {
-    return { valid: false };
+    // ✅ P0-2: result.valid === false면 reason은 무조건 string이 되도록 보장
+    return { valid: false, reason: '토큰 확인 중 오류가 발생했습니다.' };
   }
 }
 
