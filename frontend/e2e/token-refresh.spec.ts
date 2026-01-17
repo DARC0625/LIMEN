@@ -226,14 +226,62 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     expect(storageStateBefore.expiresAt).toBeTruthy();
     expect(storageStateBefore.csrfToken).toBe('test-csrf-token');
 
-    // ✅ 명령 3) S4는 window.runS4() 호출로 트리거 (페이지 이동으로 트리거 ❌)
-    // injectHarness에서 이미 expect.poll로 보장했으므로 바로 호출 가능
-    await page.evaluate(async () => {
+    // ✅ 4) 테스트 코드 쪽(즉시 패치)
+    // 지금은 evaluate에서 그냥 await만 하고 있어 "왜 죽었는지"가 로그에 안 남는다.
+    // S4/S3 evaluate를 반드시 이렇게 바꿔라
+    // const result = await page.evaluate(async () => window.runS4())
+    // expect(result).toEqual({ ok: true }) 같은 계약 기반 검증
+    // 실패면 console.log(result) 찍고 fail
+    const result = await page.evaluate(async () => {
       if (window.runS4) {
-        await window.runS4();
+        return await window.runS4();
       } else {
-        throw new Error('runS4 function not found');
+        return { ok: false, reason: 'runS4 function not found' };
       }
+    });
+    
+    // ✅ 계약 기반 검증
+    if (!result.ok) {
+      console.error('[E2E] S4 TEST FAILED - result:', result);
+      throw new Error(`S4 test failed: ${result.reason}`);
+    }
+    
+    // ✅ 1순위: tokenManager의 refresh 실패 catch에서 clearSession()을 "반드시" 실행하게 만들기
+    // refresh 실패 이후 clearSessionCalledCount === 1 이어야 한다
+    expect(result.clearSessionCalledCount).toBe(1);
+    console.log('[E2E] S4 clearSessionCalledCount:', result.clearSessionCalledCount);
+    console.log('[E2E] S4 snapshotA:', result.snapshotA);
+    console.log('[E2E] S4 snapshotB:', result.snapshotB);
+    console.log('[E2E] S4 clearSessionCalledCountA:', result.clearSessionCalledCountA);
+    console.log('[E2E] S4 clearSessionCalledCountB:', result.clearSessionCalledCountB);
+    
+    // ✅ 만약 A에서는 null인데 B에서 다시 토큰이 생기면 "재세팅" 문제고,
+    // A부터 토큰이 남아있으면 "정리 자체가 안 됨" 문제
+    const sessionClearedA = !result.snapshotA.refreshToken && !result.snapshotA.expiresAt && !result.snapshotA.csrfToken;
+    const sessionClearedB = !result.snapshotB.refreshToken && !result.snapshotB.expiresAt && !result.snapshotB.csrfToken;
+    
+    if (!sessionClearedA && sessionClearedB) {
+      console.warn('[E2E] S4: 재세팅 문제 - A에서는 토큰이 있었는데 B에서 정리됨');
+    } else if (!sessionClearedA && !sessionClearedB) {
+      console.error('[E2E] S4: 정리 자체가 안 됨 - A부터 토큰이 남아있음');
+    }
+    
+    expect(result).toEqual({
+      ok: true,
+      sessionCleared: true,
+      clearSessionCalledCount: 1,
+      snapshotA: expect.objectContaining({
+        refreshToken: null,
+        expiresAt: null,
+        csrfToken: null,
+      }),
+      snapshotB: expect.objectContaining({
+        refreshToken: null,
+        expiresAt: null,
+        csrfToken: null,
+      }),
+      clearSessionCalledCountA: 1,
+      clearSessionCalledCountB: 1,
     });
 
     // ✅ 정석 대체안: "navigate 관측"은 API로 해라
