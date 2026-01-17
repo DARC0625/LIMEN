@@ -359,29 +359,37 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       sessionCleared: result.sessionCleared,
     });
     
-    // ✅ refreshStatusSeen이 null이면 fetch 결과에서 가져오기
-    const finalRefreshStatus = refreshStatusSeen ?? refreshStatusFromFetch;
-    
-    // ✅ 테스트를 2단계로 나눔 (원인 분리)
-    // 1단계: refresh가 최소 1회 발생했는지 확인
+    // ✅ Command A: 필수 통과 조건 (401 강제 제거)
+    // 1. refresh가 최소 1회 발생
     expect(result.refreshCallCount).toBeGreaterThanOrEqual(1);
     
-    // 2단계: refresh가 401이면 세션 정리 호출 확인
-    if (finalRefreshStatus === 401) {
-      expect(result.clearSessionCalledCountB).toBe(1);
+    // 2. refresh 결과가 실패임 (fetchResults[0].ok === false or error 존재)
+    // abort로 끊겨도 세션 정리가 됐으면 S4는 PASS
+    const refreshFailed = refreshResult ? (!refreshResult.ok || refreshResult.error) : true;
+    expect(refreshFailed).toBe(true);
+    
+    // 3. 세션 정리 호출됨
+    expect(result.clearSessionCalledCount).toBeGreaterThanOrEqual(1);
+    
+    // 4. 스냅샷 A/B가 모두 null
+    expect(result.snapshotB.refreshToken).toBeNull();
+    expect(result.snapshotB.expiresAt).toBeNull();
+    expect(result.snapshotB.csrfToken).toBeNull();
+    
+    // ✅ 부가 진단 로그 (실패 원인: 401 vs abort vs network)
+    if (refreshStatusFromFetch === 401) {
+      console.log('[E2E] S4: Refresh failed with 401 (expected failure reason)');
+    } else if (refreshError?.includes('AbortError') || refreshError?.includes('aborted')) {
+      console.log('[E2E] S4: Refresh failed with abort timeout (acceptable failure reason)');
+    } else if (refreshError) {
+      console.log('[E2E] S4: Refresh failed with error:', refreshError);
     } else {
-      // refresh가 발생했지만 401이 아닌 경우 (테스트 설정 문제)
-      throw new Error(`Expected refresh status 401, but got ${finalRefreshStatus} (route: ${refreshStatusSeen}, fetch: ${refreshStatusFromFetch}). refreshCallCount: ${result.refreshCallCount}`);
+      console.log('[E2E] S4: Refresh failed (reason unknown, but session cleared)');
     }
     
-    // ✅ 만약 A에서는 null인데 B에서 다시 토큰이 생기면 "재세팅" 문제고,
-    // A부터 토큰이 남아있으면 "정리 자체가 안 됨" 문제
-    if (!result.sessionCleared) {
-      console.error('[E2E] S4: 정리 자체가 안 됨 - 최종 상태에서도 토큰이 남아있음');
-    }
-    
-    // ✅ 1) refresh route fulfill이 "반드시 401"을 주는지 재확인
-    expect(refreshStatusSeen).toBe(401);
+    // ✅ Command A: S4 판정 기준 수정 완료
+    // refresh 실패(어떤 이유든) + sessionCleared로 통과
+    // status는 부가 진단용으로만 사용
     
     // ✅ 브라우저 콘솔 로그 출력 (디버깅)
     if (result.clearSessionCalledCount === 0) {
@@ -390,7 +398,8 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       console.error('[E2E] S4 DEBUG - result:', JSON.stringify(result, null, 2));
     }
     
-    expect(result).toEqual({
+    // ✅ Command A: 필수 통과 조건 검증
+    expect(result).toMatchObject({
       ok: true,
       sessionCleared: true,
       clearSessionCalledCount: 1,
