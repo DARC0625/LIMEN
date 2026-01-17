@@ -114,11 +114,11 @@ try {
    * ✅ Command 2: __S4_TRACE 단계 로그로 어디서 멈췄는지 확정
    */
   window.runS4 = async function(): Promise<{ ok: true; sessionCleared: boolean } | { ok: false; reason: string }> {
-    // ✅ Command 2: __S4_TRACE 초기화 및 진행 마커
+    // ✅ Command 2-2: __S4_TRACE 초기화 및 진행 마커 (await 전에 무조건 push)
     if (!window.__S4_TRACE) {
       window.__S4_TRACE = [];
     }
-    window.__S4_TRACE.push('start');
+    window.__S4_TRACE.push('start'); // 동기 단계부터 기록
     
     try {
       window.__S4_TRACE.push('before loadTokenManager');

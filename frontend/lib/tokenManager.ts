@@ -133,8 +133,10 @@ class TokenManager {
       return null;
     }
     
-    // 이미 갱신 중이면 대기
+    // ✅ Command 3: 이미 갱신 중이면 대기 (하지만 무한 대기 방지)
     if (this.refreshPromise) {
+      // refreshPromise가 이미 있으면 그것을 반환하되,
+      // refreshAccessToken의 finally에서 정리되므로 무한 대기는 발생하지 않음
       return this.refreshPromise;
     }
     
@@ -143,6 +145,7 @@ class TokenManager {
     
     try {
       const newAccessToken = await this.refreshPromise;
+      // ✅ Command 3: 정상 완료 시 refreshPromise는 refreshAccessToken의 finally에서 null로 설정됨
       return newAccessToken;
     } catch (error) {
       // ✅ Command 3: getAccessToken은 무한 대기 없이 종료 보장
@@ -159,9 +162,8 @@ class TokenManager {
       // ✅ Command 3: 이중 보장 (refreshAccessToken의 finally에서도 처리하지만, 여기서도 보장)
       // refreshAccessToken이 완료되면 refreshPromise는 null이 되어야 함
       // 하지만 refreshAccessToken 내부에서 에러가 발생하면 여기서도 정리
-      if (this.refreshPromise) {
-        this.refreshPromise = null;
-      }
+      // 이렇게 하면 getAccessToken은 "반드시" resolve/reject (영원히 pending 금지)
+      this.refreshPromise = null;
     }
   }
 

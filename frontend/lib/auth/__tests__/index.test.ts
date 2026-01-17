@@ -106,7 +106,7 @@ describe('checkAuth', () => {
       json: async () => ({ valid: true }),
     } as unknown as Response)
 
-    const result = await checkAuth()
+    const result = await checkAuth({ debug: true })
 
     // ✅ Command 1: debug payload로 원인 확정
     console.log('[TEST] valid session debug:', result.debug)
@@ -605,7 +605,7 @@ describe('checkBackendSession edge cases', () => {
     expect(result1.valid).toBe(true)
 
     // 캐시된 결과를 사용하는지 확인 (짧은 시간 내 재호출)
-    const result2 = await checkAuth()
+    const result2 = await checkAuth({ debug: true })
     
     // ✅ Command 1: debug payload로 원인 확정
     console.log('[TEST] cached result debug:', result2.debug)
@@ -704,7 +704,7 @@ describe('checkLocalStorageToken', () => {
     // fetch가 실패하면 checkLocalStorageToken이 호출됨
     ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
 
-    const result = await checkAuth()
+    const result = await checkAuth({ debug: true })
 
     // ✅ Command 1: debug payload로 원인 확정
     console.log('[TEST] checkLocalStorageToken debug:', result.debug)
@@ -842,7 +842,7 @@ describe('checkLocalStorageToken', () => {
 
     ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
 
-    const result = await checkAuth()
+    const result = await checkAuth({ debug: true })
 
     // ✅ Command 1: debug payload로 원인 확정
     console.log('[TEST] setCookieHeaders debug:', result.debug)

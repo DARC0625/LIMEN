@@ -42,6 +42,8 @@ declare global {
 
     // ✅ Command 2: __S4_TRACE 단계 로그 (timeout 시 어디서 멈췄는지 확정)
     __S4_TRACE?: string[];
+    // ✅ Command 2-2: abort된 URL 목록
+    __ABORTED_URLS?: string[];
 
     // 필요하면 디버깅 훅
     __E2E__?: {

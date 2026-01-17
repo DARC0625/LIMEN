@@ -214,10 +214,9 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       });
     });
     
-    // ✅ Command 2: allowlist route 재구성 + abort 로그 수집
-    // 허용 목록: http://local.test/*, /api/auth/refresh
-    // 그 외 모든 요청은 즉시 abort + 로그 수집
-    const abortedUrls: string[] = [];
+    // ✅ Command 2-2: allowlist route 완성
+    // 허용 URL 목록만 fulfill, 나머지는 즉시 abort
+    // abort된 URL은 무조건 window.__ABORTED_URLS.push(url) 기록
     
     await context.route('**/*', async (route) => {
       const url = route.request().url();
@@ -235,9 +234,15 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
         return;
       }
       
-      // ✅ Command 2: allowlist 밖 요청은 즉시 abort + 로그 수집
-      // "몰래 나가는 요청"을 즉시 찾기 위해 abort된 URL 목록을 로그로 남김
-      abortedUrls.push(url);
+      // ✅ Command 2-2: allowlist 밖 요청은 즉시 abort + window.__ABORTED_URLS 기록
+      // 브라우저 내부에서 기록하므로 evaluate가 끝나지 않아도 확인 가능
+      await page.evaluate((abortedUrl) => {
+        if (!window.__ABORTED_URLS) {
+          window.__ABORTED_URLS = [];
+        }
+        window.__ABORTED_URLS.push(abortedUrl);
+      }, url);
+      
       console.log('[E2E] Aborted request (not in allowlist):', url);
       await route.abort();
     });
