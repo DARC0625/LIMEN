@@ -201,6 +201,9 @@ const HARNESS_HTML = `<!doctype html>
 
 /**
  * ✅ 명령 2) tokenManager는 브라우저에서 import 가능하게 ESM 번들로 만들어 route로 서빙
+ * 
+ * ✅ A안: esbuild 번들링에서 process/env 완전 치환
+ * 브라우저 번들에서 process 자체가 사라지게 만들기
  */
 async function buildTokenManagerESM(): Promise<string> {
   const tokenManagerPath = join(__dirname, '../lib/tokenManager.ts');
@@ -213,6 +216,14 @@ async function buildTokenManagerESM(): Promise<string> {
     platform: 'browser',
     target: 'es2020',
     external: ['next'], // Next.js는 외부 의존성으로 처리
+    // ✅ process.env 완전 치환 (브라우저에서 process가 사라지게)
+    define: {
+      'process.env.NODE_ENV': '"test"',
+      'process.env.NEXT_PUBLIC_API_URL': '"/api"',
+      'process.env.NEXT_PUBLIC_SENTRY_DSN': 'undefined',
+      'process.env.NEXT_PUBLIC_ERROR_TRACKING_API': 'undefined',
+      'process.env': '{}', // 나머지 모든 process.env 접근은 {}로 치환
+    },
   });
   
   return result.outputFiles[0].text;

@@ -18,8 +18,9 @@ interface SentryInstance {
 }
 
 // Sentry 연동 (환경 변수로 활성화)
+// ✅ 브라우저에서 기본 OFF: hermetic 환경에서는 외부 side effect 금지
 const Sentry: SentryInstance | null = null;
-if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_SENTRY_DSN) {
+if (typeof window !== 'undefined' && typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_SENTRY_DSN) {
   try {
     // 동적 import로 Sentry 로드 (필요시 설치: npm install @sentry/nextjs)
     // Sentry = require('@sentry/nextjs');
@@ -55,7 +56,8 @@ export function trackError(error: Error, context?: ErrorContext): void {
   };
 
   // 개발 환경에서는 콘솔에 출력
-  if (process.env.NODE_ENV === 'development') {
+  // ✅ 브라우저에서 기본 OFF: process가 없으면 스킵
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
     console.error('[Error Tracking]', errorInfo);
   }
 
@@ -77,7 +79,8 @@ export function trackError(error: Error, context?: ErrorContext): void {
   }
 
   // 백엔드 API로 에러 전송 (선택적)
-  if (process.env.NEXT_PUBLIC_ERROR_TRACKING_API && typeof window !== 'undefined') {
+  // ✅ 브라우저에서 기본 OFF: hermetic 환경에서는 외부 전송 금지
+  if (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_ERROR_TRACKING_API && typeof window !== 'undefined') {
     fetch(process.env.NEXT_PUBLIC_ERROR_TRACKING_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -88,7 +91,8 @@ export function trackError(error: Error, context?: ErrorContext): void {
   }
 
   // 프로덕션 환경에서도 콘솔에 출력 (디버깅용)
-  if (process.env.NODE_ENV === 'production' && !Sentry) {
+  // ✅ 브라우저에서 기본 OFF: process가 없으면 스킵
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production' && !Sentry) {
     console.error('[Error Tracking]', errorInfo);
   }
 }
