@@ -40,6 +40,9 @@ declare global {
     __FETCH_CALLS?: Array<string | Request>;
     __FETCH_RESULTS?: Array<{ url: string; status: number | null; ok: boolean; error?: string }>;
 
+    // ✅ Command 2: __S4_TRACE 단계 로그 (timeout 시 어디서 멈췄는지 확정)
+    __S4_TRACE?: string[];
+
     // 필요하면 디버깅 훅
     __E2E__?: {
       runS3?: () => Promise<void> | void;
