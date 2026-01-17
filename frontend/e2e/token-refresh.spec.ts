@@ -272,7 +272,7 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     console.log('[E2E] S4 refreshStatusSeen:', refreshStatusSeen);
     
     // ✅ 확정 판정용 최소 계측 확인
-    // 케이스 A: refreshCallCount === 0 → 만료 트리거가 안 걸림 (테스트 준비 단계가 토큰매니저의 만료 기준과 불일치)
+    // 케이스 A: refreshCallCount === 0 → refresh 트리거 실패 (테스트 준비 단계 문제)
     // 케이스 B: refreshCallCount >= 1 AND status === 401 AND clearSessionCalledCount === 0 → 제품 버그 거의 확정
     console.log('[E2E] S4 DIAGNOSTIC:', {
       refreshCallCount: result.refreshCallCount,
@@ -282,9 +282,17 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       sessionCleared: result.sessionCleared,
     });
     
-    // ✅ 1순위: tokenManager의 refresh 실패 catch에서 clearSession()을 "반드시" 실행하게 만들기
-    // refresh 실패 이후 clearSessionCalledCount === 1 이어야 한다
-    expect(result.clearSessionCalledCount).toBe(1);
+    // ✅ 테스트를 2단계로 나눔 (원인 분리)
+    // 1단계: refresh가 최소 1회 발생했는지 확인
+    expect(result.refreshCallCount).toBeGreaterThanOrEqual(1);
+    
+    // 2단계: refresh가 401이면 세션 정리 호출 확인
+    if (refreshStatusSeen === 401) {
+      expect(result.clearSessionCalledCountB).toBe(1);
+    } else {
+      // refresh가 발생했지만 401이 아닌 경우 (테스트 설정 문제)
+      throw new Error(`Expected refresh status 401, but got ${refreshStatusSeen}. refreshCallCount: ${result.refreshCallCount}`);
+    }
     
     // ✅ 만약 A에서는 null인데 B에서 다시 토큰이 생기면 "재세팅" 문제고,
     // A부터 토큰이 남아있으면 "정리 자체가 안 됨" 문제

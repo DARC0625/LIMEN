@@ -137,6 +137,7 @@ try {
         getClearSessionCalledCount: () => number;
         resetClearSessionCalledCount: () => void;
         getAccessToken?: () => Promise<string | null>;
+        refreshOnce?: () => Promise<void>; // ✅ refresh를 직접 호출하는 훅
       } }).__test;
       
       if (!testHook) {
@@ -149,36 +150,35 @@ try {
       // ✅ refresh 호출 계측 시작 (__FETCH_CALLS 초기화)
       const fetchCallsBefore = (window.__FETCH_CALLS || []).length;
       
-      // ✅ refreshToken 세팅 + expiresAt을 "만료 상태"로 세팅
-      // ⚠️ 핵심: accessToken도 명시적으로 만료 처리해야 getAccessToken()이 refreshAccessToken()을 호출함
-      // setExpiresAt()만으로는 accessToken이 유효한 상태로 남아있을 수 있음
-      testHook.setTokens('expired-access-token', 'test-refresh-token', -1); // expiresIn: -1 (즉시 만료)
+      // ✅ refreshToken 세팅 (refreshOnce()가 직접 호출하므로 만료 판단 로직에 의존하지 않음)
+      testHook.setRefreshToken('test-refresh-token');
       sessionStorage.setItem('csrf_token', 'test-csrf-token');
       
-      // ✅ await tokenManager.getAccessToken() 호출 (실패 기대)
+      // ✅ refresh를 직접 호출 (만료 판단 로직에 의존하지 않음)
       // refresh route를 401로 1회 강제 (테스트 코드에서 route 설정)
-      if (tokenManager && typeof tokenManager === 'object' && 'getAccessToken' in tokenManager) {
-        const getAccessToken = (tokenManager as { getAccessToken: () => Promise<string | null> }).getAccessToken;
-        const getAccessTokenResult = await withTimeout(
-          getAccessToken(),
+      if (testHook.refreshOnce) {
+        const refreshResult = await withTimeout(
+          testHook.refreshOnce(),
           3000,
-          'getAccessToken (expected to fail with 401)'
+          'refreshOnce (expected to fail with 401)'
         );
         
         // 401 에러는 예상된 동작이므로 무시
-        if (!getAccessTokenResult.ok && getAccessTokenResult.reason.includes('401')) {
+        if (!refreshResult.ok && refreshResult.reason.includes('401')) {
           // 정상적인 실패
-        } else if (!getAccessTokenResult.ok) {
+        } else if (!refreshResult.ok) {
           // 예상치 못한 에러
-          console.log('[HARNESS] runS4: Unexpected error:', getAccessTokenResult.reason);
+          console.log('[HARNESS] runS4: Unexpected error:', refreshResult.reason);
         }
+      } else {
+        return { ok: false, reason: 'testHook.refreshOnce is not available' };
       }
       
       // ✅ refresh 호출 계측 (__FETCH_CALLS에서 refresh URL 추출)
       const fetchCallsAfter = (window.__FETCH_CALLS || []);
       const refreshUrls = fetchCallsAfter
         .filter((url: string) => typeof url === 'string' && (url.includes('/auth/refresh') || url.includes('/api/auth/refresh')))
-        .slice(fetchCallsBefore); // getAccessToken 호출 이후의 refresh 호출만
+        .slice(fetchCallsBefore); // refreshOnce() 호출 이후의 refresh 호출만
       const refreshCallCount = refreshUrls.length;
       
       // ✅ S4에서 snapshot 찍는 위치를 2개로 쪼개
@@ -261,20 +261,18 @@ try {
       // ✅ Promise.allSettled([tokenManager.getAccessToken(), tokenManager.getAccessToken()])
       // 같은 페이지에서 "동시 2회 호출"로 single-flight를 증명 가능
       // 그리고 내부에서 fetch 캡처된 refresh 호출 횟수만 반환
-      const refreshCalls = (window.__FETCH_CALLS || []).filter((url: string) => 
-        typeof url === 'string' && url.includes('refresh')
-      );
+      const fetchCallsBefore = (window.__FETCH_CALLS || []).length;
       
       const results = await Promise.allSettled([
         withTimeout(getAccessToken(), 3000, 'getAccessToken (call 1)'),
         withTimeout(getAccessToken(), 3000, 'getAccessToken (call 2)'),
       ]);
       
-      const refreshCallsAfter = (window.__FETCH_CALLS || []).filter((url: string) => 
-        typeof url === 'string' && url.includes('refresh')
-      );
-      
-      const refreshCallCount = refreshCallsAfter.length;
+      const fetchCallsAfter = (window.__FETCH_CALLS || []);
+      const refreshUrls = fetchCallsAfter
+        .filter((url: string) => typeof url === 'string' && (url.includes('/auth/refresh') || url.includes('/api/auth/refresh')))
+        .slice(fetchCallsBefore); // getAccessToken 호출 이후의 refresh 호출만
+      const refreshCallCount = refreshUrls.length;
       
       // 두 호출이 모두 완료되었는지 확인
       const allSettled = results.every(r => r.status === 'fulfilled');

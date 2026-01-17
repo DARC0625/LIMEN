@@ -24,7 +24,7 @@ tokenManager.clearTokens = function() {
 // 번들러가 tree-shake로 제거하지 않도록 side-effect로 명시
 (tokenManager as Record<string, unknown>).__test = {
   /**
-   * 강제 refresh 호출 (테스트용)
+   * 강제 refresh 호출 (테스트용) - getAccessToken()을 통한 간접 호출
    * @param options.respond - 응답 상태 코드 (401: 실패, 200: 성공)
    */
   forceRefresh: async (options?: { respond?: number }): Promise<void> => {
@@ -42,6 +42,31 @@ tokenManager.clearTokens = function() {
         throw error;
       }
     }
+  },
+  
+  /**
+   * refresh를 직접 호출 (테스트용) - 만료 판단 로직에 의존하지 않음
+   * ✅ S4 테스트에서 refresh를 확실히 발생시키기 위한 훅
+   * private 메서드 refreshAccessToken()을 런타임에서 직접 호출
+   */
+  refreshOnce: async (): Promise<void> => {
+    // refreshToken이 없으면 에러 발생 (제품 코드와 동일한 검증)
+    if (!tokenManager.getRefreshToken()) {
+      throw new Error('No refresh token available');
+    }
+    
+    // ✅ private 메서드 refreshAccessToken()을 런타임에서 직접 호출
+    // TypeScript의 private는 컴파일 타임 체크일 뿐, 런타임에서는 접근 가능
+    const tokenManagerAny = tokenManager as unknown as {
+      refreshAccessToken?: () => Promise<string>;
+    };
+    
+    if (!tokenManagerAny.refreshAccessToken) {
+      throw new Error('refreshAccessToken method not found');
+    }
+    
+    // refreshAccessToken() 직접 호출 (에러는 그대로 throw)
+    await tokenManagerAny.refreshAccessToken();
   },
   
   /**
