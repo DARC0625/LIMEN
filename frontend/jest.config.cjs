@@ -6,9 +6,10 @@
  * - ui: app/** 테스트 및 브라우저 의존 테스트 (jsdom 환경)
  * 
  * Next.js 통합: nextJest를 사용하여 Next.js 설정 로드
+ * 
+ * ✅ Jest config를 JS로 유지하여 ts-node 요구사항 제거
  */
-import type { Config } from 'jest';
-import nextJest from 'next/jest';
+const nextJest = require('next/jest');
 
 const createJestConfig = nextJest({
   // Next.js 앱의 경로를 제공하여 next.config.js와 .env 파일을 로드
@@ -16,7 +17,7 @@ const createJestConfig = nextJest({
 });
 
 // Core 프로젝트 설정 (node 환경)
-const coreConfig: Config = {
+const coreConfig = {
   displayName: 'core',
   testEnvironment: 'node',
   roots: ['<rootDir>/lib'],
@@ -43,7 +44,7 @@ const coreConfig: Config = {
 };
 
 // UI 프로젝트 설정 (jsdom 환경)
-const uiConfig: Config = {
+const uiConfig = {
   displayName: 'ui',
   testEnvironment: 'jest-environment-jsdom',
   roots: ['<rootDir>'],
@@ -70,15 +71,16 @@ const uiConfig: Config = {
     '!components/**/*.test.{ts,tsx}',
     '!hooks/**/*.test.{ts,tsx}',
   ],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
 };
 
 // Jest 설정 생성 (비동기)
-const config: Config = async () => {
+module.exports = async () => {
   // UI 프로젝트에만 nextJest 설정 적용
   const baseConfig = await createJestConfig(uiConfig);
   
   // Core 프로젝트에도 TypeScript transform 설정 추가
-  const coreWithTransform: Config = {
+  const coreWithTransform = {
     ...coreConfig,
     transform: baseConfig.transform,
     moduleNameMapper: {
@@ -88,7 +90,7 @@ const config: Config = async () => {
   };
   
   // UI 프로젝트 설정 병합
-  const uiWithNext: Config = {
+  const uiWithNext = {
     ...baseConfig,
     ...uiConfig,
     testEnvironment: 'jest-environment-jsdom', // 프로젝트별 설정 유지
@@ -98,5 +100,3 @@ const config: Config = async () => {
     projects: [coreWithTransform, uiWithNext],
   };
 };
-
-export default config;
