@@ -9,6 +9,7 @@ import { browserLocalStoragePort, browserSessionStoragePort } from './adapters/b
 import { createBrowserLocationPort } from './adapters/browserLocationPort';
 import { createBrowserBroadcastPort } from './adapters/browserBroadcastPort';
 import { createMemoryStoragePort, createMemorySessionStoragePort } from './adapters/memoryStoragePort';
+import { createMemoryLocationPort } from './adapters/memoryLocationPort';
 import { createNoopBroadcastPort } from './adapters/noopBroadcastPort';
 
 // 세션 하이재킹 방지를 위한 브라우저 핑거프린트
@@ -227,7 +228,7 @@ export function detectAbnormalActivity(
   
   const defaultLocation = location ?? (typeof window !== 'undefined'
     ? createBrowserLocationPort()
-    : null);
+    : createMemoryLocationPort('/'));
   
   // 패시브 모니터링: 로깅만 수행, 차단하지 않음
   const token = defaultStorage.get('auth_token');
