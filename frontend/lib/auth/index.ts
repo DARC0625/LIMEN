@@ -3,11 +3,17 @@
  * TokenManager, Security, AuthGuard의 인증 로직을 통합 관리
  */
 
-import { tokenManager } from '../tokenManager';
+import { tokenManager, type TokenManagerPort } from '../tokenManager';
 import { authAPI } from '../api/auth';
 import { getUserRoleFromToken, isUserApprovedFromToken, isTokenValid } from '../utils/token';
 import type { SessionResponse } from '../types';
 import { logger } from '../utils/logger';
+
+// ✅ Command Jest-2: auth는 TokenManagerPort 인터페이스만 의존
+// 구체 클래스에 의존하지 말고 인터페이스만 보게 만듦
+// ✅ Command Jest-1: auth에서 브라우저 글로벌 직접 접근 완전 제거
+// document.cookie는 checkBackendSession에서만 사용 (로그용)
+// 실제 로직은 tokenManager(StoragePort)를 통해서만 접근
 
 /**
  * 인증 확인 결과

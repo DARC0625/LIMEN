@@ -6,16 +6,18 @@ import { checkAuth, getUserRole, isUserApproved, isAdmin, logout } from '../inde
 import { tokenManager } from '../../tokenManager'
 import { authAPI } from '../../api/auth'
 
-// ✅ Command 1: tokenManager 모킹에 getExpiresAt 추가
-// TokenManagerInterface 계약을 100% 구현
+// ✅ Command Jest-2: tokenManager 모킹에 TokenManagerPort 계약 100% 구현
+// TokenManagerPort 인터페이스의 모든 메서드를 구현
 jest.mock('../../tokenManager', () => ({
   tokenManager: {
     hasValidToken: jest.fn(),
     getAccessToken: jest.fn(),
-    clearTokens: jest.fn(),
+    getRefreshToken: jest.fn(), // ✅ Command Jest-2: 추가
+    getExpiresAt: jest.fn(),
     getCSRFToken: jest.fn(),
-    getExpiresAt: jest.fn(), // ✅ Command 1: 추가된 계약
+    clearTokens: jest.fn(),
   },
+  TokenManagerPort: {}, // 타입 export
 }))
 
 // authAPI 모킹
@@ -62,10 +64,11 @@ const mockIsUserApprovedFromToken = isUserApprovedFromToken as jest.MockedFuncti
 describe('checkAuth', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    // ✅ Command Jest-2: TokenManagerPort 계약에 맞춘 mock 설정
     mockTokenManager.hasValidToken.mockReturnValue(false)
     mockTokenManager.getCSRFToken.mockReturnValue(null)
     mockTokenManager.getAccessToken.mockResolvedValue(null)
-    // ✅ Command 1: getExpiresAt mock 추가 (expiresAt이 없으면 null 반환)
+    mockTokenManager.getRefreshToken = jest.fn().mockReturnValue(null) // ✅ Command Jest-2: 추가
     mockTokenManager.getExpiresAt = jest.fn().mockReturnValue(null)
     mockGetUserRoleFromToken.mockReturnValue(null)
     mockIsUserApprovedFromToken.mockReturnValue(false)

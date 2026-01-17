@@ -26,23 +26,31 @@ export type TokenRefreshResponse = {
 };
 
 /**
- * ✅ Command 1: TokenManager 공개 계약(Interface)
+ * ✅ Command Jest-2: TokenManagerPort 공개 계약(Interface) 확정
  * 
  * 제품 코드(checkAuth 등)가 TokenManager에 기대하는 최소 계약
  * 테스트 더블은 이 계약을 100% 구현해야 함
+ * 
+ * 명명: TokenManagerInterface → TokenManagerPort (Port 패턴 일관성)
  */
-export interface TokenManagerInterface {
+export interface TokenManagerPort {
   hasValidToken(): boolean;
   getAccessToken(): Promise<string | null>;
   getRefreshToken(): string | null;
-  getExpiresAt(): number | null; // ✅ Command 1: 추가된 계약
+  getExpiresAt(): number | null; // ✅ Command Jest-2: 추가된 계약
   getCSRFToken(): string | null;
   clearTokens(): void;
 }
 
+/**
+ * @deprecated TokenManagerInterface는 TokenManagerPort로 대체됨
+ * 하위 호환성을 위해 유지
+ */
+export type TokenManagerInterface = TokenManagerPort;
+
 // Token Storage (메모리 + StoragePort 폴백)
-// ✅ Command 1: TokenManager는 TokenManagerInterface를 구현
-class TokenManager implements TokenManagerInterface {
+// ✅ Command Jest-2: TokenManager는 TokenManagerPort를 구현
+class TokenManager implements TokenManagerPort {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
   private expiresAt: number = 0;
