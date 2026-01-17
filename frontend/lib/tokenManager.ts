@@ -6,7 +6,7 @@ import { logger } from './utils/logger';
 import { StoragePort, SessionStoragePort } from './ports/storagePort';
 import { LocationPort } from './ports/locationPort';
 import { ClockPort } from './ports/clockPort';
-import { createBrowserStoragePort, browserLocalStoragePort, browserSessionStoragePort } from './adapters/browserStoragePort';
+import { browserLocalStoragePort, browserSessionStoragePort } from './adapters/browserStoragePort';
 import { createBrowserLocationPort } from './adapters/browserLocationPort';
 import { createBrowserClockPort } from './adapters/browserClockPort';
 import { createMemoryStoragePort, createMemorySessionStoragePort } from './adapters/memoryStoragePort';

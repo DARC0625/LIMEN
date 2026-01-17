@@ -5,11 +5,10 @@ import { logger } from './utils/logger';
 import { StoragePort, SessionStoragePort } from './ports/storagePort';
 import { LocationPort } from './ports/locationPort';
 import { BroadcastPort } from './ports/broadcastPort';
-import { createBrowserStoragePort, browserLocalStoragePort, browserSessionStoragePort } from './adapters/browserStoragePort';
+import { browserLocalStoragePort, browserSessionStoragePort } from './adapters/browserStoragePort';
 import { createBrowserLocationPort } from './adapters/browserLocationPort';
 import { createBrowserBroadcastPort } from './adapters/browserBroadcastPort';
 import { createMemoryStoragePort, createMemorySessionStoragePort } from './adapters/memoryStoragePort';
-import { createMemoryLocationPort } from './adapters/memoryLocationPort';
 import { createNoopBroadcastPort } from './adapters/noopBroadcastPort';
 
 // 세션 하이재킹 방지를 위한 브라우저 핑거프린트
