@@ -214,10 +214,9 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       });
     });
     
-    // ✅ Command 2-2: allowlist route 완성
-    // 허용 URL 목록만 fulfill, 나머지는 즉시 abort
-    // abort된 URL은 무조건 window.__ABORTED_URLS.push(url) 기록
-    
+    // ✅ Command 2: fallback route 추가 (모든 요청을 명시적으로 fulfill)
+    // Playwright hermetic 규칙: 테스트 중 나가는 모든 네트워크는 명시적으로 fulfill되어야 함
+    // 누락된 요청이 있으면 "즉시 실패"로 바꾸는 게 정석
     await context.route('**/*', async (route) => {
       const url = route.request().url();
       const request = route.request();
@@ -234,8 +233,8 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
         return;
       }
       
-      // ✅ Command 2-2: allowlist 밖 요청은 즉시 abort + window.__ABORTED_URLS 기록
-      // 브라우저 내부에서 기록하므로 evaluate가 끝나지 않아도 확인 가능
+      // ✅ Command 2: fallback route - 미매칭은 즉시 500으로 fulfill (절대 pending 금지)
+      // 이렇게 하면 pending 자체가 사라짐
       await page.evaluate((abortedUrl) => {
         if (!window.__ABORTED_URLS) {
           window.__ABORTED_URLS = [];
@@ -243,8 +242,12 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
         window.__ABORTED_URLS.push(abortedUrl);
       }, url);
       
-      console.log('[E2E] Aborted request (not in allowlist):', url);
-      await route.abort();
+      console.log('[E2E] Unmocked request (fulfilling with 500):', url);
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'UNMOCKED_REQUEST', url }),
+      });
     });
     
     // ✅ 정석 harness 주입 템플릿

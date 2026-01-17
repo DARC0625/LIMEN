@@ -6,13 +6,15 @@ import { checkAuth, getUserRole, isUserApproved, isAdmin, logout } from '../inde
 import { tokenManager } from '../../tokenManager'
 import { authAPI } from '../../api/auth'
 
-// tokenManager 모킹
+// ✅ Command 1: tokenManager 모킹에 getExpiresAt 추가
+// TokenManagerInterface 계약을 100% 구현
 jest.mock('../../tokenManager', () => ({
   tokenManager: {
     hasValidToken: jest.fn(),
     getAccessToken: jest.fn(),
     clearTokens: jest.fn(),
     getCSRFToken: jest.fn(),
+    getExpiresAt: jest.fn(), // ✅ Command 1: 추가된 계약
   },
 }))
 
@@ -63,6 +65,8 @@ describe('checkAuth', () => {
     mockTokenManager.hasValidToken.mockReturnValue(false)
     mockTokenManager.getCSRFToken.mockReturnValue(null)
     mockTokenManager.getAccessToken.mockResolvedValue(null)
+    // ✅ Command 1: getExpiresAt mock 추가 (expiresAt이 없으면 null 반환)
+    mockTokenManager.getExpiresAt = jest.fn().mockReturnValue(null)
     mockGetUserRoleFromToken.mockReturnValue(null)
     mockIsUserApprovedFromToken.mockReturnValue(false)
     

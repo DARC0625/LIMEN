@@ -25,8 +25,24 @@ export type TokenRefreshResponse = {
   expires_in: number; // 초 단위
 };
 
+/**
+ * ✅ Command 1: TokenManager 공개 계약(Interface)
+ * 
+ * 제품 코드(checkAuth 등)가 TokenManager에 기대하는 최소 계약
+ * 테스트 더블은 이 계약을 100% 구현해야 함
+ */
+export interface TokenManagerInterface {
+  hasValidToken(): boolean;
+  getAccessToken(): Promise<string | null>;
+  getRefreshToken(): string | null;
+  getExpiresAt(): number | null; // ✅ Command 1: 추가된 계약
+  getCSRFToken(): string | null;
+  clearTokens(): void;
+}
+
 // Token Storage (메모리 + StoragePort 폴백)
-class TokenManager {
+// ✅ Command 1: TokenManager는 TokenManagerInterface를 구현
+class TokenManager implements TokenManagerInterface {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
   private expiresAt: number = 0;

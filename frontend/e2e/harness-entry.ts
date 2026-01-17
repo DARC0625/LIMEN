@@ -113,7 +113,9 @@ try {
    * 
    * ✅ Command 2: __S4_TRACE 단계 로그로 어디서 멈췄는지 확정
    */
-  window.runS4 = async function(): Promise<{ ok: true; sessionCleared: boolean } | { ok: false; reason: string }> {
+  // ✅ Command 3: runS4는 어떤 경우에도 항상 결과를 반환해야 함
+  // no-hang contract: 내부 fetch timeout 시 {ok:false, reason:'fetch_timeout', trace} 반환
+  window.runS4 = async function(): Promise<{ ok: true; sessionCleared: boolean } | { ok: false; reason: string; trace?: string[]; pendingUrl?: string | null }> {
     // ✅ Command 2-2: __S4_TRACE 초기화 및 진행 마커 (await 전에 무조건 push)
     if (!window.__S4_TRACE) {
       window.__S4_TRACE = [];
@@ -162,16 +164,10 @@ try {
       // ✅ clearSession 호출 횟수 리셋
       testHook.resetClearSessionCalledCount();
       
-      window.__S4_TRACE.push('before smoke test fetch');
-      // ✅ 2-A) runS4 시작에 "강제 fetch" 한 번 (스모크 테스트)
-      // initScript/route/네트워크가 정상 작동하는지 1초 안에 확정
-      try {
-        await fetch('/api/auth/refresh', { method: 'POST' });
-        window.__S4_TRACE.push('smoke test fetch completed');
-      } catch (e) {
-        // 네트워크 에러는 예상됨 (route가 401을 반환하거나 abort)
-        window.__S4_TRACE.push('smoke test fetch error: ' + String(e));
-      }
+      // ✅ Command 2: smoke test fetch 제거
+      // S4는 "refresh 실패 시 clearTokens 호출"을 검증해야지,
+      // "네트워크 가용성"을 검증하면 안 됨
+      // smoke test fetch는 네트워크를 불필요하게 호출하여 pending을 유발할 수 있음
       
       window.__S4_TRACE.push('before fetchCallsBefore');
       // ✅ refresh 호출 계측 시작 (__FETCH_CALLS 초기화)
