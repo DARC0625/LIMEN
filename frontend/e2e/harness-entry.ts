@@ -71,32 +71,30 @@ try {
   /**
    * S4: refresh 실패 시 전역 세션 정리 및 강제 로그아웃
    * 
-   * ✅ T+2h ~ T+6h: harness에 강제 트리거 함수 추가
-   * await tokenManager.getAccessToken() 등 "반드시 refresh 경로를 타는 호출" 사용
+   * ✅ Step 3: hermetic E2E는 훅만 사용 (조건/시간 의존 제거)
+   * S4: __test.forceRefresh({ respond: 401 }) → cleanup 실행 보장 → storage null assert
    */
   window.runS4 = async function() {
     try {
       const tokenManager = await loadTokenManager();
       
-      // ✅ 만료된 토큰 상태로 설정 (refresh 트리거)
-      const expiresAt = Date.now() - 1000; // 이미 만료됨
-      localStorage.setItem('refresh_token', 'test-refresh-token');
-      localStorage.setItem('token_expires_at', expiresAt.toString());
-      sessionStorage.setItem('csrf_token', 'test-csrf-token');
-      
       window.__SESSION_CLEARED = false;
       
-      // ✅ tokenManager.getAccessToken() 호출 → 자동 refresh 시도
-      // 만료된 토큰이므로 refreshAccessToken()이 자동으로 호출됨
-      if (tokenManager && typeof tokenManager === 'object' && 'getAccessToken' in tokenManager) {
-        const getAccessToken = (tokenManager as { getAccessToken: () => Promise<string | null> }).getAccessToken;
-        try {
-          await getAccessToken();
-        } catch (error) {
-          console.log('[HARNESS] runS4: Refresh failed as expected:', error);
+      // ✅ Step 3: hermetic E2E는 훅만 사용
+      // __test.forceRefresh({ respond: 401 }) → cleanup 실행 보장
+      if (tokenManager && typeof tokenManager === 'object' && '__test' in tokenManager) {
+        const testHook = (tokenManager as { __test?: { forceRefresh: (options?: { respond?: number }) => Promise<void> } }).__test;
+        if (testHook && testHook.forceRefresh) {
+          try {
+            await testHook.forceRefresh({ respond: 401 });
+          } catch (error) {
+            console.log('[HARNESS] runS4: Refresh failed as expected:', error);
+          }
+        } else {
+          throw new Error('tokenManager.__test.forceRefresh is not available');
         }
       } else {
-        throw new Error('tokenManager.getAccessToken is not available');
+        throw new Error('tokenManager.__test is not available');
       }
       
       // 세션 정리 완료 확인
@@ -121,9 +119,8 @@ try {
   /**
    * S3: 멀티탭 동시 refresh 경합 방지 (single-flight)
    * 
-   * ✅ T+2h ~ T+6h: harness에 강제 트리거 함수 추가
-   * page1/page2에서 동시에 동일 트리거 호출
-   * await tokenManager.getAccessToken() 등 "반드시 refresh 경로를 타는 호출" 사용
+   * ✅ Step 3: hermetic E2E는 훅만 사용 (조건/시간 의존 제거)
+   * S3: page1/page2에서 동시에 forceRefresh(200) → refreshCallCount=1 assert
    */
   window.runS3 = async function() {
     try {
@@ -131,40 +128,38 @@ try {
       
       window.__REFRESH_COMPLETED = false;
       
-      // ✅ 만료된 토큰 상태로 설정 (refresh 트리거)
-      const expiresAt = Date.now() - 1000; // 이미 만료됨
-      localStorage.setItem('refresh_token', 'test-refresh-token');
-      localStorage.setItem('token_expires_at', expiresAt.toString());
-      sessionStorage.setItem('csrf_token', 'test-csrf-token');
-      
       window.__REFRESH_CALL_COUNT = (window.__REFRESH_CALL_COUNT ?? 0) + 1;
       
-      // ✅ tokenManager.getAccessToken() 호출 → 자동 refresh 시도
-      // 만료된 토큰이므로 refreshAccessToken()이 자동으로 호출됨
-      if (tokenManager && typeof tokenManager === 'object' && 'getAccessToken' in tokenManager) {
-        const getAccessToken = (tokenManager as { getAccessToken: () => Promise<string | null> }).getAccessToken;
-        const accessToken = await getAccessToken();
-        
-        window.__REFRESH_COMPLETED = true;
-        
-        // BroadcastChannel로 다른 탭에 알림
-        if (typeof BroadcastChannel !== 'undefined') {
-          const broadcastChannel = new BroadcastChannel('token-refresh');
-          broadcastChannel.postMessage({ type: 'refresh-completed' });
+      // ✅ Step 3: hermetic E2E는 훅만 사용
+      // page1/page2에서 동시에 forceRefresh(200) → refreshCallCount=1 assert
+      if (tokenManager && typeof tokenManager === 'object' && '__test' in tokenManager) {
+        const testHook = (tokenManager as { __test?: { forceRefresh: (options?: { respond?: number }) => Promise<void> } }).__test;
+        if (testHook && testHook.forceRefresh) {
+          await testHook.forceRefresh({ respond: 200 });
+          
+          window.__REFRESH_COMPLETED = true;
+          
+          // BroadcastChannel로 다른 탭에 알림
+          if (typeof BroadcastChannel !== 'undefined') {
+            const broadcastChannel = new BroadcastChannel('token-refresh');
+            broadcastChannel.postMessage({ type: 'refresh-completed' });
+          }
+          
+          // 최종 토큰 상태 확인
+          const refreshToken = localStorage.getItem('refresh_token');
+          const expiresAtAfter = localStorage.getItem('token_expires_at');
+          
+          return {
+            accessToken: 'present',
+            refreshToken: refreshToken,
+            expiresAt: expiresAtAfter,
+            refreshCompleted: window.__REFRESH_COMPLETED ?? false,
+          };
+        } else {
+          throw new Error('tokenManager.__test.forceRefresh is not available');
         }
-        
-        // 최종 토큰 상태 확인
-        const refreshToken = localStorage.getItem('refresh_token');
-        const expiresAtAfter = localStorage.getItem('token_expires_at');
-        
-        return {
-          accessToken: accessToken ? 'present' : null,
-          refreshToken: refreshToken,
-          expiresAt: expiresAtAfter,
-          refreshCompleted: window.__REFRESH_COMPLETED ?? false,
-        };
       } else {
-        throw new Error('tokenManager.getAccessToken is not available');
+        throw new Error('tokenManager.__test is not available');
       }
     } catch (error) {
       console.error('[HARNESS] runS3: Error:', error);

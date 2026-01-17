@@ -264,15 +264,23 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     console.log('[E2E] S3 PAGE1 REFRESH_CALLS:', refreshCalls1);
     console.log('[E2E] S3 PAGE2 REFRESH_CALLS:', refreshCalls2);
     
-    // ✅ T+0 ~ T+2h: 테스트 종료 직전에 __FETCH_CALLS를 dump하여 refresh 요청 실제 URL 확정
+    // ✅ Step 4: fetch dump를 "테스트 실패 시" 강제 출력
+    // 지금은 로그가 안 보이니, 실패 시 console.log(__FETCH_CALLS)를 반드시 찍고 끝내게 해
     const fetchCalls = await page.evaluate(() => window.__FETCH_CALLS || []);
-    console.log('[E2E] S4 FETCH_CALLS:', fetchCalls);
-    
-    // refresh 요청이 실제로 호출되었는지 확인
     const refreshCalls = fetchCalls.filter((url: string) => 
       typeof url === 'string' && url.includes('refresh')
     );
-    console.log('[E2E] S4 REFRESH_CALLS:', refreshCalls);
+    
+    // ✅ 테스트 실패 시 무조건 로그로 찍기
+    if (refreshCallCount === 0 || !sessionCleared) {
+      console.error('[E2E] S4 TEST FAILED - FETCH_CALLS:', fetchCalls);
+      console.error('[E2E] S4 TEST FAILED - REFRESH_CALLS:', refreshCalls);
+      console.error('[E2E] S4 TEST FAILED - refreshCallCount:', refreshCallCount);
+      console.error('[E2E] S4 TEST FAILED - sessionCleared:', sessionCleared);
+    } else {
+      console.log('[E2E] S4 FETCH_CALLS:', fetchCalls);
+      console.log('[E2E] S4 REFRESH_CALLS:', refreshCalls);
+    }
   });
 
   /**
