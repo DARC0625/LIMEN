@@ -111,10 +111,10 @@ export function forceLogout(
   
   const location = options?.location ?? (typeof window !== 'undefined'
     ? createBrowserLocationPort()
-    : null);
+    : undefined);
   
   const broadcast = options?.broadcast ?? (typeof window !== 'undefined'
-    ? createBrowserBroadcastPort()
+    ? (createBrowserBroadcastPort() ?? createNoopBroadcastPort())
     : createNoopBroadcastPort());
   
   const pathname = location?.getPathname() ?? '/';

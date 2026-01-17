@@ -182,7 +182,7 @@ describe('security', () => {
 
     it('does nothing on server side', () => {
       const storage = createMemoryStoragePort()
-      const location = null
+      const location = undefined
       const broadcast = createNoopBroadcastPort()
 
       expect(() => forceLogout('test reason', { storage, location, broadcast })).not.toThrow()
@@ -316,7 +316,7 @@ describe('security', () => {
 
     it('returns false on server side', () => {
       const storage = createMemoryStoragePort()
-      const location = null
+      const location = undefined
       const result = detectAbnormalActivity(storage, location)
 
       expect(result.isAbnormal).toBe(false)

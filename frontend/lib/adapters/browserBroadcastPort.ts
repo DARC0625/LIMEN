@@ -4,9 +4,9 @@
  */
 import { BroadcastPort } from '../ports/broadcastPort';
 
-export function createBrowserBroadcastPort(channelName: string = 'auth_channel'): BroadcastPort | null {
+export function createBrowserBroadcastPort(channelName: string = 'auth_channel'): BroadcastPort | undefined {
   if (typeof window === 'undefined' || typeof BroadcastChannel === 'undefined') {
-    return null;
+    return undefined;
   }
 
   const channel = new BroadcastChannel(channelName);

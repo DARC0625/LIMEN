@@ -4,9 +4,9 @@
  */
 import { LocationPort } from '../ports/locationPort';
 
-export function createBrowserLocationPort(): LocationPort | null {
+export function createBrowserLocationPort(): LocationPort | undefined {
   if (typeof window === 'undefined') {
-    return null;
+    return undefined;
   }
 
   return {

@@ -325,7 +325,7 @@ export function createTokenManager(
     : createMemoryClockPort());
   
   const defaultLocation = location ?? (typeof window !== 'undefined'
-    ? createBrowserLocationPort()
+    ? (createBrowserLocationPort() ?? createMemoryLocationPort('/'))
     : createMemoryLocationPort('/'));
   
   return new TokenManager(defaultStorage, defaultSessionStorage, defaultClock, defaultLocation);
