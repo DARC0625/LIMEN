@@ -326,27 +326,35 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       throw new Error(`S4 test failed: ${result.reason}`);
     }
     
-    // ✅ B-1) fetch 래퍼에서 response.status 기록 확인
+    // ✅ Command A: S4 판정 기준 수정 (401 강제 제거)
+    // S4의 제품 요구사항은 "refresh 실패(어떤 이유든) → 세션 정리"
+    // 401은 "대표적인 실패 원인"일 뿐, 테스트의 본질이 아님
+    
+    // ✅ 부가 진단 로그 (실패 원인: 401 vs abort vs network)
     const fetchResults = await page.evaluate(() => window.__FETCH_RESULTS || []);
-    const refreshResult = fetchResults.find((r: { url: string; status: number | null }) => 
+    const refreshResult = fetchResults.find((r: { url: string; status: number | null; ok: boolean; error?: string }) => 
       r.url.includes('/api/auth/refresh') || r.url.includes('/auth/refresh')
     );
     const refreshStatusFromFetch = refreshResult?.status ?? null;
+    const refreshError = refreshResult?.error;
     
-    // ✅ 이거 한 줄만 바꾸면 디버깅 속도가 10배 빨라져: expect 전에 result 출력
     console.log('[E2E] S4 result:', JSON.stringify(result, null, 2));
     console.log('[E2E] S4 refreshStatusSeen (route):', refreshStatusSeen);
     console.log('[E2E] S4 refreshStatusFromFetch (actual):', refreshStatusFromFetch);
+    console.log('[E2E] S4 refreshError:', refreshError);
     console.log('[E2E] S4 fetchResults:', fetchResults);
     
-    // ✅ 확정 판정용 최소 계측 확인
-    // 케이스 A: refreshCallCount === 0 → refresh 트리거 실패 (테스트 준비 단계 문제)
-    // 케이스 B: refreshCallCount >= 1 AND status === 401 AND clearSessionCalledCount === 0 → 제품 버그 거의 확정
+    // ✅ Command A: 필수 통과 조건 (401 강제 제거)
+    // 1. refresh가 최소 1회 발생 (refreshCallCount >= 1)
+    // 2. refresh 결과가 실패임 (fetchResults[0].ok === false or error 존재)
+    // 3. 세션 정리 호출됨 (clearSessionCalledCount === 1)
+    // 4. 스냅샷 A/B가 모두 null (refreshToken/expiresAt/csrfToken)
     console.log('[E2E] S4 DIAGNOSTIC:', {
       refreshCallCount: result.refreshCallCount,
       refreshUrls: result.refreshUrls,
       refreshStatusSeen,
       refreshStatusFromFetch,
+      refreshError,
       clearSessionCalledCount: result.clearSessionCalledCount,
       sessionCleared: result.sessionCleared,
     });
