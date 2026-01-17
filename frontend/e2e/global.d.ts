@@ -28,6 +28,11 @@ declare global {
     __REFRESH_CALL_COUNT?: number;
     __CURRENT_URL?: string;
 
+    // ✅ harness-entry 최상단 비콘 (무조건 찍히는 비콘)
+    __HARNESS_LOADED_AT?: number;
+    __HARNESS_ERROR?: string | null;
+    __HARNESS_READY?: boolean;
+
     // 필요하면 디버깅 훅
     __E2E__?: {
       runS3?: () => Promise<void> | void;

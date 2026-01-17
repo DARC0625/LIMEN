@@ -26,12 +26,17 @@ import { buildTokenManagerIIFE, buildHarnessIIFE } from './_bundles';
  * - origin은 http://local.test로 생김
  * - localStorage/broadcastchannel 등 웹 API가 정상 동작
  * 
+ * ✅ 3) 주입은 무조건 context.addInitScript({ content })로 통일해라 (정석)
+ * - page.addInitScript로도 되긴 하는데, 멀티탭/멀티페이지/재사용에서 사고가 더 많아
+ * - 특히 hermetic에서 "새 문서에 100% 적용"은 context.addInitScript가 정석
+ * 
  * (A) 페이지/컨텍스트에 라우팅 등록
- * (B) init script 주입 → 그 다음 goto
- * (C) 주입 검증은 evaluate가 아니라 "즉시 observable"로
+ * (B) context.addInitScript로 주입 → 그 다음 goto
+ * (C) assert 순서를 바꿔라 (원인 분리)
  */
 async function injectHarness(
   page: Page,
+  context: any, // BrowserContext
   tokenManagerIIFE: string,
   harnessIIFE: string
 ): Promise<void> {
@@ -45,31 +50,68 @@ async function injectHarness(
     });
   });
 
-  // ✅ (B) init script 주입 → 그 다음 goto
+  // ✅ (B) context.addInitScript로 주입 → 그 다음 goto
+  // ✅ 3) 주입은 무조건 context.addInitScript({ content })로 통일해라 (정석)
+  // const context = browser.newContext() 만든 직후
+  // await context.addInitScript({ content: tokenManagerBundle })
+  // await context.addInitScript({ content: harnessBundle })
+  // 그 다음에 const page = await context.newPage() + goto
   // ✅ tokenManager 주입과 harness-entry 주입 순서를 강제
   // harness-entry는 내부에서 window.__TOKEN_MANAGER를 참조할 가능성이 높음
   // 순서: tokenManager initScript → harness-entry initScript → goto(local.test)
-  await page.addInitScript({ content: tokenManagerIIFE });
-  await page.addInitScript({ content: harnessIIFE });
+  await context.addInitScript({ content: tokenManagerIIFE });
+  await context.addInitScript({ content: harnessIIFE });
 
   // 그 다음에 "새 문서"를 열어서 initScript가 적용되게 함
   // 네비게이션은 "있지만" 네트워크는 0 (전부 fulfill)
   await page.goto('http://local.test/', { waitUntil: 'domcontentloaded' });
 
-  // ✅ (C) "runS3/runS4 생성"을 기다리지 말고 즉시 assert 하라 (정석)
-  // goto 직후 바로 assert
-  // 만약 여기서 실패하면 **주입이 안 된 게 아니라 "harness-entry가 실행되지 않았다"**가 확정
+  // ✅ (C) assert 순서를 바꿔라 (원인 분리)
+  // 지금은 runS4만 보고 죽는데, 다음 순서로 "원인 분리" 해야 함:
+  // 1. __TOKEN_MANAGER 존재 확인 (이미 됨)
+  // 2. __HARNESS_LOADED_AT 존재 확인 ← 여기서 갈림
+  // 3. __HARNESS_ERROR가 비었는지 확인 ← 여기서 갈림
+  // 4. 마지막에 runS3/runS4 타입 확인
+
+  // ✅ 1. __TOKEN_MANAGER 존재 확인
+  const hasTokenManager = await page.evaluate(() => typeof window.__TOKEN_MANAGER !== 'undefined');
+  expect(hasTokenManager).toBe(true);
+
+  // ✅ 2. __HARNESS_LOADED_AT 존재 확인 ← 여기서 갈림
+  // (A) __HARNESS_LOADED_AT 자체가 없다
+  // → addInitScript가 harness에만 안 먹는 것
+  // (주입 코드/순서/대상(context vs page)/코드 문자열이 비어있음/빌드 결과를 안 넣음)
+  const harnessLoadedAt = await page.evaluate(() => window.__HARNESS_LOADED_AT);
+  expect(harnessLoadedAt).toBeDefined();
+  expect(typeof harnessLoadedAt).toBe('number');
+
+  // ✅ 3. __HARNESS_ERROR가 비었는지 확인 ← 여기서 갈림
+  // (B) __HARNESS_LOADED_AT는 있는데 __HARNESS_ERROR가 있다
+  // → harness-entry 실행 중 예외로 죽음
+  // (대부분 의존성, window/document 접근 시점, import/require 잔재, 전역 변수 충돌)
+  const harnessError = await page.evaluate(() => window.__HARNESS_ERROR);
+  if (harnessError) {
+    throw new Error(`Harness execution error: ${harnessError}`);
+  }
+
+  // ✅ 4. 마지막에 runS3/runS4 타입 확인
+  // (C) __HARNESS_READY=true인데도 runS3/runS4가 없다
+  // → harness-entry가 "window 바인딩"을 안 하고 export만 하는 구조
+  // (혹은 이름이 다름: runS4 -> runS4Impl 등)
   expect(await page.evaluate(() => typeof window.runS4)).toBe('function');
   expect(await page.evaluate(() => typeof window.runS3)).toBe('function');
-  expect(await page.evaluate(() => typeof window.__TOKEN_MANAGER !== 'undefined')).toBe(true);
 
-  // ✅ 디버그 로그 (10초 안에 잡는 디버그 2줄)
+  // ✅ 디버그 로그 (다음 로그에서 나한테 보여줄 건 딱 3개)
+  // typeof window.__TOKEN_MANAGER
+  // window.__HARNESS_LOADED_AT 값 유무
+  // window.__HARNESS_ERROR 문자열 (있으면 그대로)
   const diag = await page.evaluate(() => ({
-    readyState: document.readyState,
+    typeofTokenManager: typeof window.__TOKEN_MANAGER,
+    harnessLoadedAt: window.__HARNESS_LOADED_AT,
+    harnessError: window.__HARNESS_ERROR,
+    harnessReady: window.__HARNESS_READY,
     hasRunS3: typeof window.runS3,
     hasRunS4: typeof window.runS4,
-    keys: Object.keys(window).filter((k) => k.includes('runS')),
-    hasTokenManager: typeof window.__TOKEN_MANAGER !== 'undefined',
   }));
   console.log('[E2E] HARNESS DIAG', diag);
 }
@@ -121,7 +163,8 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     });
     
     // ✅ 정석 harness 주입 템플릿
-    await injectHarness(page, tokenManagerIIFE, harnessIIFE);
+    // ✅ 3) 주입은 무조건 context.addInitScript({ content })로 통일
+    await injectHarness(page, context, tokenManagerIIFE, harnessIIFE);
 
     // ✅ localStorage 접근은 boot 이후에만 (HTTP origin 확보 후)
     await page.evaluate(() => {
@@ -232,8 +275,44 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     
     // ✅ 정석 harness 주입 템플릿
     // ✅ S3는 page1/page2 둘 다 동일하게 주입 + 각각 존재성 체크
-    await injectHarness(page1, tokenManagerIIFE, harnessIIFE);
-    await injectHarness(page2, tokenManagerIIFE, harnessIIFE);
+    // ✅ 3) 주입은 무조건 context.addInitScript({ content })로 통일
+    // 멀티탭(S3)면 page1, page2 둘 다 route를 걸어야 한다 (라우트는 Page 단위로 등록되니까)
+    // 하지만 context.addInitScript는 context 단위로 등록되므로 한 번만 호출하면 됨
+    await context.addInitScript({ content: tokenManagerIIFE });
+    await context.addInitScript({ content: harnessIIFE });
+    
+    // page1, page2 각각 route 설정
+    await page1.route('http://local.test/*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><html><body>e2e</body></html>',
+      });
+    });
+    await page2.route('http://local.test/*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><html><body>e2e</body></html>',
+      });
+    });
+    
+    // 그 다음에 "새 문서"를 열어서 initScript가 적용되게 함
+    await page1.goto('http://local.test/', { waitUntil: 'domcontentloaded' });
+    await page2.goto('http://local.test/', { waitUntil: 'domcontentloaded' });
+    
+    // ✅ assert 순서를 바꿔라 (원인 분리)
+    // page1 검증
+    expect(await page1.evaluate(() => typeof window.__TOKEN_MANAGER !== 'undefined')).toBe(true);
+    expect(await page1.evaluate(() => window.__HARNESS_LOADED_AT)).toBeDefined();
+    expect(await page1.evaluate(() => window.__HARNESS_ERROR)).toBeNull();
+    expect(await page1.evaluate(() => typeof window.runS3)).toBe('function');
+    
+    // page2 검증
+    expect(await page2.evaluate(() => typeof window.__TOKEN_MANAGER !== 'undefined')).toBe(true);
+    expect(await page2.evaluate(() => window.__HARNESS_LOADED_AT)).toBeDefined();
+    expect(await page2.evaluate(() => window.__HARNESS_ERROR)).toBeNull();
+    expect(await page2.evaluate(() => typeof window.runS3)).toBe('function');
 
     // ✅ localStorage 접근은 boot 이후에만 (HTTP origin 확보 후)
     await page1.evaluate(() => {
