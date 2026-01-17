@@ -1,5 +1,6 @@
 /**
  * security.ts 테스트
+ * ✅ 정석: Port mock 기반으로 테스트
  * @jest-environment jsdom
  */
 
@@ -14,6 +15,9 @@ import {
   initializeSession,
 } from '../security'
 import { logger } from '../utils/logger'
+import { createMemoryStoragePort, createMemorySessionStoragePort } from '../adapters/memoryStoragePort'
+import { createMemoryLocationPort } from '../adapters/memoryLocationPort'
+import { createNoopBroadcastPort } from '../adapters/noopBroadcastPort'
 
 // logger 모킹
 jest.mock('../utils/logger', () => ({
@@ -28,6 +32,7 @@ describe('security', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     localStorage.clear()
+    sessionStorage.clear()
   })
 
   describe('getBrowserFingerprint', () => {
@@ -160,9 +165,10 @@ describe('security', () => {
 
   describe('forceLogout', () => {
     it('logs logout event on client side', () => {
-      localStorage.setItem('auth_token', 'test-token')
+      const storage = createMemoryStoragePort()
+      storage.set('auth_token', 'test-token')
 
-      forceLogout('test reason')
+      const result = forceLogout('test reason', { storage })
 
       expect(logger.warn).toHaveBeenCalledWith(
         '[Security Log] Logout event detected:',
@@ -170,102 +176,114 @@ describe('security', () => {
           reason: 'test reason',
         })
       )
+      expect(result.action).toBe('LOGOUT')
+      expect(result.reason).toBe('test reason')
     })
 
     it('does nothing on server side', () => {
-      const originalWindow = global.window
-      // @ts-expect-error - intentional deletion of global.window for server-side test
-      delete global.window
+      const storage = createMemoryStoragePort()
+      const location = null
+      const broadcast = createNoopBroadcastPort()
 
-      expect(() => forceLogout('test reason')).not.toThrow()
-
-      global.window = originalWindow
+      expect(() => forceLogout('test reason', { storage, location, broadcast })).not.toThrow()
     })
 
     it('removes token when reason includes expired', () => {
-      localStorage.setItem('auth_token', 'test-token')
-      localStorage.setItem('auth_token_timestamp', '123456')
+      const storage = createMemoryStoragePort()
+      storage.set('auth_token', 'test-token')
+      storage.set('auth_token_timestamp', '123456')
 
-      forceLogout('토큰이 만료되었습니다')
+      const result = forceLogout('토큰이 만료되었습니다', { storage })
 
-      expect(localStorage.getItem('auth_token')).toBeNull()
-      expect(localStorage.getItem('auth_token_timestamp')).toBeNull()
+      expect(storage.get('auth_token')).toBeNull()
+      expect(storage.get('auth_token_timestamp')).toBeNull()
+      expect(result.shouldRedirect).toBe(true)
     })
 
     it('removes token when reason includes invalid', () => {
-      localStorage.setItem('auth_token', 'test-token')
-      localStorage.setItem('auth_token_timestamp', '123456')
+      const storage = createMemoryStoragePort()
+      storage.set('auth_token', 'test-token')
+      storage.set('auth_token_timestamp', '123456')
 
-      forceLogout('invalid token')
+      const result = forceLogout('invalid token', { storage })
 
-      expect(localStorage.getItem('auth_token')).toBeNull()
-      expect(localStorage.getItem('auth_token_timestamp')).toBeNull()
+      expect(storage.get('auth_token')).toBeNull()
+      expect(storage.get('auth_token_timestamp')).toBeNull()
+      expect(result.shouldRedirect).toBe(true)
     })
 
     it('does not remove token for other reasons', () => {
-      localStorage.setItem('auth_token', 'test-token')
-      localStorage.setItem('auth_token_timestamp', '123456')
+      const storage = createMemoryStoragePort()
+      storage.set('auth_token', 'test-token')
+      storage.set('auth_token_timestamp', '123456')
 
-      forceLogout('normal logout')
+      const result = forceLogout('normal logout', { storage })
 
-      expect(localStorage.getItem('auth_token')).toBe('test-token')
-      expect(localStorage.getItem('auth_token_timestamp')).toBe('123456')
+      expect(storage.get('auth_token')).toBe('test-token')
+      expect(storage.get('auth_token_timestamp')).toBe('123456')
+      expect(result.shouldRedirect).toBe(false)
     })
 
     it('sends broadcast message', () => {
       const mockChannel = {
         postMessage: jest.fn(),
         close: jest.fn(),
-      }; // ✅ 세미콜론 추가 (ASI 해결)
-      // ✅ globalThis.BroadcastChannel로 mock (node/jsdom 어디서든 작동)
-      (globalThis as any).BroadcastChannel = jest.fn().mockImplementation(() => mockChannel) as any;
+      }
+      const broadcast = {
+        postAuthEvent: jest.fn(),
+        close: jest.fn(),
+      }
 
-      forceLogout('test reason')
+      const result = forceLogout('test reason', { broadcast })
 
-      expect(mockChannel.postMessage).toHaveBeenCalledWith({
+      expect(broadcast.postAuthEvent).toHaveBeenCalledWith({
         type: 'AUTH_EVENT',
         reason: 'test reason',
         action: 'log',
       })
-      expect(mockChannel.close).toHaveBeenCalled()
+      expect(broadcast.close).toHaveBeenCalled()
     })
   })
 
   describe('checkAndUnblockAccount', () => {
     it('checks account status on client side', () => {
-      localStorage.setItem('account_blocked', 'true')
+      const storage = createMemoryStoragePort()
+      const sessionStorage = createMemorySessionStoragePort()
+      storage.set('account_blocked', 'true')
 
-      checkAndUnblockAccount()
+      checkAndUnblockAccount(storage, sessionStorage)
 
       // 차단 플래그가 제거되었는지 확인
-      expect(localStorage.getItem('account_blocked')).toBeNull()
+      expect(storage.get('account_blocked')).toBeNull()
     })
 
     it('removes all block flags', () => {
-      localStorage.setItem('account_blocked', 'true')
-      localStorage.setItem('user_blocked', 'true')
-      localStorage.setItem('admin_blocked', 'true')
-      localStorage.setItem('security_block', 'true')
-      localStorage.setItem('rate_limit_blocked', 'true')
-      localStorage.setItem('fingerprint_blocked', 'true')
-      sessionStorage.setItem('logout_redirect', 'true')
+      const storage = createMemoryStoragePort()
+      const sessionStorage = createMemorySessionStoragePort()
+      storage.set('account_blocked', 'true')
+      storage.set('user_blocked', 'true')
+      storage.set('admin_blocked', 'true')
+      storage.set('security_block', 'true')
+      storage.set('rate_limit_blocked', 'true')
+      storage.set('fingerprint_blocked', 'true')
+      sessionStorage.set('logout_redirect', 'true')
 
-      checkAndUnblockAccount()
+      checkAndUnblockAccount(storage, sessionStorage)
 
-      expect(localStorage.getItem('account_blocked')).toBeNull()
-      expect(localStorage.getItem('user_blocked')).toBeNull()
-      expect(localStorage.getItem('admin_blocked')).toBeNull()
-      expect(localStorage.getItem('security_block')).toBeNull()
-      expect(localStorage.getItem('rate_limit_blocked')).toBeNull()
-      expect(localStorage.getItem('fingerprint_blocked')).toBeNull()
-      expect(sessionStorage.getItem('logout_redirect')).toBeNull()
+      expect(storage.get('account_blocked')).toBeNull()
+      expect(storage.get('user_blocked')).toBeNull()
+      expect(storage.get('admin_blocked')).toBeNull()
+      expect(storage.get('security_block')).toBeNull()
+      expect(storage.get('rate_limit_blocked')).toBeNull()
+      expect(storage.get('fingerprint_blocked')).toBeNull()
+      expect(sessionStorage.get('logout_redirect')).toBeNull()
     })
   })
 
   describe('getSessionId', () => {
     it('generates session ID on client side', () => {
-      sessionStorage.clear()
-      const result = getSessionId()
+      const sessionStorage = createMemorySessionStoragePort()
+      const result = getSessionId(sessionStorage)
 
       expect(result).toBeTruthy()
       expect(typeof result).toBe('string')
@@ -273,9 +291,9 @@ describe('security', () => {
     })
 
     it('returns same session ID on subsequent calls', () => {
-      sessionStorage.clear()
-      const first = getSessionId()
-      const second = getSessionId()
+      const sessionStorage = createMemorySessionStoragePort()
+      const first = getSessionId(sessionStorage)
+      const second = getSessionId(sessionStorage)
 
       expect(first).toBe(second)
     })
@@ -289,36 +307,38 @@ describe('security', () => {
 
   describe('detectAbnormalActivity', () => {
     it('returns false for normal activity', () => {
-      const result = detectAbnormalActivity()
+      const storage = createMemoryStoragePort()
+      const location = createMemoryLocationPort('/')
+      const result = detectAbnormalActivity(storage, location)
 
       expect(result.isAbnormal).toBe(false)
     })
 
     it('returns false on server side', () => {
-      const originalWindow = global.window
-      // @ts-expect-error - intentional deletion of global.window for server-side test
-      delete global.window
-
-      const result = detectAbnormalActivity()
+      const storage = createMemoryStoragePort()
+      const location = null
+      const result = detectAbnormalActivity(storage, location)
 
       expect(result.isAbnormal).toBe(false)
-
-      global.window = originalWindow
     })
 
     it('logs warning for invalid token but does not block', () => {
-      localStorage.setItem('auth_token', 'invalid.token.format')
+      const storage = createMemoryStoragePort()
+      const location = createMemoryLocationPort('/')
+      storage.set('auth_token', 'invalid.token.format')
 
-      const result = detectAbnormalActivity()
+      const result = detectAbnormalActivity(storage, location)
 
       expect(result.isAbnormal).toBe(false)
       expect(logger.warn).toHaveBeenCalled()
     })
 
     it('returns false when no token exists', () => {
-      localStorage.removeItem('auth_token')
+      const storage = createMemoryStoragePort()
+      const location = createMemoryLocationPort('/')
+      storage.remove('auth_token')
 
-      const result = detectAbnormalActivity()
+      const result = detectAbnormalActivity(storage, location)
 
       expect(result.isAbnormal).toBe(false)
     })
@@ -326,15 +346,16 @@ describe('security', () => {
 
   describe('initializeSession', () => {
     it('initializes session on client side', () => {
-      localStorage.setItem('account_blocked', 'true')
+      const storage = createMemoryStoragePort()
+      const sessionStorage = createMemorySessionStoragePort()
+      storage.set('account_blocked', 'true')
 
-      initializeSession()
+      initializeSession(storage, sessionStorage)
 
       // 차단 플래그가 제거되었는지 확인
-      expect(localStorage.getItem('account_blocked')).toBeNull()
+      expect(storage.get('account_blocked')).toBeNull()
       // 브라우저 핑거프린트가 저장되었는지 확인
-      expect(localStorage.getItem('browser_fingerprint')).toBeTruthy()
+      expect(storage.get('browser_fingerprint')).toBeTruthy()
     })
   })
 })
-

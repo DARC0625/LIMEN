@@ -1,9 +1,13 @@
 /**
  * tokenManager 테스트
+ * ✅ 정석: Port mock 기반으로 테스트
  */
 
-import { tokenManager } from '../tokenManager'
+import { createTokenManager } from '../tokenManager'
 import { logger } from '../utils/logger'
+import { createMemoryStoragePort, createMemorySessionStoragePort } from '../adapters/memoryStoragePort'
+import { createMemoryClockPort } from '../adapters/memoryClockPort'
+import { createMemoryLocationPort } from '../adapters/memoryLocationPort'
 
 // logger 모킹
 jest.mock('../utils/logger', () => ({
@@ -25,10 +29,21 @@ jest.mock('../api/auth', () => ({
 }))
 
 describe('tokenManager', () => {
+  let tokenManager: ReturnType<typeof createTokenManager>
+  let storage: ReturnType<typeof createMemoryStoragePort>
+  let sessionStorage: ReturnType<typeof createMemorySessionStoragePort>
+  let clock: ReturnType<typeof createMemoryClockPort>
+  let location: ReturnType<typeof createMemoryLocationPort>
+
   beforeEach(() => {
     jest.clearAllMocks()
-    localStorage.clear()
-    sessionStorage.clear()
+    // ✅ Port mock 생성
+    storage = createMemoryStoragePort()
+    sessionStorage = createMemorySessionStoragePort()
+    clock = createMemoryClockPort(Date.now())
+    location = createMemoryLocationPort('/')
+    // ✅ Port 기반으로 tokenManager 생성
+    tokenManager = createTokenManager(storage, sessionStorage, clock, location)
   })
 
   it('sets tokens', () => {
@@ -38,8 +53,8 @@ describe('tokenManager', () => {
 
     tokenManager.setTokens(accessToken, refreshToken, expiresIn)
 
-    expect(localStorage.getItem('refresh_token')).toBe(refreshToken)
-    expect(localStorage.getItem('token_expires_at')).toBeTruthy()
+    expect(storage.get('refresh_token')).toBe(refreshToken)
+    expect(storage.get('token_expires_at')).toBeTruthy()
   })
 
   it('has valid token when refresh token exists', () => {
@@ -52,7 +67,7 @@ describe('tokenManager', () => {
   })
 
   it('returns false when no refresh token', () => {
-    localStorage.clear()
+    storage.clear()
     tokenManager.clearTokens()
 
     const result = tokenManager.hasValidToken()
@@ -61,13 +76,13 @@ describe('tokenManager', () => {
   })
 
   it('clears tokens', () => {
-    localStorage.setItem('refresh_token', 'test-token')
-    localStorage.setItem('token_expires_at', '1234567890')
+    storage.set('refresh_token', 'test-token')
+    storage.set('token_expires_at', '1234567890')
 
     tokenManager.clearTokens()
 
-    expect(localStorage.getItem('refresh_token')).toBeNull()
-    expect(localStorage.getItem('token_expires_at')).toBeNull()
+    expect(storage.get('refresh_token')).toBeNull()
+    expect(storage.get('token_expires_at')).toBeNull()
   })
 
   it('gets expires at time after setting tokens', () => {
@@ -77,14 +92,14 @@ describe('tokenManager', () => {
     const result = tokenManager.getExpiresAt()
 
     expect(result).toBeGreaterThan(0)
-    expect(result).toBeGreaterThan(Date.now())
+    expect(result).toBeGreaterThan(clock.now())
   })
 
   it('gets CSRF token', () => {
     // CSRF 토큰은 constructor에서 생성되므로 이미 존재할 수 있음
     const csrfToken = tokenManager.getCSRFToken()
 
-    // CSRF 토큰이 있거나 null일 수 있음 (window가 undefined인 경우)
+    // CSRF 토큰이 있거나 null일 수 있음
     expect(csrfToken === null || typeof csrfToken === 'string').toBe(true)
   })
 
@@ -98,32 +113,29 @@ describe('tokenManager', () => {
     // CSRF 토큰이 생성되었거나 이미 존재할 수 있음
     if (csrfToken) {
       expect(typeof csrfToken).toBe('string')
-      expect(sessionStorage.getItem('csrf_token')).toBe(csrfToken)
+      expect(sessionStorage.get('csrf_token')).toBe(csrfToken)
     }
   })
 
   it('reuses existing CSRF token', () => {
-    sessionStorage.setItem('csrf_token', 'existing-token')
+    sessionStorage.set('csrf_token', 'existing-token')
 
-    const csrfToken = tokenManager.getCSRFToken()
+    // 새로운 인스턴스 생성 (기존 토큰 재사용)
+    const newTokenManager = createTokenManager(storage, sessionStorage, clock, location)
+    const csrfToken = newTokenManager.getCSRFToken()
 
     // 기존 토큰이 재사용되거나 새로 생성될 수 있음
     expect(csrfToken === 'existing-token' || csrfToken === null || typeof csrfToken === 'string').toBe(true)
   })
 
   it('handles token refresh', async () => {
+    const { authAPI } = require('../api/auth')
     const mockResponse = {
       access_token: 'new-access-token',
       refresh_token: 'new-refresh-token',
       expires_in: 900,
     }
-
-    // authAPI.refreshToken 모킹
-    jest.doMock('../api/auth', () => ({
-      authAPI: {
-        refreshToken: jest.fn().mockResolvedValue(mockResponse),
-      },
-    }))
+    authAPI.refreshToken.mockResolvedValue(mockResponse)
 
     // 만료된 토큰 설정 (expiresIn을 음수로)
     tokenManager.setTokens('old-access-token', 'old-refresh-token', -1)
@@ -138,24 +150,8 @@ describe('tokenManager', () => {
   })
 
   it('handles token refresh failure', async () => {
-    // 모듈 캐시 초기화 (동적 import를 위해)
-    jest.resetModules()
-    
-    // authAPI 모킹 재설정
     const { authAPI } = require('../api/auth')
-    
-    // 모킹 함수를 명시적으로 재설정
-    if (authAPI && authAPI.refreshToken && typeof authAPI.refreshToken.mockReset === 'function') {
-      authAPI.refreshToken.mockReset()
-      authAPI.refreshToken.mockRejectedValue(new Error('Refresh failed'))
-    } else {
-      // 모킹이 제대로 설정되지 않은 경우, 직접 모킹
-      jest.doMock('../api/auth', () => ({
-        authAPI: {
-          refreshToken: jest.fn().mockRejectedValue(new Error('Refresh failed')),
-        },
-      }))
-    }
+    authAPI.refreshToken.mockRejectedValue(new Error('Refresh failed'))
 
     // 만료된 토큰 설정
     tokenManager.setTokens('old-access-token', 'old-refresh-token', -1)
@@ -168,7 +164,7 @@ describe('tokenManager', () => {
   })
 
   it('returns null when no refresh token', async () => {
-    localStorage.clear()
+    storage.clear()
     tokenManager.clearTokens()
 
     const accessToken = await tokenManager.getAccessToken()
@@ -184,69 +180,45 @@ describe('tokenManager', () => {
     expect(accessToken).toBe('valid-access-token')
   })
 
-  it('handles localStorage errors gracefully', () => {
-    const originalSetItem = Storage.prototype.setItem
-    Storage.prototype.setItem = jest.fn().mockImplementation(() => {
-      throw new Error('Storage quota exceeded')
-    })
+  it('handles storage errors gracefully', () => {
+    // StoragePort에서 에러를 시뮬레이션
+    const errorStorage = {
+      get: jest.fn(),
+      set: jest.fn().mockImplementation(() => {
+        throw new Error('Storage quota exceeded')
+      }),
+      remove: jest.fn(),
+      clear: jest.fn(),
+    }
+
+    const errorTokenManager = createTokenManager(errorStorage, sessionStorage, clock, location)
 
     expect(() => {
-      tokenManager.setTokens('access-token', 'refresh-token', 3600)
+      errorTokenManager.setTokens('access-token', 'refresh-token', 3600)
     }).toThrow()
-
-    Storage.prototype.setItem = originalSetItem
   })
 
-  it('loads tokens from localStorage on initialization', () => {
-    localStorage.setItem('refresh_token', 'saved-refresh-token')
-    localStorage.setItem('token_expires_at', (Date.now() + 3600000).toString())
+  it('loads tokens from storage on initialization', () => {
+    storage.set('refresh_token', 'saved-refresh-token')
+    storage.set('token_expires_at', (Date.now() + 3600000).toString())
 
     // 새로운 인스턴스 생성 시뮬레이션
-    const hasToken = tokenManager.hasValidToken()
+    const newTokenManager = createTokenManager(storage, sessionStorage, clock, location)
+    const hasToken = newTokenManager.hasValidToken()
 
     expect(hasToken).toBe(true)
   })
 
-  it('returns null when window is undefined', async () => {
-    // tokenManager는 싱글톤이므로 window를 삭제하면 다른 테스트에 영향을 줄 수 있음
-    // 대신 window가 없는 환경에서의 동작을 확인
-    // 실제로는 tokenManager가 constructor에서 window를 확인하므로
-    // 이 테스트는 스킵하거나 다른 방식으로 테스트해야 함
-    const accessToken = await tokenManager.getAccessToken()
-    
-    // window가 있으면 토큰이 반환될 수 있고, 없으면 null
-    expect(accessToken === null || typeof accessToken === 'string').toBe(true)
-  })
-
   it('handles concurrent token refresh requests', async () => {
-    // 모듈 캐시 초기화 (동적 import를 위해)
-    jest.resetModules()
-    
-    // authAPI 모킹 재설정
     const { authAPI } = require('../api/auth')
-    
-    // 모킹 함수 설정
     const mockResponse = {
       access_token: 'new-access-token',
       refresh_token: 'new-refresh-token',
       expires_in: 900,
     }
-    
-    if (authAPI && authAPI.refreshToken && typeof authAPI.refreshToken.mockReset === 'function') {
-      authAPI.refreshToken.mockReset()
-      authAPI.refreshToken.mockImplementation(() => 
-        new Promise(resolve => setTimeout(() => resolve(mockResponse), 100))
-      )
-    } else {
-      // 모킹이 제대로 설정되지 않은 경우, 직접 모킹
-      jest.doMock('../api/auth', () => ({
-        authAPI: {
-          refreshToken: jest.fn().mockImplementation(() => 
-            new Promise(resolve => setTimeout(() => resolve(mockResponse), 100))
-          ),
-        },
-      }))
-    }
+    authAPI.refreshToken.mockImplementation(() => 
+      new Promise(resolve => setTimeout(() => resolve(mockResponse), 100))
+    )
 
     // 만료된 토큰 설정
     tokenManager.setTokens('old-access-token', 'old-refresh-token', -1)
@@ -307,8 +279,7 @@ describe('tokenManager', () => {
     const expiresAt = tokenManager.getExpiresAt()
 
     // clearTokens 후에는 expiresAt이 null이거나 0일 수 있음
-    // 또는 localStorage에 저장된 값이 있을 수 있음
-    expect(expiresAt === null || expiresAt === 0 || typeof expiresAt === 'number').toBe(true)
+    expect(expiresAt === null || expiresAt === 0).toBe(true)
   })
 
   it('handles refresh token rotation', async () => {
@@ -329,7 +300,7 @@ describe('tokenManager', () => {
     await tokenManager.getAccessToken()
 
     // 새로운 refresh token이 저장되었는지 확인
-    expect(localStorage.getItem('refresh_token')).toBe('rotated-refresh-token')
+    expect(storage.get('refresh_token')).toBe('rotated-refresh-token')
   })
 
   it('handles refresh without new refresh token', async () => {
@@ -349,7 +320,7 @@ describe('tokenManager', () => {
     await tokenManager.getAccessToken()
 
     // 기존 refresh token이 유지되어야 함
-    expect(localStorage.getItem('refresh_token')).toBe('old-refresh-token')
+    expect(storage.get('refresh_token')).toBe('old-refresh-token')
   })
 
   it('handles refresh when no refresh token available', async () => {
@@ -379,6 +350,9 @@ describe('tokenManager', () => {
   })
 
   it('clears tokens on refresh error', async () => {
+    const { authAPI } = require('../api/auth')
+    authAPI.refreshToken.mockRejectedValue(new Error('Refresh failed'))
+
     // 만료된 토큰 설정
     tokenManager.setTokens('old-access-token', 'old-refresh-token', -1)
 
@@ -386,27 +360,26 @@ describe('tokenManager', () => {
     await new Promise(resolve => setTimeout(resolve, 100))
 
     // authAPI.refreshToken이 실패하는 경우를 시뮬레이션
-    // 실제로는 refreshToken이 실패하면 예외가 발생하거나 null을 반환할 수 있음
     try {
       const accessToken = await tokenManager.getAccessToken()
       // 실패 시 null을 반환할 수 있음
-      expect(accessToken === null || typeof accessToken === 'string').toBe(true)
+      expect(accessToken).toBeNull()
     } catch (error) {
       // 또는 예외가 발생할 수 있음
       expect(error).toBeInstanceOf(Error)
       // 토큰이 삭제되었는지 확인
-      expect(localStorage.getItem('refresh_token')).toBeNull()
+      expect(storage.get('refresh_token')).toBeNull()
     }
   })
 
-  it('handles hasValidToken when localStorage has no expiresAt', () => {
-    localStorage.setItem('refresh_token', 'saved-refresh-token')
-    localStorage.removeItem('token_expires_at')
+  it('handles hasValidToken when storage has no expiresAt', () => {
+    storage.set('refresh_token', 'saved-refresh-token')
+    storage.remove('token_expires_at')
     
     // clearTokens 후 다시 확인
     tokenManager.clearTokens()
     
-    // localStorage에 refresh_token이 있으면 hasValidToken이 true를 반환할 수 있음
+    // storage에 refresh_token이 있으면 hasValidToken이 true를 반환할 수 있음
     const hasToken = tokenManager.hasValidToken()
 
     // refresh_token이 있으면 true, 없으면 false
@@ -427,30 +400,6 @@ describe('tokenManager', () => {
     const timeUntilExpiry = tokenManager.getTimeUntilExpiry()
 
     expect(timeUntilExpiry).toBe(0)
-  })
-
-  it('handles setTokens on server side', () => {
-    const originalWindow = global.window
-    // @ts-expect-error - intentional deletion of global.window for server-side test
-    delete global.window
-
-    expect(() => {
-      tokenManager.setTokens('access-token', 'refresh-token', 3600)
-    }).not.toThrow()
-
-    global.window = originalWindow
-  })
-
-  it('handles clearTokens on server side', () => {
-    const originalWindow = global.window
-    // @ts-expect-error - intentional deletion of global.window for server-side test
-    delete global.window
-
-    expect(() => {
-      tokenManager.clearTokens()
-    }).not.toThrow()
-
-    global.window = originalWindow
   })
 
   it('returns refresh token', () => {
@@ -475,7 +424,7 @@ describe('tokenManager', () => {
 
     const expiresAt = tokenManager.getExpiresAt()
 
-    expect(expiresAt).toBeGreaterThan(Date.now())
+    expect(expiresAt).toBeGreaterThan(clock.now())
   })
 
   it('returns null for expiresAt when cleared', () => {
@@ -486,39 +435,26 @@ describe('tokenManager', () => {
     expect(expiresAt).toBeNull()
   })
 
-  it('loads tokens from localStorage on initialization', () => {
-    localStorage.setItem('refresh_token', 'saved-refresh-token')
-    localStorage.setItem('token_expires_at', (Date.now() + 3600000).toString())
+  it('loads tokens from storage on initialization', () => {
+    storage.set('refresh_token', 'saved-refresh-token')
+    storage.set('token_expires_at', (Date.now() + 3600000).toString())
 
-    // tokenManager는 싱글톤이므로 이미 초기화됨
-    // 하지만 hasValidToken을 호출하면 localStorage에서 로드됨
-    const hasToken = tokenManager.hasValidToken()
+    // tokenManager는 새로 생성하므로 이미 초기화됨
+    // 하지만 hasValidToken을 호출하면 storage에서 로드됨
+    const newTokenManager = createTokenManager(storage, sessionStorage, clock, location)
+    const hasToken = newTokenManager.hasValidToken()
 
     expect(hasToken).toBe(true)
   })
 
-  it('handles setTokens on server side with warning log', () => {
-    const originalWindow = global.window
-    // @ts-expect-error - intentional deletion of global.window for server-side test
-    delete global.window
+  it('loads tokens when both refreshToken and expiresAtStr exist in storage', () => {
+    storage.set('refresh_token', 'test-refresh-token')
+    storage.set('token_expires_at', (Date.now() + 3600000).toString())
 
-    jest.clearAllMocks()
-    tokenManager.setTokens('access-token', 'refresh-token', 900)
-
-    // Jest 환경에서는 window를 삭제해도 실제로는 여전히 존재할 수 있음
-    // 따라서 이 테스트는 실제 서버 환경에서만 의미가 있음
-    expect(true).toBe(true)
-
-    global.window = originalWindow
-  })
-
-  it('loads tokens when both refreshToken and expiresAtStr exist in localStorage', () => {
-    localStorage.setItem('refresh_token', 'test-refresh-token')
-    localStorage.setItem('token_expires_at', (Date.now() + 3600000).toString())
-
-    // tokenManager는 싱글톤이므로 이미 초기화되어 있음
-    // 하지만 localStorage에 값이 있으면 loadTokens가 호출되어야 함
-    const refreshToken = tokenManager.getRefreshToken()
+    // tokenManager는 새로 생성하므로 이미 초기화되어 있음
+    // 하지만 storage에 값이 있으면 loadTokens가 호출되어야 함
+    const newTokenManager = createTokenManager(storage, sessionStorage, clock, location)
+    const refreshToken = newTokenManager.getRefreshToken()
     
     // refreshToken이 로드되었는지 확인
     expect(refreshToken).toBeTruthy()
