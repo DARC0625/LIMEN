@@ -2,9 +2,11 @@
  * ✅ Hermetic E2E 테스트 전용 Harness Entry
  * 
  * 이 파일을 esbuild로 IIFE로 번들링하여 window에 전역 함수를 등록
+ * 
+ * 중요:
+ * - export 있으면 안 됨 (IIFE가 아니라 ESM이 됨)
+ * - 최상단에서 window.runS3 = 로 명시적으로 붙여야 함
  */
-
-/// <reference path="./global.d.ts" />
 
 // 전역 상태 플래그 (테스트에서 관측 가능)
 // ✅ global.d.ts로 타입 선언되어 있으므로 any 불필요

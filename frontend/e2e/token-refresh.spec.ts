@@ -15,57 +15,64 @@
  * npx playwright test e2e/token-refresh.spec.ts
  */
 
-/// <reference path="./global.d.ts" />
-
 import { test, expect, type Page } from '@playwright/test';
-import { buildTokenManagerESM, buildHarnessIIFE } from './_bundles';
+import { buildTokenManagerIIFE, buildHarnessIIFE } from './_bundles';
 
 /**
- * ✅ 명령 3) page.setContent()로 완전 격리된 페이지 생성
+ * ✅ 정석 harness 주입 템플릿
  * 
- * 서버/라우팅/네트워크 없이도 100% 재현 가능
- * CI에서 네트워크/라우팅/정적파일/도메인 관련 변수가 싹 사라짐
+ * (A) 테스트에서 페이지 만들기
+ * (B) init script로 IIFE 주입 (중요: addInitScript는 탐색 전)
+ * (C) 주입 검증은 evaluate가 아니라 "즉시 observable"로
  */
 async function injectHarness(
   page: Page,
-  tokenManagerESM: string,
+  tokenManagerIIFE: string,
   harnessIIFE: string
 ): Promise<void> {
-  // ✅ 완전 격리된 페이지 생성
-  await page.setContent('<html><head></head><body></body></html>', {
+  // ✅ (A) 테스트에서 페이지 만들기
+  await page.goto('about:blank');
+  await page.setContent('<!doctype html><html><body>e2e</body></html>', {
     waitUntil: 'domcontentloaded',
   });
-  
-  // ✅ tokenManager 주입 (ESM)
-  await page.addScriptTag({
-    content: tokenManagerESM,
-    type: 'module',
-  });
-  
-  // ✅ harness 주입 (IIFE - 전역 함수 자동 등록)
-  await page.addScriptTag({
-    content: harnessIIFE,
-  });
-  
-  // ✅ 명령 1) harness는 반드시 페이지에 주입되고, 전역 함수가 생길 때까지 기다린다
-  // harness JS가 실행됨
-  // window.runS4 === 'function' / window.runS3 === 'function'이 됨
-  // 그 다음에만 호출
-  // ✅ global.d.ts로 타입 선언되어 있으므로 any 불필요
-  await page.waitForFunction(() => {
-    return typeof window.runS4 === 'function' &&
-           typeof window.runS3 === 'function';
-  }, { timeout: 5000 });
+
+  // ✅ (B) init script로 IIFE 주입 (중요: addInitScript는 탐색 전)
+  // harness 번들은 반드시 IIFE로 만들고, addInitScript로 주입
+  await page.addInitScript({ content: tokenManagerIIFE });
+  await page.addInitScript({ content: harnessIIFE });
+
+  // 그 다음에 "새 문서"를 열어서 initScript가 적용되게 함
+  await page.goto('http://local.test/', { waitUntil: 'domcontentloaded' });
+
+  // ✅ (C) 주입 검증은 evaluate가 아니라 "즉시 observable"로
+  // page.waitForFunction보다 expect.poll이 더 "테스트 코드답고" 디버깅도 쉬워
+  await expect.poll(async () => {
+    return await page.evaluate(() => ({
+      s3: typeof window.runS3,
+      s4: typeof window.runS4,
+      hasTokenManager: typeof window.__TOKEN_MANAGER !== 'undefined',
+    }));
+  }).toEqual({ s3: 'function', s4: 'function', hasTokenManager: true });
+
+  // ✅ 디버그 로그 (10초 안에 잡는 디버그 2줄)
+  const diag = await page.evaluate(() => ({
+    readyState: document.readyState,
+    hasRunS3: typeof window.runS3,
+    hasRunS4: typeof window.runS4,
+    keys: Object.keys(window).filter((k) => k.includes('runS')),
+    hasTokenManager: typeof window.__TOKEN_MANAGER !== 'undefined',
+  }));
+  console.log('[E2E] HARNESS DIAG', diag);
 }
 
 test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', () => {
-  // ✅ 명령 2) tokenManager ESM 번들 (한 번만 빌드)
-  let tokenManagerESM: string;
+  // ✅ 명령 2) tokenManager IIFE 번들 (한 번만 빌드)
+  let tokenManagerIIFE: string;
   // ✅ 명령 1) harness IIFE 번들 (한 번만 빌드)
   let harnessIIFE: string;
   
   test.beforeAll(async () => {
-    tokenManagerESM = await buildTokenManagerESM();
+    tokenManagerIIFE = await buildTokenManagerIIFE();
     harnessIIFE = await buildHarnessIIFE();
   });
 
@@ -97,8 +104,8 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       await route.abort();
     });
     
-    // ✅ 명령 3) page.setContent()로 완전 격리된 페이지 생성
-    await injectHarness(page, tokenManagerESM, harnessIIFE);
+    // ✅ 정석 harness 주입 템플릿
+    await injectHarness(page, tokenManagerIIFE, harnessIIFE);
 
     // ✅ localStorage 접근은 boot 이후에만 (HTTP origin 확보 후)
     await page.evaluate(() => {
@@ -120,27 +127,8 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     expect(storageStateBefore.expiresAt).toBeTruthy();
     expect(storageStateBefore.csrfToken).toBe('test-csrf-token');
 
-    // ✅ tokenManager를 주입 (harness.js가 사용)
-    // page.setContent()에서는 origin이 없어서 import가 실패할 수 있으므로
-    // 주입된 ESM 번들을 직접 실행하여 window에 할당
-    await page.evaluate(async (tokenManagerCode) => {
-      // ESM 코드를 실행하여 모듈 가져오기
-      const blob = new Blob([tokenManagerCode], { type: 'application/javascript' });
-      const url = URL.createObjectURL(blob);
-      try {
-        const mod = await import(url);
-        // ✅ global.d.ts로 타입 선언되어 있으므로 unknown 캐스팅만
-        window.__TOKEN_MANAGER = mod.tokenManager as unknown;
-      } finally {
-        URL.revokeObjectURL(url);
-      }
-    }, tokenManagerESM);
-
-    // ✅ 명령 1) harness는 반드시 페이지에 주입되고, 전역 함수가 생길 때까지 기다린다
-    // injectHarness에서 이미 waitForFunction으로 보장했지만, 추가 확인
-    await page.waitForFunction(() => typeof window.runS4 === 'function', { timeout: 5000 });
-
     // ✅ 명령 3) S4는 window.runS4() 호출로 트리거 (페이지 이동으로 트리거 ❌)
+    // injectHarness에서 이미 expect.poll로 보장했으므로 바로 호출 가능
     await page.evaluate(async () => {
       if (window.runS4) {
         await window.runS4();
@@ -218,10 +206,10 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       await route.abort();
     });
     
-    // ✅ 명령 3) page.setContent()로 완전 격리된 페이지 생성
+    // ✅ 정석 harness 주입 템플릿
     // ✅ S3는 page1/page2 둘 다 동일하게 주입 + 각각 존재성 체크
-    await injectHarness(page1, tokenManagerESM, harnessIIFE);
-    await injectHarness(page2, tokenManagerESM, harnessIIFE);
+    await injectHarness(page1, tokenManagerIIFE, harnessIIFE);
+    await injectHarness(page2, tokenManagerIIFE, harnessIIFE);
 
     // ✅ localStorage 접근은 boot 이후에만 (HTTP origin 확보 후)
     await page1.evaluate(() => {
@@ -242,38 +230,6 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     expect(storageStateBefore.refreshToken).toBe('test-refresh-token');
     expect(storageStateBefore.expiresAt).toBeTruthy();
     expect(storageStateBefore.csrfToken).toBe('test-csrf-token');
-
-    // ✅ tokenManager를 주입 (harness.js가 사용)
-    // page.setContent()에서는 origin이 없어서 import가 실패할 수 있으므로
-    // 주입된 ESM 번들을 직접 실행하여 window에 할당
-    await page1.evaluate(async (tokenManagerCode) => {
-      const blob = new Blob([tokenManagerCode], { type: 'application/javascript' });
-      const url = URL.createObjectURL(blob);
-      try {
-        const mod = await import(url);
-        // ✅ global.d.ts로 타입 선언되어 있으므로 unknown 캐스팅만
-        window.__TOKEN_MANAGER = mod.tokenManager as unknown;
-      } finally {
-        URL.revokeObjectURL(url);
-      }
-    }, tokenManagerESM);
-    
-    await page2.evaluate(async (tokenManagerCode) => {
-      const blob = new Blob([tokenManagerCode], { type: 'application/javascript' });
-      const url = URL.createObjectURL(blob);
-      try {
-        const mod = await import(url);
-        // ✅ global.d.ts로 타입 선언되어 있으므로 unknown 캐스팅만
-        window.__TOKEN_MANAGER = mod.tokenManager as unknown;
-      } finally {
-        URL.revokeObjectURL(url);
-      }
-    }, tokenManagerESM);
-
-    // ✅ 명령 1) harness는 반드시 페이지에 주입되고, 전역 함수가 생길 때까지 기다린다
-    // injectHarness에서 이미 waitForFunction으로 보장했지만, 추가 확인
-    await page1.waitForFunction(() => typeof window.runS3 === 'function', { timeout: 5000 });
-    await page2.waitForFunction(() => typeof window.runS3 === 'function', { timeout: 5000 });
 
     // ✅ 명령 3) 두 페이지에서 동시에 window.runS3() 호출 (함수 호출로 트리거)
     const promise1 = page1.evaluate(async () => {

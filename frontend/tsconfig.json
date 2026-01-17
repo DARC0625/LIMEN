@@ -37,7 +37,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "e2e/**/*.d.ts"
+    "e2e/**/*.d.ts" // ✅ global.d.ts 포함 (triple-slash reference 없이)
   ],
   "exclude": [
     "node_modules",

@@ -9,22 +9,26 @@ import { join } from 'path';
 import * as esbuild from 'esbuild';
 
 /**
- * ✅ tokenManager를 브라우저에서 import 가능하게 ESM 번들로 생성
+ * ✅ tokenManager를 브라우저에서 import 가능하게 IIFE 번들로 생성
  * 
  * A안: esbuild 번들링에서 process/env 완전 치환
  * 브라우저 번들에서 process 자체가 사라지게 만들기
+ * 
+ * ✅ format=iife 강제: ESM이 아니라 IIFE로 만들어서 전역에 붙음
+ * window.__TOKEN_MANAGER에 직접 할당되도록 번들링
  */
-export async function buildTokenManagerESM(): Promise<string> {
+export async function buildTokenManagerIIFE(): Promise<string> {
   const tokenManagerPath = join(__dirname, '../lib/tokenManager.ts');
   
   const result = await esbuild.build({
     entryPoints: [tokenManagerPath],
     bundle: true,
     write: false,
-    format: 'esm',
+    format: 'iife', // ✅ IIFE로 변경 (전역에 붙음)
     platform: 'browser',
     target: 'es2020',
     external: ['next'], // Next.js는 외부 의존성으로 처리
+    globalName: '__TOKEN_MANAGER_MODULE', // 전역 이름 지정
     // ✅ process.env 완전 치환 (브라우저에서 process가 사라지게)
     define: {
       'process.env.NODE_ENV': '"test"',
@@ -35,7 +39,9 @@ export async function buildTokenManagerESM(): Promise<string> {
     },
   });
   
-  return result.outputFiles[0].text;
+  // ✅ IIFE 번들 결과물에 window.__TOKEN_MANAGER 할당 코드 추가
+  const bundleCode = result.outputFiles[0].text;
+  return `${bundleCode}\nwindow.__TOKEN_MANAGER = __TOKEN_MANAGER_MODULE.tokenManager;`;
 }
 
 /**
