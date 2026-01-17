@@ -66,8 +66,10 @@ try {
   // 원인 찾을 때까지는 욕심내지 마
   // runS3/runS4 내부에서 tokenManager를 쓰더라도, 바인딩 자체는 반드시 성공해야 함
   // 지금은 의존성 0으로 만들었으므로 loadTokenManager는 나중에 사용
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let tokenManagerInstance: unknown = null;
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function loadTokenManager(): Promise<unknown> {
     if (tokenManagerInstance) return tokenManagerInstance;
     
