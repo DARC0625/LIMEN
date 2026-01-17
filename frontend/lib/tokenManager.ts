@@ -37,7 +37,7 @@ class TokenManager {
     private storage: StoragePort,
     private sessionStorage: SessionStoragePort,
     private clock: ClockPort,
-    private location?: LocationPort | null
+    private location?: LocationPort
   ) {
     logger.log('[tokenManager] Constructor called');
     // localStorage에서 토큰 복원 (페이지 새로고침 대비)
@@ -309,7 +309,7 @@ export function createTokenManager(
   storage?: StoragePort,
   sessionStorage?: SessionStoragePort,
   clock?: ClockPort,
-  location?: LocationPort | null
+  location?: LocationPort
 ): TokenManager {
   // 기본값: 브라우저 환경이면 browser adapter, 아니면 memory adapter
   const defaultStorage = storage ?? (typeof window !== 'undefined' && browserLocalStoragePort
@@ -335,7 +335,7 @@ export function createTokenManager(
 // 브라우저 환경에서만 사용 가능
 export const tokenManager = typeof window !== 'undefined'
   ? createTokenManager()
-  : createTokenManager(createMemoryStoragePort(), createMemorySessionStoragePort(), createMemoryClockPort(), null);
+  : createTokenManager(createMemoryStoragePort(), createMemorySessionStoragePort(), createMemoryClockPort(), createMemoryLocationPort('/'));
 
 // ✅ 제품 코드는 순수하게 유지
 // 테스트 훅(__test)은 frontend/e2e/tokenManager-test-entry.ts에서 부착

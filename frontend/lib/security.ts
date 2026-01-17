@@ -101,8 +101,8 @@ export function forceLogout(
   reason: string = '보안상의 이유로 로그아웃되었습니다.',
   options?: {
     storage?: StoragePort;
-    location?: LocationPort | null;
-    broadcast?: BroadcastPort | null;
+    location?: LocationPort;
+    broadcast?: BroadcastPort;
   }
 ): { action: 'LOGOUT'; reason: string; pathname?: string; shouldRedirect?: boolean } {
   const storage = options?.storage ?? (typeof window !== 'undefined' && browserLocalStoragePort
@@ -162,9 +162,9 @@ export function forceLogout(
  */
 export function forceLogoutBrowser(reason?: string): void {
   const result = forceLogout(reason ?? '보안상의 이유로 로그아웃되었습니다.', {
-    storage: typeof window !== 'undefined' && browserLocalStoragePort ? browserLocalStoragePort : null,
-    location: typeof window !== 'undefined' ? createBrowserLocationPort() : null,
-    broadcast: typeof window !== 'undefined' ? createBrowserBroadcastPort() : null,
+    storage: typeof window !== 'undefined' && browserLocalStoragePort ? browserLocalStoragePort : undefined,
+    location: typeof window !== 'undefined' ? createBrowserLocationPort() : undefined,
+    broadcast: typeof window !== 'undefined' ? createBrowserBroadcastPort() : undefined,
   });
   
   // 브라우저 레이어에서 redirect 수행
@@ -217,7 +217,7 @@ export function checkRequestRateLimit(): boolean {
  */
 export function detectAbnormalActivity(
   storage?: StoragePort,
-  location?: LocationPort | null
+  location?: LocationPort
 ): {
   isAbnormal: boolean;
   reason?: string;
