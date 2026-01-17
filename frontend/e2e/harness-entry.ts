@@ -30,23 +30,13 @@ try {
   // ✅ global.d.ts로 타입 선언되어 있으므로 any 불필요
   window.__SESSION_CLEARED = false;
   window.__REFRESH_COMPLETED = false;
-  window.__REDIRECT_TO_LOGIN = null;
   window.__REFRESH_CALL_COUNT = 0;
 
-  // location.href monkeypatch (리다이렉트 감지)
-  Object.defineProperty(window.location, 'href', {
-    set: function(url: string) {
-      if (url.includes('/login')) {
-        window.__REDIRECT_TO_LOGIN = url;
-        console.log('[HARNESS] location.href set to:', url);
-        // 실제 리다이렉트는 하지 않음 (테스트 환경)
-      }
-    },
-    get: function() {
-      return window.__CURRENT_URL || 'http://local.test/';
-    },
-    configurable: true,
-  });
+  // ✅ 금지: Location 프로퍼티 defineProperty / patch
+  // Object.defineProperty(window.location, 'href', ...) 전면 금지
+  // 크로스브라우저/향후 브라우저 업데이트에서 더 깨짐
+  // 정석 대체안: Playwright 이벤트/라우팅을 관측 (page.waitForURL, page.on('framenavigated'))
+  // 또는 window.location.assign/replace를 스파이 (함수만 스파이, href 프로퍼티는 건드리지 않음)
 
   // BroadcastChannel 메시지 수신 (멀티탭 동기화 감지)
   let broadcastChannel: BroadcastChannel | null = null;

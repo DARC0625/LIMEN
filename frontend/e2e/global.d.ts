@@ -24,9 +24,8 @@ declare global {
     // harness 상태 플래그 (테스트에서 관측 가능)
     __SESSION_CLEARED?: boolean;
     __REFRESH_COMPLETED?: boolean;
-    __REDIRECT_TO_LOGIN?: string | null;
     __REFRESH_CALL_COUNT?: number;
-    __CURRENT_URL?: string;
+    // ✅ __REDIRECT_TO_LOGIN, __CURRENT_URL 제거 (location.href 재정의 금지)
 
     // ✅ harness-entry 최상단 비콘 (무조건 찍히는 비콘)
     __HARNESS_LOADED_AT?: number;
