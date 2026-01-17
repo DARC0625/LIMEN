@@ -79,6 +79,26 @@ jobs:
           path: frontend/test-results
           retention-days: 14
 
+      - name: Process test results (${{ matrix.browser }})
+        if: always()
+        run: |
+          # ✅ step-level run에서 조건 체크 (규칙 준수)
+          # Nightly는 merge 차단하지 않음 - 아티팩트만 저장
+          if [ -f "test-results/results.json" ]; then
+            FAILED_COUNT=$(jq -r '.stats.failures' test-results/results.json || echo "0")
+            TOTAL_COUNT=$(jq -r '.stats.total' test-results/results.json || echo "0")
+            
+            echo "📊 ${{ matrix.browser }} 테스트 결과:"
+            echo "  - 총 테스트: $TOTAL_COUNT"
+            echo "  - 실패: $FAILED_COUNT"
+            
+            if [ "$FAILED_COUNT" -gt 0 ]; then
+              echo "⚠️ ${{ matrix.browser }}에서 $FAILED_COUNT 개 테스트 실패"
+              echo "📝 48시간 내 이슈화 필요"
+              # merge 차단하지 않음 - 규칙 준수
+            fi
+          fi
+
   # ✅ Integration Sweep (실서버 의존)
   # vm-console-e2e.spec.ts, compatibility.spec.ts
   # 주의: self-hosted runner가 준비되면 이 job을 self-hosted로 이동
@@ -91,9 +111,9 @@ jobs:
         working-directory: ./frontend
 
     # ✅ Integration은 실서버/계정 의존이 있으므로 조건부 실행
-    # workflow_dispatch inputs 기반 분기 (secrets 조건으로 workflow 파싱 금지)
-    if: |
-      ${{ github.event_name == 'workflow_dispatch' && inputs.run_integration == 'true' }}
+    # ❌ if: 에서 env, secrets 직접 비교 금지
+    # ✅ step-level run에서 체크 (규칙 준수)
+    if: github.event_name == 'workflow_dispatch'
     
     steps:
       - name: Checkout code
@@ -111,6 +131,14 @@ jobs:
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
+
+      - name: Check integration condition
+        run: |
+          # ✅ step-level run에서 조건 체크 (규칙 준수)
+          if [ "${{ github.event.inputs.run_integration }}" != "true" ]; then
+            echo "Integration 테스트가 요청되지 않았습니다. 스킵합니다."
+            exit 0
+          fi
 
       - name: Run E2E integration tests
         run: npm run test:e2e:integration
@@ -147,6 +175,9 @@ jobs:
     if: always()
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Check results
         run: |
           echo "✅ Cross-Browser Hermetic Sweep 완료"
@@ -155,3 +186,56 @@ jobs:
           echo "다음 단계:"
           echo "- Self-hosted runner 준비 시 integration job을 self-hosted로 이동"
           echo "- 기관망/프록시 조건 추가 검증"
+
+  # ✅ 실패 시 이슈 자동 생성 (48시간 내 이슈화 규칙)
+  create-issue-on-failure:
+    name: Create Issue on Failure
+    runs-on: ubuntu-latest
+    needs: [e2e-hermetic-cross-browser]
+    if: failure() # e2e-hermetic-cross-browser job이 실패한 경우에만 실행
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'nightly-e2e-failure'
+            });
+            
+            // 중복 이슈 방지
+            const existingIssue = issues.find(issue => 
+              issue.title.includes('Nightly E2E Failure')
+            );
+            
+            if (!existingIssue) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `[Nightly E2E] Cross-Browser 테스트 실패 - ${new Date().toISOString().split('T')[0]}`,
+                body: `## Nightly E2E 테스트 실패 보고
+                
+                **실행 시간**: ${new Date().toISOString()}
+                **워크플로우**: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+                
+                ### 실패 브라우저
+                - 아티팩트에서 확인 필요
+                
+                ### 조치 사항
+                - [ ] 아티팩트 확인 (trace, video)
+                - [ ] 실패 원인 분석
+                - [ ] 수정 또는 이슈 추적
+                
+                ### 규칙 준수
+                - ✅ merge 차단하지 않음
+                - ✅ 아티팩트 + trace + 영상 저장됨
+                - ✅ 48시간 내 이슈화`,
+                labels: ['nightly-e2e-failure', 'bug']
+              });
+            }

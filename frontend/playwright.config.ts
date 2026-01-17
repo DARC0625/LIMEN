@@ -1,12 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Playwright 설정 - 브라우저 호환성 진단용
+ * Hermetic E2E 테스트 설정
  * 
- * BASE_URL 환경 변수로 테스트 대상 URL 지정
- * 예: BASE_URL="https://limen.kr" npm run test:compatibility
+ * 규칙:
+ * - 환경 독립성: BASE_URL, ADMIN_USER, ADMIN_PASS 절대 요구 금지
+ * - page.goto() 원칙적으로 금지
+ * - 네트워크 모킹 필수 (page.route())
+ * - 브라우저 중립성: Chromium 기준, Firefox/WebKit은 Nightly에서 검증
  */
-const baseURL = process.env.BASE_URL || 'http://localhost:9444';
 
 const isCI = !!process.env.CI;
 
@@ -30,7 +32,8 @@ export default defineConfig({
     ['json', { outputFile: 'test-results/results.json' }],
   ],
   use: {
-    baseURL,
+    // ✅ BASE_URL 제거: 환경 독립성 원칙 준수
+    // 모든 테스트는 page.setContent() 또는 모킹된 응답 사용
     trace: isCI ? 'on-first-retry' : 'on-first-retry', // ✅ hermetic은 trace on first failure
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

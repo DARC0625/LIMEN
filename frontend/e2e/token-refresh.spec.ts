@@ -115,7 +115,11 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     });
 
     // ✅ Then: refresh 실패 처리 대기
-    await page.waitForTimeout(1000);
+    // ❌ waitForTimeout 금지 - 명시적 대기 사용
+    // localStorage 정리 완료를 기다림
+    await page.waitForFunction(() => {
+      return localStorage.getItem('refresh_token') === null;
+    }, { timeout: 5000 });
 
     // ✅ Then: 모든 저장소 정리 확인
     const storageStateAfter = await page.evaluate(() => {

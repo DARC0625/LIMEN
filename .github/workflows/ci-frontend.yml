@@ -169,3 +169,16 @@ jobs:
           name: playwright-test-results-pr-gate
           path: frontend/test-results
           retention-days: 7
+
+      - name: Check test results
+        if: always()
+        run: |
+          # ✅ step-level run에서 조건 체크 (규칙 준수)
+          # if: 에서 env, secrets 직접 비교 금지
+          if [ -f "test-results/results.json" ]; then
+            FAILED_COUNT=$(jq -r '.stats.failures' test-results/results.json || echo "0")
+            if [ "$FAILED_COUNT" -gt 0 ]; then
+              echo "❌ E2E 테스트 실패: $FAILED_COUNT 개"
+              exit 1
+            fi
+          fi
