@@ -49,6 +49,11 @@ export async function buildTokenManagerIIFE(): Promise<string> {
  * 
  * 원인 A 해결: esbuild 번들이 ESM(export) 형태라 <script>로 넣어도 전역이 안 생김
  * 해결: harness 번들을 IIFE로 만들고 window에 명시적으로 붙이기
+ * 
+ * ✅ 정석: harness-entry 번들은 반드시 IIFE(즉시 실행)로 빌드
+ * - format: 'iife'
+ * - globalName 불필요 (IIFE면 즉시 실행)
+ * - 번들 결과가 (() => { ... window.runS3 = ... })(); 형태여야 함
  */
 export async function buildHarnessIIFE(): Promise<string> {
   const harnessPath = join(__dirname, 'harness-entry.ts');
@@ -57,10 +62,10 @@ export async function buildHarnessIIFE(): Promise<string> {
     entryPoints: [harnessPath],
     bundle: true,
     write: false,
-    format: 'iife', // ✅ IIFE로 변경 (전역 함수 생성)
+    format: 'iife', // ✅ IIFE로 변경 (즉시 실행)
     platform: 'browser',
     target: 'es2020',
-    globalName: '__E2E__', // 필요시 전역 이름 지정
+    // ✅ globalName 불필요 (IIFE면 즉시 실행)
   });
   
   return result.outputFiles[0].text;

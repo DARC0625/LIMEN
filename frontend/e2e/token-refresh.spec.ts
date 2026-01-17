@@ -46,7 +46,9 @@ async function injectHarness(
   });
 
   // ✅ (B) init script 주입 → 그 다음 goto
-  // harness 번들은 반드시 IIFE로 만들고, addInitScript로 주입
+  // ✅ tokenManager 주입과 harness-entry 주입 순서를 강제
+  // harness-entry는 내부에서 window.__TOKEN_MANAGER를 참조할 가능성이 높음
+  // 순서: tokenManager initScript → harness-entry initScript → goto(local.test)
   await page.addInitScript({ content: tokenManagerIIFE });
   await page.addInitScript({ content: harnessIIFE });
 
@@ -54,15 +56,12 @@ async function injectHarness(
   // 네비게이션은 "있지만" 네트워크는 0 (전부 fulfill)
   await page.goto('http://local.test/', { waitUntil: 'domcontentloaded' });
 
-  // ✅ (C) 주입 검증은 evaluate가 아니라 "즉시 observable"로
-  // page.waitForFunction보다 expect.poll이 더 "테스트 코드답고" 디버깅도 쉬워
-  await expect.poll(async () => {
-    return await page.evaluate(() => ({
-      s3: typeof window.runS3,
-      s4: typeof window.runS4,
-      hasTokenManager: typeof window.__TOKEN_MANAGER !== 'undefined',
-    }));
-  }).toEqual({ s3: 'function', s4: 'function', hasTokenManager: true });
+  // ✅ (C) "runS3/runS4 생성"을 기다리지 말고 즉시 assert 하라 (정석)
+  // goto 직후 바로 assert
+  // 만약 여기서 실패하면 **주입이 안 된 게 아니라 "harness-entry가 실행되지 않았다"**가 확정
+  expect(await page.evaluate(() => typeof window.runS4)).toBe('function');
+  expect(await page.evaluate(() => typeof window.runS3)).toBe('function');
+  expect(await page.evaluate(() => typeof window.__TOKEN_MANAGER !== 'undefined')).toBe(true);
 
   // ✅ 디버그 로그 (10초 안에 잡는 디버그 2줄)
   const diag = await page.evaluate(() => ({
