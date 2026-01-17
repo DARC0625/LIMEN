@@ -7,15 +7,9 @@
 declare global {
   interface Window {
     // harness entry가 주입하는 함수들
-    runS3?: () => Promise<{
-      accessToken: string | null;
-      refreshToken: string | null;
-      expiresAt: string | null;
-      refreshCompleted: boolean;
-    }>;
-    runS4?: () => Promise<{
-      sessionCleared: boolean;
-    }>;
+    // ✅ 필수 계약: { ok: true } | { ok: false, reason }
+    runS3?: () => Promise<{ ok: true; refreshCallCount: number } | { ok: false; reason: string }>;
+    runS4?: () => Promise<{ ok: true; sessionCleared: boolean } | { ok: false; reason: string }>;
 
     // tokenManager를 주입해 쓸 때
     __TOKEN_MANAGER?: unknown;

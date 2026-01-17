@@ -80,6 +80,57 @@ import { tokenManager } from '../lib/tokenManager';
   clearState: (): void => {
     tokenManager.clearTokens();
   },
+  
+  /**
+   * 세션 정리 함수 (테스트용)
+   * localStorage/cookie(가능하면)/memory 상태를 즉시 초기화
+   */
+  clearSession: (): void => {
+    tokenManager.clearTokens();
+  },
+  
+  /**
+   * Refresh Token 설정 (테스트용)
+   * @param value - Refresh Token 값 또는 null
+   */
+  setRefreshToken: (value: string | null): void => {
+    if (value === null) {
+      localStorage.removeItem('refresh_token');
+      (tokenManager as { refreshToken?: string | null }).refreshToken = null;
+    } else {
+      localStorage.setItem('refresh_token', value);
+      (tokenManager as { refreshToken?: string | null }).refreshToken = value;
+    }
+  },
+  
+  /**
+   * 만료 시간 설정 (테스트용)
+   * @param msEpoch - 만료 시간 (밀리초 epoch) 또는 null
+   */
+  setExpiresAt: (msEpoch: number | null): void => {
+    if (msEpoch === null) {
+      localStorage.removeItem('token_expires_at');
+      (tokenManager as { expiresAt?: number }).expiresAt = 0;
+    } else {
+      localStorage.setItem('token_expires_at', msEpoch.toString());
+      (tokenManager as { expiresAt?: number }).expiresAt = msEpoch;
+    }
+  },
+  
+  /**
+   * 스토리지 스냅샷 (테스트용)
+   */
+  getStorageSnapshot: (): {
+    refreshToken: string | null;
+    expiresAt: string | null;
+    csrfToken: string | null;
+  } => {
+    return {
+      refreshToken: localStorage.getItem('refresh_token'),
+      expiresAt: localStorage.getItem('token_expires_at'),
+      csrfToken: sessionStorage.getItem('csrf_token'),
+    };
+  },
 };
 
 // ✅ E2E 전용 번들에서 export

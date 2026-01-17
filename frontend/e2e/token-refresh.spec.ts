@@ -303,11 +303,20 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
 
   /**
    * S3: 멀티탭 동시 refresh 경합 테스트
+   * 
+   * ✅ 2) runS3에서 "멀티탭 대기"를 제거하고, single-flight의 본질만 검증해라
+   * single-flight 본질은 이거 하나다:
+   * - 동시에 getAccessToken() 을 호출했을 때
+   * - refresh fetch가 정확히 1회만 나가고
+   * - 두 호출이 동일한 결과를 받는다
+   * 
+   * Promise.allSettled([tokenManager.getAccessToken(), tokenManager.getAccessToken()])
+   * 같은 페이지에서 "동시 2회 호출"로 single-flight를 증명 가능
+   * 
+   * 즉, S3에서 page2 자체를 없애라.
+   * (멀티탭은 nightly/cross-browser에서만 돌려도 된다. PR Gate는 hermetic+deterministic이 우선)
    */
-  test('S3: 멀티탭 동시 refresh 경합 방지 (single-flight)', async ({ context }) => {
-    // ✅ Given: 같은 context에서 2개 page 생성 (localStorage 공유)
-    const page1 = await context.newPage();
-    const page2 = await context.newPage();
+  test('S3: 멀티탭 동시 refresh 경합 방지 (single-flight)', async ({ page, context }) => {
 
     // ✅ 네트워크 모킹: refresh endpoint만 정확히 fulfill
     let refreshCallCount = 0;

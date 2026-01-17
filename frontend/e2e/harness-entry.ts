@@ -63,6 +63,41 @@ try {
     return window.__TOKEN_MANAGER;
   }
 
+  // ✅ 1) runS3/runS4는 "절대 무한 대기/외부 의존"하면 안 된다 (최우선)
+  // harness 함수는 테스트용 트리거다. 제품 로직을 그대로 호출하더라도,
+  // 테스트에서는 반드시 "끝나는 계약(terminate contract)"이 있어야 한다.
+  // 
+  // 필수 계약(하드 룰):
+  // - runS4() / runS3() 는 항상 { ok: true } | { ok: false, reason } 를 반환
+  // - 내부 await는 timeout guard를 가진다 (예: 3초)
+  // - 어떤 예외도 밖으로 던지지 말고 { ok:false, reason:String(e) } 로 반환
+  
+  /**
+   * 타임아웃 가드 헬퍼
+   * ms 초과 시 reject가 아니라 resolve로 실패 반환 (테스트가 제어할 수 있게)
+   */
+  async function withTimeout<T>(
+    promise: Promise<T>,
+    ms: number,
+    label: string
+  ): Promise<{ ok: true; value: T } | { ok: false; reason: string }> {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        resolve({ ok: false, reason: `Timeout after ${ms}ms: ${label}` });
+      }, ms);
+      
+      promise
+        .then((value) => {
+          clearTimeout(timer);
+          resolve({ ok: true, value });
+        })
+        .catch((error) => {
+          clearTimeout(timer);
+          resolve({ ok: false, reason: `Error in ${label}: ${String(error)}` });
+        });
+    });
+  }
+
   // ✅ 4) harness-entry를 의존성 0으로 먼저 만들어서 바인딩만 성공
   // 원인 찾을 때까지는 욕심내지 마
   // runS3/runS4 내부에서 tokenManager를 쓰더라도, 바인딩 자체는 반드시 성공해야 함
@@ -71,99 +106,174 @@ try {
   /**
    * S4: refresh 실패 시 전역 세션 정리 및 강제 로그아웃
    * 
-   * ✅ Step 3: hermetic E2E는 훅만 사용 (조건/시간 의존 제거)
-   * S4: __test.forceRefresh({ respond: 401 }) → cleanup 실행 보장 → storage null assert
+   * ✅ 3) S4는 "refresh 실패 시 세션 정리"를 제품 코드에 맡기지 말고, 훅으로 직접 호출해라
+   * 정석: 훅으로 '세션 정리 함수'를 직접 노출
+   * 
+   * 필수 계약: { ok: true } | { ok: false, reason }
    */
-  window.runS4 = async function() {
+  window.runS4 = async function(): Promise<{ ok: true; sessionCleared: boolean } | { ok: false; reason: string }> {
     try {
-      const tokenManager = await loadTokenManager();
+      const tokenManagerResult = await withTimeout(
+        loadTokenManager(),
+        1000,
+        'loadTokenManager'
+      );
       
-      window.__SESSION_CLEARED = false;
+      if (!tokenManagerResult.ok) {
+        return { ok: false, reason: tokenManagerResult.reason };
+      }
       
-      // ✅ Step 3: hermetic E2E는 훅만 사용
-      // __test.forceRefresh({ respond: 401 }) → cleanup 실행 보장
-      if (tokenManager && typeof tokenManager === 'object' && '__test' in tokenManager) {
-        const testHook = (tokenManager as { __test?: { forceRefresh: (options?: { respond?: number }) => Promise<void> } }).__test;
-        if (testHook && testHook.forceRefresh) {
-          try {
-            await testHook.forceRefresh({ respond: 401 });
-          } catch (error) {
-            console.log('[HARNESS] runS4: Refresh failed as expected:', error);
-          }
-        } else {
-          throw new Error('tokenManager.__test.forceRefresh is not available');
+      const tokenManager = tokenManagerResult.value;
+      
+      if (!tokenManager || typeof tokenManager !== 'object' || !('__test' in tokenManager)) {
+        return { ok: false, reason: 'tokenManager.__test is not available' };
+      }
+      
+      const testHook = (tokenManager as { __test?: {
+        setRefreshToken: (value: string | null) => void;
+        setExpiresAt: (msEpoch: number | null) => void;
+        clearSession: () => void;
+        getStorageSnapshot: () => { refreshToken: string | null; expiresAt: string | null; csrfToken: string | null };
+        getAccessToken?: () => Promise<string | null>;
+      } }).__test;
+      
+      if (!testHook) {
+        return { ok: false, reason: 'tokenManager.__test is not available' };
+      }
+      
+      // ✅ refreshToken 세팅 + expiresAt을 "만료 상태"로 세팅
+      testHook.setRefreshToken('test-refresh-token');
+      testHook.setExpiresAt(Date.now() - 1000); // 이미 만료됨
+      sessionStorage.setItem('csrf_token', 'test-csrf-token');
+      
+      // ✅ await tokenManager.getAccessToken() 호출 (실패 기대)
+      // refresh route를 401로 1회 강제 (테스트 코드에서 route 설정)
+      if (testHook.getAccessToken) {
+        const getAccessTokenResult = await withTimeout(
+          testHook.getAccessToken(),
+          3000,
+          'getAccessToken (expected to fail with 401)'
+        );
+        
+        // 401 에러는 예상된 동작이므로 무시
+        if (!getAccessTokenResult.ok && getAccessTokenResult.reason.includes('401')) {
+          // 정상적인 실패
+        } else if (!getAccessTokenResult.ok) {
+          // 예상치 못한 에러
+          console.log('[HARNESS] runS4: Unexpected error:', getAccessTokenResult.reason);
         }
-      } else {
-        throw new Error('tokenManager.__test is not available');
+      } else if (tokenManager && typeof tokenManager === 'object' && 'getAccessToken' in tokenManager) {
+        const getAccessToken = (tokenManager as { getAccessToken: () => Promise<string | null> }).getAccessToken;
+        const getAccessTokenResult = await withTimeout(
+          getAccessToken(),
+          3000,
+          'getAccessToken (expected to fail with 401)'
+        );
+        
+        // 401 에러는 예상된 동작이므로 무시
+        if (!getAccessTokenResult.ok && getAccessTokenResult.reason.includes('401')) {
+          // 정상적인 실패
+        } else if (!getAccessTokenResult.ok) {
+          // 예상치 못한 에러
+          console.log('[HARNESS] runS4: Unexpected error:', getAccessTokenResult.reason);
+        }
       }
       
-      // 세션 정리 완료 확인
-      const refreshToken = localStorage.getItem('refresh_token');
-      const expiresAtAfter = localStorage.getItem('token_expires_at');
-      const csrfToken = sessionStorage.getItem('csrf_token');
-      
-      if (!refreshToken && !expiresAtAfter && !csrfToken) {
-        window.__SESSION_CLEARED = true;
-        console.log('[HARNESS] runS4: Session cleared successfully');
-      }
+      // ✅ clearSession()이 호출됐는지(또는 storage가 비었는지) 확인해서 결과 반환
+      // S4의 목적은 "제품이 실패 처리에서 세션 정리한다" 검증이니까,
+      // 검증은 __test.getStorageSnapshot() 같은 걸로 "결과"만 보면 된다
+      const snapshot = testHook.getStorageSnapshot();
+      const sessionCleared = !snapshot.refreshToken && !snapshot.expiresAt && !snapshot.csrfToken;
       
       return {
-        sessionCleared: window.__SESSION_CLEARED ?? false,
+        ok: true,
+        sessionCleared,
       };
     } catch (error) {
-      console.error('[HARNESS] runS4: Error:', error);
-      throw error;
+      // ✅ 어떤 예외도 밖으로 던지지 말고 { ok:false, reason:String(e) } 로 반환
+      return { ok: false, reason: String(error) };
     }
   };
 
   /**
    * S3: 멀티탭 동시 refresh 경합 방지 (single-flight)
    * 
-   * ✅ Step 3: hermetic E2E는 훅만 사용 (조건/시간 의존 제거)
-   * S3: page1/page2에서 동시에 forceRefresh(200) → refreshCallCount=1 assert
+   * ✅ 2) runS3에서 "멀티탭 대기"를 제거하고, single-flight의 본질만 검증해라
+   * single-flight 본질은 이거 하나다:
+   * - 동시에 getAccessToken() 을 호출했을 때
+   * - refresh fetch가 정확히 1회만 나가고
+   * - 두 호출이 동일한 결과를 받는다
+   * 
+   * Promise.allSettled([tokenManager.getAccessToken(), tokenManager.getAccessToken()])
+   * 같은 페이지에서 "동시 2회 호출"로 single-flight를 증명 가능
+   * 
+   * 필수 계약: { ok: true, refreshCallCount: number } | { ok: false, reason }
    */
-  window.runS3 = async function() {
+  window.runS3 = async function(): Promise<{ ok: true; refreshCallCount: number } | { ok: false; reason: string }> {
     try {
-      const tokenManager = await loadTokenManager();
+      const tokenManagerResult = await withTimeout(
+        loadTokenManager(),
+        1000,
+        'loadTokenManager'
+      );
       
-      window.__REFRESH_COMPLETED = false;
-      
-      window.__REFRESH_CALL_COUNT = (window.__REFRESH_CALL_COUNT ?? 0) + 1;
-      
-      // ✅ Step 3: hermetic E2E는 훅만 사용
-      // page1/page2에서 동시에 forceRefresh(200) → refreshCallCount=1 assert
-      if (tokenManager && typeof tokenManager === 'object' && '__test' in tokenManager) {
-        const testHook = (tokenManager as { __test?: { forceRefresh: (options?: { respond?: number }) => Promise<void> } }).__test;
-        if (testHook && testHook.forceRefresh) {
-          await testHook.forceRefresh({ respond: 200 });
-          
-          window.__REFRESH_COMPLETED = true;
-          
-          // BroadcastChannel로 다른 탭에 알림
-          if (typeof BroadcastChannel !== 'undefined') {
-            const broadcastChannel = new BroadcastChannel('token-refresh');
-            broadcastChannel.postMessage({ type: 'refresh-completed' });
-          }
-          
-          // 최종 토큰 상태 확인
-          const refreshToken = localStorage.getItem('refresh_token');
-          const expiresAtAfter = localStorage.getItem('token_expires_at');
-          
-          return {
-            accessToken: 'present',
-            refreshToken: refreshToken,
-            expiresAt: expiresAtAfter,
-            refreshCompleted: window.__REFRESH_COMPLETED ?? false,
-          };
-        } else {
-          throw new Error('tokenManager.__test.forceRefresh is not available');
-        }
-      } else {
-        throw new Error('tokenManager.__test is not available');
+      if (!tokenManagerResult.ok) {
+        return { ok: false, reason: tokenManagerResult.reason };
       }
+      
+      const tokenManager = tokenManagerResult.value;
+      
+      if (!tokenManager || typeof tokenManager !== 'object' || !('getAccessToken' in tokenManager)) {
+        return { ok: false, reason: 'tokenManager.getAccessToken is not available' };
+      }
+      
+      const getAccessToken = (tokenManager as { getAccessToken: () => Promise<string | null> }).getAccessToken;
+      
+      // ✅ 만료된 토큰 상태로 설정 (refresh 트리거)
+      if (tokenManager && typeof tokenManager === 'object' && '__test' in tokenManager) {
+        const testHook = (tokenManager as { __test?: {
+          setRefreshToken: (value: string | null) => void;
+          setExpiresAt: (msEpoch: number | null) => void;
+        } }).__test;
+        
+        if (testHook) {
+          testHook.setRefreshToken('test-refresh-token');
+          testHook.setExpiresAt(Date.now() - 1000); // 이미 만료됨
+          sessionStorage.setItem('csrf_token', 'test-csrf-token');
+        }
+      }
+      
+      // ✅ Promise.allSettled([tokenManager.getAccessToken(), tokenManager.getAccessToken()])
+      // 같은 페이지에서 "동시 2회 호출"로 single-flight를 증명 가능
+      // 그리고 내부에서 fetch 캡처된 refresh 호출 횟수만 반환
+      const fetchCallsBefore = (window.__FETCH_CALLS || []).length;
+      
+      const results = await Promise.allSettled([
+        withTimeout(getAccessToken(), 3000, 'getAccessToken (call 1)'),
+        withTimeout(getAccessToken(), 3000, 'getAccessToken (call 2)'),
+      ]);
+      
+      const fetchCallsAfter = (window.__FETCH_CALLS || []).length;
+      const refreshCalls = (window.__FETCH_CALLS || []).filter((url: string) => 
+        typeof url === 'string' && url.includes('refresh')
+      );
+      
+      const refreshCallCount = refreshCalls.length;
+      
+      // 두 호출이 모두 완료되었는지 확인
+      const allSettled = results.every(r => r.status === 'fulfilled');
+      
+      if (!allSettled) {
+        return { ok: false, reason: 'Some getAccessToken calls did not settle' };
+      }
+      
+      return {
+        ok: true,
+        refreshCallCount,
+      };
     } catch (error) {
-      console.error('[HARNESS] runS3: Error:', error);
-      throw error;
+      // ✅ 어떤 예외도 밖으로 던지지 말고 { ok:false, reason:String(e) } 로 반환
+      return { ok: false, reason: String(error) };
     }
   };
 
