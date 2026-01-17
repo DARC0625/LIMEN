@@ -36,8 +36,9 @@ declare global {
     __HARNESS_ERROR?: string | null;
     __HARNESS_READY?: boolean;
 
-    // ✅ fetch 캡처 인스트루먼트 (refresh 요청 실제 URL 확정)
+    // ✅ fetch 캡처 인스트루먼트 (refresh 요청 실제 URL 및 응답 status 확정)
     __FETCH_CALLS?: Array<string | Request>;
+    __FETCH_RESULTS?: Array<{ url: string; status: number | null; ok: boolean; error?: string }>;
 
     // 필요하면 디버깅 훅
     __E2E__?: {

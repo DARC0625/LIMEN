@@ -61,15 +61,27 @@ async function injectHarness(
   // 순서: tokenManager initScript → harness-entry initScript → goto(local.test)
   
   // ✅ T+0 ~ T+2h: fetch 캡처 인스트루먼트를 initScript로 추가
-  // refresh 요청 실제 URL을 확정하기 위해 fetch 호출을 캡처
+  // refresh 요청 실제 URL과 응답 status를 확정하기 위해 fetch 호출을 캡처
   await context.addInitScript({
     content: `
       window.__FETCH_CALLS = [];
-      const _fetch = window.fetch;
-      window.fetch = function(...args) {
-        const url = args[0] instanceof Request ? args[0].url : String(args[0]);
-        window.__FETCH_CALLS.push(url);
-        return _fetch.apply(this, args);
+      window.__FETCH_RESULTS = [];
+      const _fetch = window.fetch.bind(window);
+      window.fetch = async function(input, init) {
+        const url = typeof input === 'string'
+          ? input
+          : (input instanceof URL ? input.toString() : input.url);
+        
+        try {
+          const res = await _fetch(input, init);
+          window.__FETCH_CALLS.push(url);
+          window.__FETCH_RESULTS.push({ url, status: res.status, ok: res.ok });
+          return res;
+        } catch (e) {
+          window.__FETCH_CALLS.push(url);
+          window.__FETCH_RESULTS.push({ url, status: null, ok: false, error: String(e) });
+          throw e;
+        }
       };
     `,
   });
@@ -183,6 +195,26 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     let refreshCallCount = 0;
     let refreshStatusSeen: number | null = null;
     
+    // ✅ B-2) route 패턴을 **/api/auth/refresh**로 고정 (절대/상대 경로 모두 매칭)
+    await context.route('**/api/auth/refresh**', async (route) => {
+      refreshCallCount++;
+      refreshStatusSeen = 401; // ✅ 2) S4 harness에서 "refresh 응답 status"를 같이 반환
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ 
+          error: 'Invalid or expired refresh token',
+          message: 'Token refresh failed'
+        }),
+        headers: {
+          'access-control-allow-origin': '*',
+          'cache-control': 'no-store',
+        },
+      });
+    });
+    
+    // ✅ 다른 모든 요청은 abort (hermetic: 실서버 의존 제거)
+    // 단, http://local.test/*는 injectHarness에서 처리하므로 건너뛰기
     await context.route('**/*', async (route) => {
       const url = route.request().url();
       
@@ -192,27 +224,7 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
         return;
       }
       
-      // ✅ S4: refresh 엔드포인트만 401로 강제 실패
-      // ✅ 1) refresh route fulfill이 "반드시 401"을 주는지 재확인
-      // Playwright route.fulfill에서 아래 3개가 들어가야 함:
-      // status: 401
-      // contentType: 'application/json'
-      // body: JSON.stringify({ ... })
-      if (url.includes('/auth/refresh') || url.includes('/api/auth/refresh')) {
-        refreshCallCount++;
-        refreshStatusSeen = 401; // ✅ 2) S4 harness에서 "refresh 응답 status"를 같이 반환
-        await route.fulfill({
-          status: 401,
-          contentType: 'application/json',
-          body: JSON.stringify({ 
-            error: 'Invalid or expired refresh token',
-            message: 'Token refresh failed'
-          }),
-        });
-        return;
-      }
-      
-      // ✅ 다른 모든 요청은 abort (hermetic: 실서버 의존 제거)
+      // refresh는 위에서 이미 처리했으므로 여기서는 abort
       await route.abort();
     });
     
@@ -254,22 +266,24 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       }
     });
     
-    // ✅ 2) S4 harness에서 "refresh 응답 status"를 같이 반환
-    // refreshStatusSeen을 result에 추가
-    const resultWithStatus = {
-      ...result,
-      refreshStatusSeen: refreshStatusSeen,
-    };
-    
     // ✅ 계약 기반 검증
     if (!result.ok) {
       console.error('[E2E] S4 TEST FAILED - result:', result);
       throw new Error(`S4 test failed: ${result.reason}`);
     }
     
+    // ✅ B-1) fetch 래퍼에서 response.status 기록 확인
+    const fetchResults = await page.evaluate(() => window.__FETCH_RESULTS || []);
+    const refreshResult = fetchResults.find((r: { url: string; status: number | null }) => 
+      r.url.includes('/api/auth/refresh') || r.url.includes('/auth/refresh')
+    );
+    const refreshStatusFromFetch = refreshResult?.status ?? null;
+    
     // ✅ 이거 한 줄만 바꾸면 디버깅 속도가 10배 빨라져: expect 전에 result 출력
     console.log('[E2E] S4 result:', JSON.stringify(result, null, 2));
-    console.log('[E2E] S4 refreshStatusSeen:', refreshStatusSeen);
+    console.log('[E2E] S4 refreshStatusSeen (route):', refreshStatusSeen);
+    console.log('[E2E] S4 refreshStatusFromFetch (actual):', refreshStatusFromFetch);
+    console.log('[E2E] S4 fetchResults:', fetchResults);
     
     // ✅ 확정 판정용 최소 계측 확인
     // 케이스 A: refreshCallCount === 0 → refresh 트리거 실패 (테스트 준비 단계 문제)
@@ -278,20 +292,24 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       refreshCallCount: result.refreshCallCount,
       refreshUrls: result.refreshUrls,
       refreshStatusSeen,
+      refreshStatusFromFetch,
       clearSessionCalledCount: result.clearSessionCalledCount,
       sessionCleared: result.sessionCleared,
     });
+    
+    // ✅ refreshStatusSeen이 null이면 fetch 결과에서 가져오기
+    const finalRefreshStatus = refreshStatusSeen ?? refreshStatusFromFetch;
     
     // ✅ 테스트를 2단계로 나눔 (원인 분리)
     // 1단계: refresh가 최소 1회 발생했는지 확인
     expect(result.refreshCallCount).toBeGreaterThanOrEqual(1);
     
     // 2단계: refresh가 401이면 세션 정리 호출 확인
-    if (refreshStatusSeen === 401) {
+    if (finalRefreshStatus === 401) {
       expect(result.clearSessionCalledCountB).toBe(1);
     } else {
       // refresh가 발생했지만 401이 아닌 경우 (테스트 설정 문제)
-      throw new Error(`Expected refresh status 401, but got ${refreshStatusSeen}. refreshCallCount: ${result.refreshCallCount}`);
+      throw new Error(`Expected refresh status 401, but got ${finalRefreshStatus} (route: ${refreshStatusSeen}, fetch: ${refreshStatusFromFetch}). refreshCallCount: ${result.refreshCallCount}`);
     }
     
     // ✅ 만약 A에서는 null인데 B에서 다시 토큰이 생기면 "재세팅" 문제고,
