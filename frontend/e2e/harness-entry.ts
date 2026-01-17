@@ -180,14 +180,9 @@ try {
       const snapshotB = testHook.getStorageSnapshot();
       const clearSessionCalledCountB = testHook.getClearSessionCalledCount();
       
-      // 만약 A에서는 null인데 B에서 다시 토큰이 생기면 "재세팅" 문제고,
-      // A부터 토큰이 남아있으면 "정리 자체가 안 됨" 문제
-      const sessionClearedA = !snapshotA.refreshToken && !snapshotA.expiresAt && !snapshotA.csrfToken;
-      const sessionClearedB = !snapshotB.refreshToken && !snapshotB.expiresAt && !snapshotB.csrfToken;
-      
       return {
         ok: true,
-        sessionCleared: sessionClearedB, // 최종 상태
+        sessionCleared: !snapshotB.refreshToken && !snapshotB.expiresAt && !snapshotB.csrfToken, // 최종 상태
         clearSessionCalledCount: clearSessionCalledCountB,
         snapshotA,
         snapshotB,
@@ -251,19 +246,20 @@ try {
       // ✅ Promise.allSettled([tokenManager.getAccessToken(), tokenManager.getAccessToken()])
       // 같은 페이지에서 "동시 2회 호출"로 single-flight를 증명 가능
       // 그리고 내부에서 fetch 캡처된 refresh 호출 횟수만 반환
-      const fetchCallsBefore = (window.__FETCH_CALLS || []).length;
+      const refreshCalls = (window.__FETCH_CALLS || []).filter((url: string) => 
+        typeof url === 'string' && url.includes('refresh')
+      );
       
       const results = await Promise.allSettled([
         withTimeout(getAccessToken(), 3000, 'getAccessToken (call 1)'),
         withTimeout(getAccessToken(), 3000, 'getAccessToken (call 2)'),
       ]);
       
-      const fetchCallsAfter = (window.__FETCH_CALLS || []).length;
-      const refreshCalls = (window.__FETCH_CALLS || []).filter((url: string) => 
+      const refreshCallsAfter = (window.__FETCH_CALLS || []).filter((url: string) => 
         typeof url === 'string' && url.includes('refresh')
       );
       
-      const refreshCallCount = refreshCalls.length;
+      const refreshCallCount = refreshCallsAfter.length;
       
       // 두 호출이 모두 완료되었는지 확인
       const allSettled = results.every(r => r.status === 'fulfilled');

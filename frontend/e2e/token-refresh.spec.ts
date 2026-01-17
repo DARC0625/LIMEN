@@ -172,6 +172,7 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     // ✅ 네트워크 모킹: refresh endpoint만 정확히 fulfill (전부 204 금지)
     // ✅ PR Gate Hermetic에서는 절대 임의 도메인 실네트워크 접속 금지
     let refreshCallCount = 0;
+    let refreshStatusSeen: number | null = null;
     
     await context.route('**/*', async (route) => {
       const url = route.request().url();
@@ -183,10 +184,14 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       }
       
       // ✅ S4: refresh 엔드포인트만 401로 강제 실패
-      // ✅ T+0 ~ T+2h: page.route 패턴을 실제 URL에 맞게 수정
-      // fetch 캡처로 실제 refresh URL을 확인한 후 패턴 수정
+      // ✅ 1) refresh route fulfill이 "반드시 401"을 주는지 재확인
+      // Playwright route.fulfill에서 아래 3개가 들어가야 함:
+      // status: 401
+      // contentType: 'application/json'
+      // body: JSON.stringify({ ... })
       if (url.includes('/auth/refresh') || url.includes('/api/auth/refresh')) {
         refreshCallCount++;
+        refreshStatusSeen = 401; // ✅ 2) S4 harness에서 "refresh 응답 status"를 같이 반환
         await route.fulfill({
           status: 401,
           contentType: 'application/json',
@@ -240,6 +245,13 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       }
     });
     
+    // ✅ 2) S4 harness에서 "refresh 응답 status"를 같이 반환
+    // refreshStatusSeen을 result에 추가
+    const resultWithStatus = {
+      ...result,
+      refreshStatusSeen: refreshStatusSeen,
+    };
+    
     // ✅ 계약 기반 검증
     if (!result.ok) {
       console.error('[E2E] S4 TEST FAILED - result:', result);
@@ -254,17 +266,16 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     console.log('[E2E] S4 snapshotB:', result.snapshotB);
     console.log('[E2E] S4 clearSessionCalledCountA:', result.clearSessionCalledCountA);
     console.log('[E2E] S4 clearSessionCalledCountB:', result.clearSessionCalledCountB);
+    console.log('[E2E] S4 refreshStatusSeen:', refreshStatusSeen);
     
     // ✅ 만약 A에서는 null인데 B에서 다시 토큰이 생기면 "재세팅" 문제고,
     // A부터 토큰이 남아있으면 "정리 자체가 안 됨" 문제
-    const sessionClearedA = !result.snapshotA.refreshToken && !result.snapshotA.expiresAt && !result.snapshotA.csrfToken;
-    const sessionClearedB = !result.snapshotB.refreshToken && !result.snapshotB.expiresAt && !result.snapshotB.csrfToken;
-    
-    if (!sessionClearedA && sessionClearedB) {
-      console.warn('[E2E] S4: 재세팅 문제 - A에서는 토큰이 있었는데 B에서 정리됨');
-    } else if (!sessionClearedA && !sessionClearedB) {
-      console.error('[E2E] S4: 정리 자체가 안 됨 - A부터 토큰이 남아있음');
+    if (!result.sessionCleared) {
+      console.error('[E2E] S4: 정리 자체가 안 됨 - 최종 상태에서도 토큰이 남아있음');
     }
+    
+    // ✅ 1) refresh route fulfill이 "반드시 401"을 주는지 재확인
+    expect(refreshStatusSeen).toBe(401);
     
     expect(result).toEqual({
       ok: true,

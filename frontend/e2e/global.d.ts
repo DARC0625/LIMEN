@@ -17,6 +17,7 @@ declare global {
       snapshotB: { refreshToken: string | null; expiresAt: string | null; csrfToken: string | null };
       clearSessionCalledCountA: number;
       clearSessionCalledCountB: number;
+      refreshStatusSeen?: number | null; // ✅ 2) S4 harness에서 "refresh 응답 status"를 같이 반환
     } | { ok: false; reason: string }>;
 
     // tokenManager를 주입해 쓸 때
