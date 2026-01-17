@@ -12,8 +12,8 @@ import type { SessionResponse } from '../../types';
 /**
  * ✅ P1-6: 테스트용 Clock 생성 (시간 제어 가능)
  */
-export function createTestClock(initialNow: number = Date.now()) {
-  let now = initialNow;
+export function createTestClock(initialNow?: number) {
+  let now = initialNow ?? (typeof Date !== 'undefined' ? Date.now() : 0);
   return {
     now: () => now,
     advance: (ms: number) => {
@@ -43,8 +43,11 @@ export function createFakeTokenManager(options: {
     getAccessTokenImpl,
   } = options;
 
+  // ✅ P1-6: clock을 주입받아 사용하도록 변경 (테스트에서 clock을 전달해야 함)
+  // hasValidToken은 clock 없이도 동작하도록 기본값 사용
+  const defaultNow = typeof Date !== 'undefined' ? Date.now() : 0;
   return {
-    hasValidToken: jest.fn(() => refreshToken !== null && expiresAt !== null && expiresAt > Date.now()),
+    hasValidToken: jest.fn(() => refreshToken !== null && expiresAt !== null && expiresAt > defaultNow),
     getAccessToken: jest.fn(getAccessTokenImpl || (async () => accessToken)),
     getRefreshToken: jest.fn(() => refreshToken),
     getExpiresAt: jest.fn(() => expiresAt),
