@@ -5,23 +5,9 @@
  * S4: refresh 실패 시 강제 로그아웃
  * 
  * ✅ Hermetic E2E: 완전 모킹 기반, 실서버 의존 없음
- * - 모든 네트워크를 route로 차단 (allowlist)
- * - 필요한 API만 가짜로 응답
- * - CI Gate에서 안정적으로 실행 가능
- * 
- * ✅ Hermetic E2E의 정의 (PR Gate)
- * - 절대 금지: 실제 서버 접근, 실제 로그인 페이지 접근, page.goto(BASE_URL) 의존
- * - 허용: page.route() 기반 API 완전 모킹, context.addInitScript()로 storage/cookie 세팅
- * - 실패 시 "프론트 로직 결함"만 의미해야 함
- * - Hermetic E2E에서 net::ERR_FAILED가 나오면 테스트 설계가 틀린 것임
- * 
- * ✅ 테스트 코드 작성 원칙 (미래 대응)
- * - 브라우저별 분기 로직 금지 (if (browser === 'firefox'))
- * - 타이밍 의존 sleep 최소화
- * - DOM 내부 구조 직접 의존 금지
- * - 사용자 행위 중심
- * - 상태 전이는 observable 결과로만 검증
- * - 모든 E2E는 idempotent
+ * - 앱에 기대지 말고, 토큰 로직을 테스트 전용 Harness로 실행
+ * - "브라우저 + origin + storage + 네트워크"만 사용
+ * - Next 앱 라우팅/번들/페이지(/login, /dashboard)에 기대지 않음
  * 
  * 실행:
  * npm run test:e2e
@@ -29,29 +15,45 @@
  * npx playwright test e2e/token-refresh.spec.ts
  */
 
-import { test, expect, type Page, type BrowserContext } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 /**
- * ✅ Hermetic E2E 표준: route-fulfill로 "가짜 HTTP origin" 생성
+ * ✅ Hermetic E2E 표준: route-fulfill로 "가짜 HTTP origin" 생성 + harness.js 제공
  * 
  * 핵심: 실서버 없이도 http://local.test 같은 origin을 Playwright가 '문서로 인식'하도록 fulfill
  * - localStorage/쿠키/탭 동기화 테스트를 정석대로 계속 밀어붙일 수 있음
  * - hermetic 원칙 유지 (실서버 의존 없음)
  */
-async function bootHermeticOrigin(page: Page) {
-  // 모든 요청을 네트워크 없이 fulfill (문서 포함)
+async function bootHermeticOrigin(page: Page, harnessJs: string) {
+  // ✅ 네트워크 모킹: document와 harness.js만 fulfill, 나머지는 abort
   await page.route('**/*', async (route) => {
     const req = route.request();
-    // document 요청은 최소 HTML로
+    const url = route.request().url();
+    
+    // document 요청은 harness.js를 포함한 HTML로
     if (req.resourceType() === 'document') {
       return route.fulfill({
         status: 200,
         contentType: 'text/html',
-        body: '<!doctype html><html><head></head><body>hermetic</body></html>',
+        body: `<!doctype html>
+<html>
+<head>
+  <script>
+    ${harnessJs}
+  </script>
+</head>
+<body>
+  <h1>Hermetic E2E Test</h1>
+</body>
+</html>`,
       });
     }
-    // 나머지는 필요 시 케이스별로 mock
-    return route.fulfill({ status: 204, body: '' });
+    
+    // harness.js 요청은 이미 HTML에 포함되어 있으므로 처리 불필요
+    // 다른 모든 요청은 abort (refresh endpoint는 테스트에서 별도 처리)
+    await route.abort();
   });
 
   // ✅ HTTP origin 확보 (실서버 불필요: route가 fulfill)
@@ -59,22 +61,30 @@ async function bootHermeticOrigin(page: Page) {
 }
 
 test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', () => {
+  // harness.js 로드 (한 번만)
+  const harnessJsPath = join(__dirname, 'harness.js');
+  let harnessJs: string;
+  
+  test.beforeAll(() => {
+    harnessJs = readFileSync(harnessJsPath, 'utf-8');
+  });
+
   /**
    * S4: refresh 실패 시 강제 로그아웃 테스트
    * 
    * 시나리오:
    * 1. 로그인 상태 유지 (localStorage에 토큰 설정)
    * 2. refresh 엔드포인트를 401로 강제 실패
-   * 3. API 호출 시도 (자동 refresh 트리거)
+   * 3. window.runS4() 호출 (tokenManager.getAccessToken() 트리거)
    * 4. 기대: 모든 저장소 정리 + /login?reason=... 리다이렉트
-   * 
-   * ✅ Hermetic: 실제 네비게이션 없이 API 레벨에서만 테스트
    */
   test('S4: refresh 실패 시 전역 세션 정리 및 강제 로그아웃', async ({ page, context }) => {
-    // ✅ Hermetic origin 부팅 (route-fulfill로 가짜 HTTP origin 생성)
-    await bootHermeticOrigin(page);
+    // ✅ Hermetic origin 부팅 (harness.js 포함)
+    await bootHermeticOrigin(page, harnessJs);
     
-    // ✅ 완전 모킹: 모든 네트워크를 차단하고 필요한 API만 허용
+    // ✅ 네트워크 모킹: refresh endpoint만 정확히 fulfill (전부 204 금지)
+    let refreshCallCount = 0;
+    
     await context.route('**/*', async (route) => {
       const url = route.request().url();
       const req = route.request();
@@ -84,12 +94,23 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
         return route.fulfill({
           status: 200,
           contentType: 'text/html',
-          body: '<!doctype html><html><head></head><body>hermetic</body></html>',
+          body: `<!doctype html>
+<html>
+<head>
+  <script>
+    ${harnessJs}
+  </script>
+</head>
+<body>
+  <h1>Hermetic E2E Test</h1>
+</body>
+</html>`,
         });
       }
       
-      // ✅ refresh 엔드포인트만 401로 강제 실패
+      // ✅ S4: refresh 엔드포인트만 401로 강제 실패
       if (url.includes('/api/auth/refresh')) {
+        refreshCallCount++;
         await route.fulfill({
           status: 401,
           contentType: 'application/json',
@@ -101,7 +122,7 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
         return;
       }
       
-      // ✅ 다른 모든 요청은 차단 (hermetic: 실서버 의존 제거)
+      // ✅ 다른 모든 요청은 abort (hermetic: 실서버 의존 제거)
       await route.abort();
     });
 
@@ -112,7 +133,7 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       sessionStorage.setItem('csrf_token', 'test-csrf-token');
     });
 
-    // ✅ Given: 초기 저장소 상태 확인 (명확한 단계별 상태 명명)
+    // ✅ Given: 초기 저장소 상태 확인
     const storageStateBefore = await page.evaluate(() => {
       return {
         refreshToken: localStorage.getItem('refresh_token'),
@@ -125,39 +146,37 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     expect(storageStateBefore.expiresAt).toBeTruthy();
     expect(storageStateBefore.csrfToken).toBe('test-csrf-token');
 
-    // ✅ When: API 호출을 직접 트리거 (페이지 이동으로 refresh를 유발 ❌)
-    // ✅ Hermetic: fetch를 직접 호출하여 refresh 트리거
-    // 실제 앱에서는 API 호출 시 자동으로 refresh가 트리거됨
-    // 여기서는 fetch를 직접 호출하여 refresh 엔드포인트를 트리거
+    // ✅ When: harness.runS4() 호출 (함수 호출로 트리거, 페이지 이동으로 트리거 ❌)
+    // tokenManager를 주입 (harness.js가 사용)
     await page.evaluate(async () => {
-      // ✅ fetch를 직접 호출하여 refresh 트리거
-      // 실제 앱에서는 apiRequest가 자동으로 tokenManager.getAccessToken()을 호출
-      // 만료된 토큰 상태에서 API 호출 시 자동으로 refresh 시도
-      try {
-        // refresh 엔드포인트를 직접 호출 (tokenManager가 자동으로 호출하는 것과 동일)
-        await fetch('/api/auth/refresh', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            refresh_token: localStorage.getItem('refresh_token'),
-          }),
-        });
-      } catch (error) {
-        // refresh 실패는 예상된 동작 (401 응답)
-        console.log('[E2E] Refresh failed as expected:', error);
+      const { tokenManager } = await import('/lib/tokenManager.js');
+      (window as any).__TOKEN_MANAGER = tokenManager;
+    });
+    
+    const result = await page.evaluate(async () => {
+      // runS4 실행
+      if (typeof (window as any).runS4 === 'function') {
+        return await (window as any).runS4();
+      } else {
+        throw new Error('runS4 function not found');
       }
     });
 
-    // ✅ Then: refresh 실패 처리 대기
-    // ❌ waitForTimeout 금지 - 명시적 대기 사용
-    // localStorage 정리 완료를 기다림
-    await page.waitForFunction(() => {
-      return localStorage.getItem('refresh_token') === null;
-    }, { timeout: 5000 });
+    // ✅ Then: 명시적 이벤트/결과로 검증 (localStorage polling 금지)
+    // 세션 정리 플래그 확인
+    const sessionCleared = await page.evaluate(() => {
+      return (window as any).__SESSION_CLEARED === true;
+    });
+    
+    // 리다이렉트 확인
+    const redirectToLogin = await page.evaluate(() => {
+      return (window as any).__REDIRECT_TO_LOGIN;
+    });
 
-    // ✅ Then: 모든 저장소 정리 확인
+    expect(sessionCleared).toBe(true);
+    expect(redirectToLogin).toContain('/login');
+    
+    // ✅ 최종 저장소 상태 확인
     const storageStateAfter = await page.evaluate(() => {
       return {
         refreshToken: localStorage.getItem('refresh_token'),
@@ -169,6 +188,9 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     expect(storageStateAfter.refreshToken).toBeNull();
     expect(storageStateAfter.expiresAt).toBeNull();
     expect(storageStateAfter.csrfToken).toBeNull();
+    
+    // ✅ refresh 호출 횟수 확인 (정확히 1회)
+    expect(refreshCallCount).toBe(1);
   });
 
   /**
@@ -176,10 +198,8 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
    * 
    * 시나리오:
    * 1. 같은 context에서 2개 page 생성 (localStorage 공유)
-   * 2. 동시에 API 호출 (access token 만료 상태)
-   * 3. 기대: refresh 호출 최소화 (single-flight) + 둘 다 정상 토큰 획득/요청 성공
-   * 
-   * ✅ Hermetic: 실제 네비게이션 없이 API 레벨에서만 테스트
+   * 2. 동시에 window.runS3() 호출 (access token 만료 상태)
+   * 3. 기대: refresh 호출 최소화 (single-flight) + 둘 다 정상 토큰 획득
    */
   test('S3: 멀티탭 동시 refresh 경합 방지 (single-flight)', async ({ context }) => {
     // ✅ Given: 같은 context에서 2개 page 생성 (localStorage 공유)
@@ -187,10 +207,10 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     const page2 = await context.newPage();
 
     // ✅ Hermetic origin 부팅 (같은 context면 origin 공유)
-    await bootHermeticOrigin(page1);
-    await bootHermeticOrigin(page2);
+    await bootHermeticOrigin(page1, harnessJs);
+    await bootHermeticOrigin(page2, harnessJs);
 
-    // ✅ 완전 모킹: 모든 네트워크를 차단하고 필요한 API만 허용
+    // ✅ 네트워크 모킹: refresh endpoint만 정확히 fulfill
     let refreshCallCount = 0;
     const refreshCalls: Array<{ timestamp: number }> = [];
     
@@ -203,11 +223,21 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
         return route.fulfill({
           status: 200,
           contentType: 'text/html',
-          body: '<!doctype html><html><head></head><body>hermetic</body></html>',
+          body: `<!doctype html>
+<html>
+<head>
+  <script>
+    ${harnessJs}
+  </script>
+</head>
+<body>
+  <h1>Hermetic E2E Test</h1>
+</body>
+</html>`,
         });
       }
       
-      // ✅ refresh 엔드포인트만 성공 응답
+      // ✅ S3: refresh 엔드포인트만 200 + 성공 응답
       if (url.includes('/api/auth/refresh')) {
         refreshCallCount++;
         refreshCalls.push({ timestamp: Date.now() });
@@ -227,7 +257,7 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
         return;
       }
       
-      // ✅ 다른 모든 요청은 차단 (hermetic: 실서버 의존 제거)
+      // ✅ 다른 모든 요청은 abort (hermetic: 실서버 의존 제거)
       await route.abort();
     });
 
@@ -239,7 +269,7 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       sessionStorage.setItem('csrf_token', 'test-csrf-token');
     });
     
-    // ✅ Given: 초기 저장소 상태 확인 (명확한 단계별 상태 명명)
+    // ✅ Given: 초기 저장소 상태 확인
     const storageStateBefore = await page1.evaluate(() => {
       return {
         refreshToken: localStorage.getItem('refresh_token'),
@@ -252,60 +282,53 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     expect(storageStateBefore.expiresAt).toBeTruthy();
     expect(storageStateBefore.csrfToken).toBe('test-csrf-token');
 
-    // ✅ When: 두 페이지에서 동시에 API 호출 (refresh 트리거)
-    // ✅ Hermetic: fetch를 직접 호출하여 refresh 트리거
+    // ✅ When: 두 페이지에서 동시에 window.runS3() 호출 (함수 호출로 트리거)
+    // tokenManager를 주입 (harness.js가 사용)
+    await page1.evaluate(async () => {
+      const { tokenManager } = await import('/lib/tokenManager.js');
+      (window as any).__TOKEN_MANAGER = tokenManager;
+    });
+    
+    await page2.evaluate(async () => {
+      const { tokenManager } = await import('/lib/tokenManager.js');
+      (window as any).__TOKEN_MANAGER = tokenManager;
+    });
+    
     const promise1 = page1.evaluate(async () => {
-      try {
-        // refresh 엔드포인트를 직접 호출 (tokenManager가 자동으로 호출하는 것과 동일)
-        const response = await fetch('/api/auth/refresh', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            refresh_token: localStorage.getItem('refresh_token'),
-          }),
-        });
-        return response.ok;
-      } catch (error) {
-        console.log('[E2E] Page1 refresh attempt:', error);
-        return false;
+      if (typeof (window as any).runS3 === 'function') {
+        return await (window as any).runS3();
+      } else {
+        throw new Error('runS3 function not found');
       }
     });
     
     const promise2 = page2.evaluate(async () => {
-      try {
-        // refresh 엔드포인트를 직접 호출 (tokenManager가 자동으로 호출하는 것과 동일)
-        const response = await fetch('/api/auth/refresh', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            refresh_token: localStorage.getItem('refresh_token'),
-          }),
-        });
-        return response.ok;
-      } catch (error) {
-        console.log('[E2E] Page2 refresh attempt:', error);
-        return false;
+      if (typeof (window as any).runS3 === 'function') {
+        return await (window as any).runS3();
+      } else {
+        throw new Error('runS3 function not found');
       }
     });
     
     await Promise.all([promise1, promise2]);
     
-    // ✅ Then: refresh 호출 횟수 확인
-    // 주의: 각 페이지마다 별도의 tokenManager 인스턴스가 있으므로
-    // 최악의 경우 2회 호출될 수 있음 (single-flight가 인스턴스별로 작동)
-    // 하지만 이상적으로는 1회여야 함 (localStorage 공유로 인한 동기화)
+    // ✅ Then: refresh 호출 횟수 확인 (정확히 1회 - single-flight)
     console.log(`[E2E] Refresh call count: ${refreshCallCount}, calls:`, refreshCalls);
+    expect(refreshCallCount).toBe(1);
     
-    // ✅ 최소한 2회 이하여야 함 (각 페이지당 1회)
-    // 실제로는 single-flight가 완벽하게 작동하면 1회일 수 있음
-    expect(refreshCallCount).toBeLessThanOrEqual(2);
+    // ✅ Then: 명시적 이벤트/결과로 검증 (localStorage polling 금지)
+    const refreshCompleted1 = await page1.evaluate(() => {
+      return (window as any).__REFRESH_COMPLETED === true;
+    });
     
-    // ✅ Then: 두 페이지 모두 정상적으로 토큰 획득 확인 (명확한 단계별 상태 명명)
-    // ✅ 상태 전이는 observable 결과로만 검증 (사용자 행위 중심)
+    const refreshCompleted2 = await page2.evaluate(() => {
+      return (window as any).__REFRESH_COMPLETED === true;
+    });
+    
+    expect(refreshCompleted1).toBe(true);
+    expect(refreshCompleted2).toBe(true);
+    
+    // ✅ 최종 토큰 상태 확인
     const storageStateAfter = await page1.evaluate(() => {
       return {
         refreshToken: localStorage.getItem('refresh_token'),
