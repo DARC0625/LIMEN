@@ -3,7 +3,9 @@
  * TokenManager, Security, AuthGuard의 인증 로직을 통합 관리
  */
 
-import { tokenManager, type TokenManagerPort } from '../tokenManager';
+import { tokenManager } from '../tokenManager';
+// ✅ Command Jest-2: TokenManagerPort는 타입으로만 사용 (런타임에서는 tokenManager 사용)
+// type import는 실제 사용 시에만 필요하므로, 지금은 tokenManager만 import
 import { authAPI } from '../api/auth';
 import { getUserRoleFromToken, isUserApprovedFromToken, isTokenValid } from '../utils/token';
 import type { SessionResponse } from '../types';

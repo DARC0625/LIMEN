@@ -7,7 +7,11 @@ import '@testing-library/jest-dom';
 // jsdom/node 둘 다 안전하게 동작
 if (!globalThis.localStorage) {
   class LocalStorageMock implements Storage {
-    private store = new Map<string, string>();
+    private store: Map<string, string>;
+
+    constructor() {
+      this.store = new Map<string, string>();
+    }
 
     getItem(key: string): string | null {
       return this.store.has(key) ? this.store.get(key)! : null;
