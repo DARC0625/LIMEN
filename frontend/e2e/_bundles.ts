@@ -11,6 +11,11 @@ import * as esbuild from 'esbuild';
 /**
  * ✅ tokenManager를 브라우저에서 import 가능하게 IIFE 번들로 생성
  * 
+ * ✅ 정석: E2E 전용 test-entry 번들 사용
+ * - 제품 코드(tokenManager.ts)는 순수하게 유지
+ * - 테스트 훅(__test)은 tokenManager-test-entry.ts에서 top-level로 강제 부착
+ * - 이렇게 하면 "제품 번들에 훅이 포함되냐" 싸움 자체가 사라진다
+ * 
  * A안: esbuild 번들링에서 process/env 완전 치환
  * 브라우저 번들에서 process 자체가 사라지게 만들기
  * 
@@ -18,10 +23,11 @@ import * as esbuild from 'esbuild';
  * window.__TOKEN_MANAGER에 직접 할당되도록 번들링
  */
 export async function buildTokenManagerIIFE(): Promise<string> {
-  const tokenManagerPath = join(__dirname, '../lib/tokenManager.ts');
+  // ✅ E2E 전용 test-entry 사용 (테스트 훅 포함)
+  const tokenManagerTestEntryPath = join(__dirname, 'tokenManager-test-entry.ts');
   
   const result = await esbuild.build({
-    entryPoints: [tokenManagerPath],
+    entryPoints: [tokenManagerTestEntryPath],
     bundle: true,
     write: false,
     format: 'iife', // ✅ IIFE로 변경 (전역에 붙음)

@@ -91,6 +91,29 @@ async function injectHarness(
   // ✅ 1. __TOKEN_MANAGER 존재 확인
   const hasTokenManager = await page.evaluate(() => typeof window.__TOKEN_MANAGER !== 'undefined');
   expect(hasTokenManager).toBe(true);
+  
+  // ✅ (A) tokenManager 객체가 다른 인스턴스다 - 진단 로그
+  // harness가 잡은 tokenManager가 실제로는 default export가 아니라 named export / re-export / wrapper 일 수 있음
+  const tokenManagerDiag = await page.evaluate(() => {
+    const tm = window.__TOKEN_MANAGER;
+    if (!tm) return null;
+    
+    return {
+      hasTest: Boolean(tm && '__test' in tm),
+      keys: Object.keys(tm).slice(0, 20), // 20개까지만
+      constructorName: tm?.constructor?.name ?? typeof tm,
+      hasGetAccessToken: typeof (tm as { getAccessToken?: unknown }).getAccessToken === 'function',
+    };
+  });
+  
+  // ✅ CI용 단일 진단 로그 (1회만)
+  // PR Gate 로그에 한 줄만 찍어라. 딱 이거면 충분
+  console.log('[E2E] TOKEN_MANAGER_TEST_HOOK', tokenManagerDiag);
+  
+  // ✅ 훅 포함 여부 100% 확정
+  if (!tokenManagerDiag || !tokenManagerDiag.hasTest) {
+    throw new Error(`tokenManager.__test is not available. Diagnostic: ${JSON.stringify(tokenManagerDiag)}`);
+  }
 
   // ✅ 2. __HARNESS_LOADED_AT 존재 확인 ← 여기서 갈림
   // (A) __HARNESS_LOADED_AT 자체가 없다
