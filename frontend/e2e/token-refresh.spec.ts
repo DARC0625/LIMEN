@@ -214,10 +214,11 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
       });
     });
     
-    // ✅ P0-3: "허용된 API 외엔 즉시 실패" 정책을 route 레벨에서 강제
-    // (a) 문서 로딩(local.test)은 항상 즉시 fulfill(HTML) - injectHarness에서 처리
-    // (b) /api/**는 "허용 목록"만 fulfill
-    // (c) 그 외 모든 요청은 즉시 abort (pending 금지)
+    // ✅ Command 2: allowlist route 재구성 + abort 로그 수집
+    // 허용 목록: http://local.test/*, /api/auth/refresh
+    // 그 외 모든 요청은 즉시 abort + 로그 수집
+    const abortedUrls: string[] = [];
+    
     await context.route('**/*', async (route) => {
       const url = route.request().url();
       const request = route.request();
@@ -234,9 +235,10 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
         return;
       }
       
-      // ✅ (c) 그 외 모든 요청은 즉시 abort (pending 금지)
-      // 이렇게 하면 "몰래 나가는 요청"이 있으면 바로 실패하고,
-      // runS4는 영원히 안 멈추는 대신 즉시 {ok:false, reason}으로 떨어진다
+      // ✅ Command 2: allowlist 밖 요청은 즉시 abort + 로그 수집
+      // "몰래 나가는 요청"을 즉시 찾기 위해 abort된 URL 목록을 로그로 남김
+      abortedUrls.push(url);
+      console.log('[E2E] Aborted request (not in allowlist):', url);
       await route.abort();
     });
     

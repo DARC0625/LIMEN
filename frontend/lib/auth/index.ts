@@ -15,6 +15,17 @@ import { logger } from '../utils/logger';
 export interface AuthCheckResult {
   valid: boolean;
   reason?: string;
+  // ✅ Command 1: debug payload로 구조화해서 반환 (프로덕션 안전)
+  debug?: {
+    hasAccessToken: boolean;
+    hasRefreshToken: boolean;
+    expiresAt: number | null;
+    usedCache: boolean;
+    backendStatus?: number;
+    backendOk?: boolean;
+    checkBackendSessionCalled?: boolean;
+    checkLocalStorageTokenCalled?: boolean;
+  };
 }
 
 /**
@@ -26,6 +37,16 @@ export async function checkAuth(): Promise<AuthCheckResult> {
     return { valid: false, reason: '서버 환경에서는 인증을 확인할 수 없습니다.' };
   }
 
+  // ✅ Command 1: debug payload 수집 시작
+  const debug: AuthCheckResult['debug'] = {
+    hasAccessToken: false,
+    hasRefreshToken: tokenManager.hasValidToken(),
+    expiresAt: tokenManager.getExpiresAt(),
+    usedCache: false,
+    checkBackendSessionCalled: false,
+    checkLocalStorageTokenCalled: false,
+  };
+
   // 중요: 로그인 페이지에서는 세션 확인 요청을 보내지 않음
   // 이제 AuthGuard는 보호된 경로에서만 사용되므로 로그인 페이지 체크 불필요
   // 보호된 경로에 접근하려면 반드시 토큰이 있어야 함
@@ -35,11 +56,16 @@ export async function checkAuth(): Promise<AuthCheckResult> {
     try {
       // Access Token 가져오기 (자동 갱신)
       const accessToken = await tokenManager.getAccessToken();
+      debug.hasAccessToken = !!accessToken;
       if (accessToken) {
         // 백엔드 세션 확인
+        debug.checkBackendSessionCalled = true;
         const sessionResult = await checkBackendSession();
+        debug.backendStatus = sessionResult.debug?.backendStatus;
+        debug.backendOk = sessionResult.debug?.backendOk;
+        debug.usedCache = sessionResult.debug?.usedCache || false;
         if (sessionResult.valid) {
-          return { valid: true };
+          return { valid: true, debug };
         }
         // 세션이 유효하지 않으면 토큰 정리하지 않음 (재시도 가능)
       }
@@ -53,9 +79,13 @@ export async function checkAuth(): Promise<AuthCheckResult> {
   // 이제 AuthGuard는 보호된 경로에서만 사용되므로 로그인 페이지 체크 불필요
 
   try {
+    debug.checkBackendSessionCalled = true;
     const sessionResult = await checkBackendSession();
+    debug.backendStatus = sessionResult.debug?.backendStatus;
+    debug.backendOk = sessionResult.debug?.backendOk;
+    debug.usedCache = sessionResult.debug?.usedCache || false;
     if (sessionResult.valid) {
-      return { valid: true };
+      return { valid: true, debug };
     }
     
     // 세션이 유효하지 않으면 토큰 정리
@@ -64,11 +94,13 @@ export async function checkAuth(): Promise<AuthCheckResult> {
       tokenManager.clearTokens();
     }
     // ✅ P0-2: result.valid === false면 reason은 무조건 string이 되도록 보장
-    return { valid: false, reason: sessionResult.reason || '세션이 유효하지 않습니다.' };
+    return { valid: false, reason: sessionResult.reason || '세션이 유효하지 않습니다.', debug };
   } catch (error) {
     // 네트워크 오류 - localStorage 토큰으로 폴백
     logger.warn('[checkAuth] Backend session check failed, falling back to localStorage:', error);
-    return checkLocalStorageToken();
+    debug.checkLocalStorageTokenCalled = true;
+    const localStorageResult = await checkLocalStorageToken();
+    return { ...localStorageResult, debug };
   }
 }
 
@@ -88,21 +120,32 @@ async function checkBackendSession(): Promise<AuthCheckResult> {
   // 이제 AuthGuard는 보호된 경로에서만 사용되므로 로그인 페이지 체크 불필요
   // 보호된 경로에 접근하려면 반드시 토큰이 있어야 함
   
+  // ✅ Command 1: debug payload 수집
+  const debug: AuthCheckResult['debug'] = {
+    hasAccessToken: false,
+    hasRefreshToken: tokenManager.hasValidToken(),
+    expiresAt: tokenManager.getExpiresAt(),
+    usedCache: false,
+    checkBackendSessionCalled: true,
+  };
+  
   // React Error #321 해결: debounce 적용 - 너무 자주 호출되는 것 방지
   const now = Date.now();
   
   // 최근에 성공한 세션 확인 결과가 있으면 캐시된 결과 반환 (페이지 이동 시 세션 유지)
   if (lastSessionCheckResult?.valid && (now - lastSessionCheckTime < SESSION_CHECK_CACHE_MS)) {
     logger.log('[checkBackendSession] Using cached session check result');
-    return lastSessionCheckResult;
+    debug.usedCache = true;
+    return { ...lastSessionCheckResult, debug };
   }
   
   if (sessionCheckInProgress || (now - lastSessionCheckTime < SESSION_CHECK_DEBOUNCE_MS)) {
     // 이미 체크 중이거나 최근에 체크했으면 캐시된 결과 또는 대기 중 반환
     if (lastSessionCheckResult) {
-      return lastSessionCheckResult;
+      debug.usedCache = true;
+      return { ...lastSessionCheckResult, debug };
     }
-    return { valid: false, reason: '세션 확인 중입니다.' };
+    return { valid: false, reason: '세션 확인 중입니다.', debug };
   }
   
   sessionCheckInProgress = true;
@@ -148,6 +191,10 @@ async function checkBackendSession(): Promise<AuthCheckResult> {
       setCookies: setCookieHeaders.map(h => h.substring(0, 150)),
     });
 
+    // ✅ Command 1: debug에 backendStatus, backendOk 추가
+    debug.backendStatus = response.status;
+    debug.backendOk = response.ok;
+    
     if (response.ok) {
       const data: SessionResponse = await response.json();
       
@@ -158,27 +205,27 @@ async function checkBackendSession(): Promise<AuthCheckResult> {
       
       if (data.valid === true) {
         logger.log('[checkBackendSession] Session is valid');
-        const result = { valid: true };
-        lastSessionCheckResult = result; // 성공한 결과 캐시
+        const result = { valid: true, debug };
+        lastSessionCheckResult = { valid: true }; // 캐시는 debug 없이
         return result;
       } else {
         logger.log('[checkBackendSession] Session is invalid:', data.reason);
-        const result = { valid: false, reason: data.reason || '세션이 유효하지 않습니다.' };
-        lastSessionCheckResult = result; // 실패한 결과도 캐시 (빠른 실패)
+        const result = { valid: false, reason: data.reason || '세션이 유효하지 않습니다.', debug };
+        lastSessionCheckResult = { valid: false, reason: data.reason || '세션이 유효하지 않습니다.' }; // 캐시는 debug 없이
         return result;
       }
     } else if (response.status === 401) {
       // 401은 세션이 없거나 만료됨
       logger.log('[checkBackendSession] Session expired or not found (401)');
-      const result = { valid: false, reason: '인증이 필요합니다.' };
-      lastSessionCheckResult = result; // 실패 결과 캐시
+      const result = { valid: false, reason: '인증이 필요합니다.', debug };
+      lastSessionCheckResult = { valid: false, reason: '인증이 필요합니다.' }; // 캐시는 debug 없이
       return result;
     } else if (response.status === 403) {
       // 403은 권한 문제 (백엔드 변경으로 GET 요청에서는 이제 발생하지 않아야 함)
       // 하지만 혹시 모를 경우를 대비해 처리
       logger.warn('[checkBackendSession] Forbidden (403) - unexpected for GET request');
-      const result = { valid: false, reason: '권한이 없습니다.' };
-      lastSessionCheckResult = result; // 실패 결과 캐시
+      const result = { valid: false, reason: '권한이 없습니다.', debug };
+      lastSessionCheckResult = { valid: false, reason: '권한이 없습니다.' }; // 캐시는 debug 없이
       return result;
     } else {
       // 기타 오류는 네트워크 문제로 간주하고 예외 발생
@@ -211,24 +258,34 @@ async function checkLocalStorageToken(): Promise<AuthCheckResult> {
     return { valid: false, reason: '서버 환경에서는 인증을 확인할 수 없습니다.' };
   }
 
+  // ✅ Command 1: debug payload 수집
+  const debug: AuthCheckResult['debug'] = {
+    hasAccessToken: false,
+    hasRefreshToken: tokenManager.hasValidToken(),
+    expiresAt: tokenManager.getExpiresAt(),
+    usedCache: false,
+    checkLocalStorageTokenCalled: true,
+  };
+
   try {
     const accessToken = await tokenManager.getAccessToken();
+    debug.hasAccessToken = !!accessToken;
     if (!accessToken?.trim()) {
       // ✅ P0-2: result.valid === false면 reason은 무조건 string이 되도록 보장
-      return { valid: false, reason: '토큰이 없습니다.' };
+      return { valid: false, reason: '토큰이 없습니다.', debug };
     }
 
     // 토큰 유효성 확인
     if (!isTokenValid(accessToken)) {
       tokenManager.clearTokens();
-      return { valid: false, reason: '토큰이 유효하지 않습니다.' };
+      return { valid: false, reason: '토큰이 유효하지 않습니다.', debug };
     }
 
     // 백엔드 연결 실패 시 임시로 토큰 기반 인증 허용
-    return { valid: true };
+    return { valid: true, debug };
   } catch {
     // ✅ P0-2: result.valid === false면 reason은 무조건 string이 되도록 보장
-    return { valid: false, reason: '토큰 확인 중 오류가 발생했습니다.' };
+    return { valid: false, reason: '토큰 확인 중 오류가 발생했습니다.', debug };
   }
 }
 

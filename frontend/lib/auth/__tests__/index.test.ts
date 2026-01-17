@@ -108,6 +108,14 @@ describe('checkAuth', () => {
 
     const result = await checkAuth()
 
+    // ✅ Command 1: debug payload로 원인 확정
+    console.log('[TEST] valid session debug:', result.debug)
+    expect(result.debug).toBeDefined()
+    expect(result.debug?.checkBackendSessionCalled).toBe(true)
+    expect(result.debug?.backendStatus).toBe(200)
+    expect(result.debug?.backendOk).toBe(true)
+    expect(result.debug?.hasAccessToken).toBe(true)
+    
     // checkBackendSession이 호출되었는지 확인
     expect(global.fetch).toHaveBeenCalled()
     // 결과는 캐싱이나 debounce에 따라 다를 수 있음
@@ -598,6 +606,13 @@ describe('checkBackendSession edge cases', () => {
 
     // 캐시된 결과를 사용하는지 확인 (짧은 시간 내 재호출)
     const result2 = await checkAuth()
+    
+    // ✅ Command 1: debug payload로 원인 확정
+    console.log('[TEST] cached result debug:', result2.debug)
+    expect(result2.debug).toBeDefined()
+    expect(result2.debug?.usedCache).toBe(true)
+    expect(result2.debug?.checkBackendSessionCalled).toBe(true)
+    
     expect(result2).toBeDefined()
   })
 
@@ -691,6 +706,12 @@ describe('checkLocalStorageToken', () => {
 
     const result = await checkAuth()
 
+    // ✅ Command 1: debug payload로 원인 확정
+    console.log('[TEST] checkLocalStorageToken debug:', result.debug)
+    expect(result.debug).toBeDefined()
+    expect(result.debug?.checkLocalStorageTokenCalled).toBe(true)
+    expect(result.debug?.hasAccessToken).toBe(true)
+    
     // checkLocalStorageToken이 호출되어 valid-token으로 인증 성공
     expect(result.valid).toBe(true)
   })
@@ -804,7 +825,7 @@ describe('checkLocalStorageToken', () => {
     mockTokenManager.getCSRFToken.mockReturnValue(null)
 
     const mockSetCookieHeaders = ['session=abc123; Path=/', 'csrf=xyz789; Path=/']
-    
+
     const mockHeaders = new Headers()
     const mockResponse = {
       ok: true,
@@ -812,17 +833,24 @@ describe('checkLocalStorageToken', () => {
       headers: mockHeaders,
       json: async () => ({ valid: true }),
     } as unknown as Response
-    
+
     // getSetCookie 메서드 추가
     Object.defineProperty(mockHeaders, 'getSetCookie', {
       value: () => mockSetCookieHeaders,
       writable: true,
     })
-    
+
     ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
 
     const result = await checkAuth()
 
+    // ✅ Command 1: debug payload로 원인 확정
+    console.log('[TEST] setCookieHeaders debug:', result.debug)
+    expect(result.debug).toBeDefined()
+    expect(result.debug?.checkBackendSessionCalled).toBe(true)
+    expect(result.debug?.backendStatus).toBe(200)
+    expect(result.debug?.backendOk).toBe(true)
+    
     expect(result.valid).toBe(true)
   })
 

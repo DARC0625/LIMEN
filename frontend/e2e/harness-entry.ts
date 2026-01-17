@@ -110,9 +110,18 @@ try {
    * 정석: 훅으로 '세션 정리 함수'를 직접 노출
    * 
    * 필수 계약: { ok: true } | { ok: false, reason }
+   * 
+   * ✅ Command 2: __S4_TRACE 단계 로그로 어디서 멈췄는지 확정
    */
   window.runS4 = async function(): Promise<{ ok: true; sessionCleared: boolean } | { ok: false; reason: string }> {
+    // ✅ Command 2: __S4_TRACE 초기화 및 진행 마커
+    if (!window.__S4_TRACE) {
+      window.__S4_TRACE = [];
+    }
+    window.__S4_TRACE.push('start');
+    
     try {
+      window.__S4_TRACE.push('before loadTokenManager');
       const tokenManagerResult = await withTimeout(
         loadTokenManager(),
         1000,
@@ -120,14 +129,19 @@ try {
       );
       
       if (!tokenManagerResult.ok) {
+        window.__S4_TRACE.push('loadTokenManager failed: ' + tokenManagerResult.reason);
         return { ok: false, reason: tokenManagerResult.reason };
       }
       
+      window.__S4_TRACE.push('after loadTokenManager');
       const tokenManager = tokenManagerResult.value;
       
       if (!tokenManager || typeof tokenManager !== 'object' || !('__test' in tokenManager)) {
+        window.__S4_TRACE.push('tokenManager.__test not available');
         return { ok: false, reason: 'tokenManager.__test is not available' };
       }
+      
+      window.__S4_TRACE.push('tokenManager.__test available');
       
       const testHook = (tokenManager as { __test?: {
         setRefreshToken: (value: string | null) => void;
@@ -144,21 +158,26 @@ try {
         return { ok: false, reason: 'tokenManager.__test is not available' };
       }
       
+      window.__S4_TRACE.push('before resetClearSessionCalledCount');
       // ✅ clearSession 호출 횟수 리셋
       testHook.resetClearSessionCalledCount();
       
+      window.__S4_TRACE.push('before smoke test fetch');
       // ✅ 2-A) runS4 시작에 "강제 fetch" 한 번 (스모크 테스트)
       // initScript/route/네트워크가 정상 작동하는지 1초 안에 확정
       try {
         await fetch('/api/auth/refresh', { method: 'POST' });
-      } catch {
+        window.__S4_TRACE.push('smoke test fetch completed');
+      } catch (e) {
         // 네트워크 에러는 예상됨 (route가 401을 반환하거나 abort)
-        // unused 변수 제거
+        window.__S4_TRACE.push('smoke test fetch error: ' + String(e));
       }
       
+      window.__S4_TRACE.push('before fetchCallsBefore');
       // ✅ refresh 호출 계측 시작 (__FETCH_CALLS 초기화)
       const fetchCallsBefore = (window.__FETCH_CALLS || []).length;
       
+      window.__S4_TRACE.push('before setRefreshToken/setExpiresAt');
       // ✅ 2-B) 만료 조건을 실제로 refresh를 트리거하도록 강제
       // ✅ Port 기반: clockPort를 사용하여 시간을 제어하여 만료 상태를 결정적으로 설정
       // expiresAt을 clock.now() - 1000 같이 확실히 만료 상태로 설정
@@ -171,6 +190,7 @@ try {
         sessionStorage.setItem('csrf_token', 'test-csrf-token');
       }
       
+      window.__S4_TRACE.push('before refreshOnce');
       // ✅ refresh를 직접 호출 (만료 판단 로직에 의존하지 않음)
       // ✅ P0-3: fetch 자체에 AbortController timeout을 걸어 절대 무한대기하지 않게
       // refresh route를 401로 1회 강제 (테스트 코드에서 route 설정)
@@ -215,12 +235,14 @@ try {
         return { ok: false, reason: 'testHook.refreshOnce is not available' };
       }
       
+      window.__S4_TRACE.push('before fetchCallsAfter analysis');
       // ✅ refresh 호출 계측 (__FETCH_CALLS에서 refresh URL 추출)
       const fetchCallsAfter = (window.__FETCH_CALLS || []);
       const refreshUrls = fetchCallsAfter
         .filter((url: string) => typeof url === 'string' && (url.includes('/auth/refresh') || url.includes('/api/auth/refresh')))
         .slice(fetchCallsBefore); // refreshOnce() 호출 이후의 refresh 호출만
       const refreshCallCount = refreshUrls.length;
+      window.__S4_TRACE.push('refreshCallCount: ' + refreshCallCount);
       
       // ✅ S4에서 snapshot 찍는 위치를 2개로 쪼개
       // refresh 실패 직후 snapshot A
