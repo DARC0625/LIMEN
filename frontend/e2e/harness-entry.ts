@@ -92,9 +92,10 @@ try {
     // ✅ 의존성 0으로 먼저 바인딩만 성공
     // 원인 찾을 때까지는 욕심내지 마
     // runS3/runS4 내부에서 tokenManager를 쓰더라도, 바인딩 자체는 반드시 성공해야 함
+    // ✅ redirectToLogin 제거 (location.href 재정의 금지)
+    // URL 검증은 Playwright API로: page.waitForURL() 또는 expect(page).toHaveURL()
     return {
       sessionCleared: false,
-      redirectToLogin: null,
     };
   };
 

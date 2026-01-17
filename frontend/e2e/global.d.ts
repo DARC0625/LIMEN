@@ -15,8 +15,6 @@ declare global {
     }>;
     runS4?: () => Promise<{
       sessionCleared: boolean;
-      // ✅ redirectToLogin 제거 (location.href 재정의 금지)
-      // URL 검증은 Playwright API로: page.waitForURL() 또는 expect(page).toHaveURL()
     }>;
 
     // tokenManager를 주입해 쓸 때
