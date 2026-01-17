@@ -271,27 +271,50 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     expect(storageStateBefore.expiresAt).toBeTruthy();
     expect(storageStateBefore.csrfToken).toBe('test-csrf-token');
 
-    // ✅ 4) 테스트 코드 쪽(즉시 패치)
-    // 지금은 evaluate에서 그냥 await만 하고 있어 "왜 죽었는지"가 로그에 안 남는다.
-    // S4/S3 evaluate를 반드시 이렇게 바꿔라
-    // const result = await page.evaluate(async () => window.runS4())
-    // expect(result).toEqual({ ok: true }) 같은 계약 기반 검증
-    // 실패면 console.log(result) 찍고 fail
-    const result = await page.evaluate(async () => {
-      if (window.runS4) {
-        return await window.runS4();
-      } else {
-        return { ok: false, reason: 'runS4 function not found' };
+    // ✅ E2E: Promise.race를 runS4 호출 바깥에 적용 (await runS4() 금지)
+    // 핵심: window.runS4()는 await로 먼저 붙잡지 말 것
+    // Promise.race에서 timeout이 이기면 trace/abortedUrls를 무조건 실어 반환
+    // timeout은 브라우저 내부 setTimeout으로 만들어야 함 (Node 타이머 말고)
+    const result = await page.evaluate(() => {
+      const run = (window as any).runS4?.bind(window);
+
+      const timeoutMs = 5000;
+      const timeoutPromise = new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            ok: false,
+            reason: 'timeout',
+            trace: (window as any).__S4_TRACE ?? [],
+            abortedUrls: (window as any).__ABORTED_URLS ?? [],
+          });
+        }, timeoutMs);
+      });
+
+      if (!run) {
+        return Promise.resolve({ 
+          ok: false, 
+          reason: 'runS4 missing',
+          trace: (window as any).__S4_TRACE ?? [],
+          abortedUrls: (window as any).__ABORTED_URLS ?? [],
+        });
       }
+
+      // ❗여기서 절대 await run() 하지 말 것
+      // Promise.race에서 run()을 호출하되, await는 race 결과에만
+      return Promise.race([
+        Promise.resolve().then(() => run()),
+        timeoutPromise,
+      ]);
     });
     
     // ✅ Command 2: __S4_TRACE 로그 출력 (timeout 시 어디서 멈췄는지 확정)
-    const trace = await page.evaluate(() => window.__S4_TRACE || []);
+    const trace = result.trace || [];
     console.log('[E2E] S4_TRACE:', trace);
     
     // ✅ Command 2: abort된 URL 목록 출력
-    if (abortedUrls.length > 0) {
-      console.log('[E2E] Aborted URLs (not in allowlist):', abortedUrls);
+    const aborted = result.abortedUrls || [];
+    if (aborted.length > 0) {
+      console.log('[E2E] Aborted URLs (not in allowlist):', aborted);
     }
     
     // ✅ 계약 기반 검증

@@ -408,6 +408,10 @@ describe('isAdmin', () => {
 describe('logout', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    // ✅ Jest: logout이 서버로 판정되지 않도록 window mock 유지
+    // logout은 typeof window === 'undefined' 체크를 하므로
+    // window가 없으면 아무 것도 안 함
+    global.window = global.window || {} as any;
   })
 
   it('clears tokens and deletes session on client side', async () => {
@@ -415,6 +419,8 @@ describe('logout', () => {
 
     logout()
 
+    // ✅ Jest: logout이 브라우저 환경으로 판정되어야 함
+    // window가 없으면 deleteSession / clearTokens가 호출되지 않음
     expect(mockTokenManager.clearTokens).toHaveBeenCalled()
     expect(mockAuthAPI.deleteSession).toHaveBeenCalled()
   })
