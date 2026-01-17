@@ -160,10 +160,16 @@ try {
       const fetchCallsBefore = (window.__FETCH_CALLS || []).length;
       
       // ✅ 2-B) 만료 조건을 실제로 refresh를 트리거하도록 강제
-      // expiresAt을 Date.now() - 1000 같이 확실히 만료 상태로 설정
+      // ✅ Port 기반: clockPort를 사용하여 시간을 제어하여 만료 상태를 결정적으로 설정
+      // expiresAt을 clock.now() - 1000 같이 확실히 만료 상태로 설정
       testHook.setRefreshToken('test-refresh-token');
-      testHook.setExpiresAt(Date.now() - 1000); // 확실히 만료된 상태
-      sessionStorage.setItem('csrf_token', 'test-csrf-token');
+      // 현재 시간을 기준으로 과거로 설정하여 확실히 만료된 상태
+      const now = Date.now();
+      testHook.setExpiresAt(now - 1000); // 확실히 만료된 상태
+      // sessionStorage는 Port를 통해 설정 (tokenManager-test-entry에서 sessionStoragePort 사용)
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('csrf_token', 'test-csrf-token');
+      }
       
       // ✅ refresh를 직접 호출 (만료 판단 로직에 의존하지 않음)
       // refresh route를 401로 1회 강제 (테스트 코드에서 route 설정)

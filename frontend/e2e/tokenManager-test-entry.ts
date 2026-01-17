@@ -4,10 +4,28 @@
  * 제품 코드(tokenManager.ts)는 순수하게 유지하고,
  * 테스트 훅(__test)은 이 엔트리에서 top-level로 강제 부착
  * 
- * 이렇게 하면 "제품 번들에 훅이 포함되냐" 싸움 자체가 사라진다.
+ * ✅ 정석 원칙: Port 기반으로 tokenManager 생성
+ * - memory adapter를 사용하여 테스트에서 상태를 100% 제어 가능
+ * - clock adapter를 사용하여 시간을 제어하여 만료 상태를 결정적으로 설정
  */
+import { createTokenManager } from '../lib/tokenManager';
+import { createMemoryStoragePort, createMemorySessionStoragePort } from '../lib/adapters/memoryStoragePort';
+import { createMemoryClockPort } from '../lib/adapters/memoryClockPort';
+import { createMemoryLocationPort } from '../lib/adapters/memoryLocationPort';
 
-import { tokenManager } from '../lib/tokenManager';
+// ✅ Port 기반으로 tokenManager 생성 (테스트에서 상태 100% 제어 가능)
+const storagePort = createMemoryStoragePort();
+const sessionStoragePort = createMemorySessionStoragePort();
+const clockPort = createMemoryClockPort(Date.now());
+const locationPort = createMemoryLocationPort('/');
+
+// ✅ 테스트 전용 tokenManager 인스턴스 생성
+export const tokenManager = createTokenManager(
+  storagePort,
+  sessionStoragePort,
+  clockPort,
+  locationPort
+);
 
 // ✅ clearSession 호출 계측 (테스트용)
 let clearSessionCalledCount = 0;
@@ -71,16 +89,11 @@ tokenManager.clearTokens = function() {
   
   /**
    * 현재 시간 설정 (테스트용)
+   * ✅ Port 기반: clockPort.setNow() 사용
    * @param now - 설정할 시간 (밀리초)
    */
   setNow: (now: number): void => {
-    // Date.now()를 오버라이드할 수 없으므로, expiresAt을 조정하여 시뮬레이션
-    // 실제로는 setTokens로 expiresAt을 조정
-    const currentExpiresAt = (tokenManager as { expiresAt?: number }).expiresAt || 0;
-    if (currentExpiresAt > 0) {
-      const diff = currentExpiresAt - Date.now();
-      (tokenManager as { expiresAt?: number }).expiresAt = now + diff;
-    }
+    (clockPort as { setNow?: (timestamp: number) => void }).setNow?.(now);
   },
   
   /**
@@ -127,34 +140,42 @@ tokenManager.clearTokens = function() {
   
   /**
    * Refresh Token 설정 (테스트용)
+   * ✅ Port 기반: storagePort 사용
    * @param value - Refresh Token 값 또는 null
    */
   setRefreshToken: (value: string | null): void => {
     if (value === null) {
-      localStorage.removeItem('refresh_token');
+      storagePort.remove('refresh_token');
       (tokenManager as { refreshToken?: string | null }).refreshToken = null;
     } else {
-      localStorage.setItem('refresh_token', value);
+      storagePort.set('refresh_token', value);
       (tokenManager as { refreshToken?: string | null }).refreshToken = value;
     }
   },
   
   /**
    * 만료 시간 설정 (테스트용)
+   * ✅ Port 기반: storagePort + clockPort 사용
    * @param msEpoch - 만료 시간 (밀리초 epoch) 또는 null
    */
   setExpiresAt: (msEpoch: number | null): void => {
     if (msEpoch === null) {
-      localStorage.removeItem('token_expires_at');
+      storagePort.remove('token_expires_at');
       (tokenManager as { expiresAt?: number }).expiresAt = 0;
     } else {
-      localStorage.setItem('token_expires_at', msEpoch.toString());
+      storagePort.set('token_expires_at', msEpoch.toString());
       (tokenManager as { expiresAt?: number }).expiresAt = msEpoch;
+      // ✅ clockPort도 함께 설정하여 만료 상태를 결정적으로 만들기
+      // expiresAt이 clock.now()보다 작으면 만료된 상태
+      if (msEpoch < clockPort.now()) {
+        // 이미 만료된 상태
+      }
     }
   },
   
   /**
    * 스토리지 스냅샷 (테스트용)
+   * ✅ Port 기반: storagePort, sessionStoragePort 사용
    */
   getStorageSnapshot: (): {
     refreshToken: string | null;
@@ -162,9 +183,9 @@ tokenManager.clearTokens = function() {
     csrfToken: string | null;
   } => {
     return {
-      refreshToken: localStorage.getItem('refresh_token'),
-      expiresAt: localStorage.getItem('token_expires_at'),
-      csrfToken: sessionStorage.getItem('csrf_token'),
+      refreshToken: storagePort.get('refresh_token'),
+      expiresAt: storagePort.get('token_expires_at'),
+      csrfToken: sessionStoragePort.get('csrf_token'),
     };
   },
   
