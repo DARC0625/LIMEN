@@ -187,6 +187,7 @@ try {
         // 원본 fetch를 래핑하여 AbortController를 자동으로 추가
         const originalFetch = window.fetch;
         const wrappedFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+          // 이미 signal이 있으면 그대로 사용, 없으면 abortController.signal 사용
           const signal = init?.signal || abortController.signal;
           return originalFetch(input, { ...init, signal });
         };
@@ -198,7 +199,7 @@ try {
             3000,
             'refreshOnce (expected to fail with 401)'
           );
-        
+          
           // 401 에러는 예상된 동작이므로 무시
           if (!refreshResult.ok && refreshResult.reason.includes('401')) {
             // 정상적인 실패
@@ -305,33 +306,25 @@ try {
       const fetchCallsBefore = (window.__FETCH_CALLS || []).length;
       
       // ✅ AbortController로 fetch timeout 보장
-      const abortController1 = new AbortController();
-      const abortController2 = new AbortController();
-      const timeoutId1 = setTimeout(() => abortController1.abort(), 2000);
-      const timeoutId2 = setTimeout(() => abortController2.abort(), 2000);
+      // 단일 AbortController를 사용하여 모든 fetch에 timeout 적용
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(() => abortController.abort(), 2000); // 2초 타임아웃
       
       // 원본 fetch를 래핑하여 AbortController를 자동으로 추가
       const originalFetch = window.fetch;
-      const wrappedFetch1 = async (input: RequestInfo | URL, init?: RequestInit) => {
-        const signal = init?.signal || abortController1.signal;
+      const wrappedFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        // 이미 signal이 있으면 그대로 사용, 없으면 abortController.signal 사용
+        const signal = init?.signal || abortController.signal;
         return originalFetch(input, { ...init, signal });
       };
-      const wrappedFetch2 = async (input: RequestInfo | URL, init?: RequestInit) => {
-        const signal = init?.signal || abortController2.signal;
-        return originalFetch(input, { ...init, signal });
-      };
+      window.fetch = wrappedFetch as typeof fetch;
       
       try {
-        // 첫 번째 호출은 wrappedFetch1 사용
-        window.fetch = wrappedFetch1 as typeof fetch;
-        const promise1 = withTimeout(getAccessToken(), 3000, 'getAccessToken (call 1)');
+        const results = await Promise.allSettled([
+          withTimeout(getAccessToken(), 3000, 'getAccessToken (call 1)'),
+          withTimeout(getAccessToken(), 3000, 'getAccessToken (call 2)'),
+        ]);
         
-        // 두 번째 호출은 wrappedFetch2 사용 (동시 호출 시뮬레이션)
-        window.fetch = wrappedFetch2 as typeof fetch;
-        const promise2 = withTimeout(getAccessToken(), 3000, 'getAccessToken (call 2)');
-        
-        const results = await Promise.allSettled([promise1, promise2]);
-      
         const fetchCallsAfter = (window.__FETCH_CALLS || []);
         const refreshUrls = fetchCallsAfter
           .filter((url: string) => typeof url === 'string' && (url.includes('/auth/refresh') || url.includes('/api/auth/refresh')))
@@ -350,8 +343,7 @@ try {
           refreshCallCount,
         };
       } finally {
-        clearTimeout(timeoutId1);
-        clearTimeout(timeoutId2);
+        clearTimeout(timeoutId);
         window.fetch = originalFetch; // 원본 fetch 복원
       }
     } catch (error) {
