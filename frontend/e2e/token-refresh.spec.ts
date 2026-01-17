@@ -19,10 +19,15 @@ import { test, expect, type Page } from '@playwright/test';
 import { buildTokenManagerIIFE, buildHarnessIIFE } from './_bundles';
 
 /**
- * ✅ 정석 harness 주입 템플릿
+ * ✅ 정석 harness 주입 템플릿 (최종 권장: route.fulfill로 local.test origin 생성)
  * 
- * (A) 테스트에서 페이지 만들기
- * (B) init script로 IIFE 주입 (중요: addInitScript는 탐색 전)
+ * 정석 2안: route.fulfill로 **local.test를 "내가 제공"**해서 origin을 만들기
+ * - 네비게이션은 "있지만" 네트워크는 0 (전부 fulfill)
+ * - origin은 http://local.test로 생김
+ * - localStorage/broadcastchannel 등 웹 API가 정상 동작
+ * 
+ * (A) 페이지/컨텍스트에 라우팅 등록
+ * (B) init script 주입 → 그 다음 goto
  * (C) 주입 검증은 evaluate가 아니라 "즉시 observable"로
  */
 async function injectHarness(
@@ -30,18 +35,23 @@ async function injectHarness(
   tokenManagerIIFE: string,
   harnessIIFE: string
 ): Promise<void> {
-  // ✅ (A) 테스트에서 페이지 만들기
-  await page.goto('about:blank');
-  await page.setContent('<!doctype html><html><body>e2e</body></html>', {
-    waitUntil: 'domcontentloaded',
+  // ✅ (A) 페이지/컨텍스트에 라우팅 등록
+  // page.goto('http://local.test/')를 쓸 거면 반드시 그 전에 route.fulfill 설정
+  await page.route('http://local.test/*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: '<!doctype html><html><body>e2e</body></html>',
+    });
   });
 
-  // ✅ (B) init script로 IIFE 주입 (중요: addInitScript는 탐색 전)
+  // ✅ (B) init script 주입 → 그 다음 goto
   // harness 번들은 반드시 IIFE로 만들고, addInitScript로 주입
   await page.addInitScript({ content: tokenManagerIIFE });
   await page.addInitScript({ content: harnessIIFE });
 
   // 그 다음에 "새 문서"를 열어서 initScript가 적용되게 함
+  // 네비게이션은 "있지만" 네트워크는 0 (전부 fulfill)
   await page.goto('http://local.test/', { waitUntil: 'domcontentloaded' });
 
   // ✅ (C) 주입 검증은 evaluate가 아니라 "즉시 observable"로
@@ -81,10 +91,17 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
    */
   test('S4: refresh 실패 시 전역 세션 정리 및 강제 로그아웃', async ({ page, context }) => {
     // ✅ 네트워크 모킹: refresh endpoint만 정확히 fulfill (전부 204 금지)
+    // ✅ PR Gate Hermetic에서는 절대 임의 도메인 실네트워크 접속 금지
     let refreshCallCount = 0;
     
     await context.route('**/*', async (route) => {
       const url = route.request().url();
+      
+      // ✅ http://local.test/*는 injectHarness에서 처리하므로 여기서는 건너뛰기
+      if (url.startsWith('http://local.test/')) {
+        // injectHarness의 page.route가 처리
+        return;
+      }
       
       // ✅ S4: refresh 엔드포인트만 401로 강제 실패
       if (url.includes('/api/auth/refresh')) {
@@ -181,6 +198,14 @@ test.describe('토큰 꼬임 P0 - Refresh 경합 및 실패 처리 (Hermetic)', 
     
     await context.route('**/*', async (route) => {
       const url = route.request().url();
+      
+      // ✅ http://local.test/*는 injectHarness에서 처리하므로 여기서는 건너뛰기
+      // 멀티탭(S3)면 page1, page2 둘 다 route를 걸어야 한다 (라우트는 Page 단위로 등록되니까)
+      // injectHarness 내부에서 각 page.route를 설정하므로 여기서는 건너뛰기
+      if (url.startsWith('http://local.test/')) {
+        // injectHarness의 page.route가 처리
+        return;
+      }
       
       // ✅ S3: refresh 엔드포인트만 200 + 성공 응답
       if (url.includes('/api/auth/refresh')) {
