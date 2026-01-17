@@ -23,6 +23,13 @@ jest.mock('../../api/auth', () => ({
   },
 }))
 
+// ✅ Jest: 브라우저 환경 mock (window, document)
+// checkAuth가 typeof window === 'undefined'로 브라우저 경로를 막지 않도록
+global.window = global.window || {} as any;
+global.document = global.document || {
+  cookie: '',
+} as any;
+
 // fetch 모킹
 global.fetch = jest.fn()
 
@@ -68,9 +75,10 @@ describe('checkAuth', () => {
     // @ts-expect-error - intentional deletion of global.window for server-side test
     delete global.window
 
-    const result = await checkAuth()
+    const result = await checkAuth({ debug: true })
 
     expect(result.valid).toBe(false)
+    expect(result.debug?.reasonPath).toBe('none')
     global.window = originalWindow
   })
 
@@ -85,8 +93,12 @@ describe('checkAuth', () => {
       json: async () => ({ valid: false, reason: 'Session expired' }),
     } as unknown as Response)
 
-    const result = await checkAuth()
+    const result = await checkAuth({ debug: true })
 
+    // ✅ Jest: debug로 경로 확정
+    console.log('[TEST] invalid session debug:', result.debug)
+    expect(result.debug).toBeDefined()
+    expect(result.debug?.checkBackendSessionCalled).toBe(true)
     expect(result.valid).toBe(false)
   })
 
