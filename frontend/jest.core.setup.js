@@ -7,5 +7,6 @@ if (typeof globalThis.window === 'undefined') {
     },
   };
   // typeof window가 작동하도록 전역 변수로 선언
+  // eslint-disable-next-line no-undef
   global.window = globalThis.window;
 }
