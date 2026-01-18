@@ -2,7 +2,7 @@
  * VM API 클라이언트
  */
 
-import { apiRequest } from './client';
+import { apiRequest } from './clientApi';
 import type {
   VM,
   VMStats,

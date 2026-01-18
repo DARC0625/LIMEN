@@ -4,13 +4,14 @@
  */
 
 import { vmAPI } from '../vm'
-import { apiRequest } from '../client'
 
-// apiRequest 모킹
-jest.mock('../client', () => ({
+// ✅ P1-Next-Fix-Module: clientApi.ts의 apiRequest를 mock
+// vm.ts가 './clientApi'에서 import하는 apiRequest를 mock
+jest.mock('../clientApi', () => ({
   apiRequest: jest.fn(),
 }))
 
+import { apiRequest } from '../clientApi'
 const mockApiRequest = apiRequest as jest.MockedFunction<typeof apiRequest>
 
 /**

@@ -3,7 +3,7 @@
  * 로그인, 회원가입, 세션 관리
  */
 
-import { apiRequest } from './client';
+import { apiRequest } from './clientApi';
 import { tokenManager } from '../tokenManager';
 import type {
   LoginRequest,

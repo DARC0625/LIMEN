@@ -2,7 +2,7 @@
  * 스냅샷 API 클라이언트
  */
 
-import { apiRequest } from './client';
+import { apiRequest } from './clientApi';
 import type { VMSnapshot } from '../types';
 
 export const snapshotAPI = {

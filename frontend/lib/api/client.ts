@@ -11,23 +11,34 @@ import type { APIError } from '../types';
 import { logger } from '../utils/logger';
 
 /**
- * API URL 가져오기
+ * ✅ P1-Next-Fix-Module: API Client Factory
+ * tokenManager를 주입받아 API 클라이언트 인스턴스 생성
  */
-const getAPIUrl = (): string => {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
-  return '/api';
-};
-
-/**
- * API 요청 옵션
- */
-interface APIRequestOptions extends RequestInit {
-  skipAuth?: boolean; // 인증 스킵 (public endpoints)
-  retry?: boolean; // 재시도 여부
-  timeout?: number; // 타임아웃 (밀리초)
+export interface ApiClientDeps {
+  tokenManager: TokenManagerPort;
 }
+
+export function createApiClient(deps: ApiClientDeps) {
+  const { tokenManager } = deps;
+
+  /**
+   * API URL 가져오기
+   */
+  const getAPIUrl = (): string => {
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      return process.env.NEXT_PUBLIC_API_URL;
+    }
+    return '/api';
+  };
+
+  /**
+   * API 요청 옵션
+   */
+  interface APIRequestOptions extends RequestInit {
+    skipAuth?: boolean; // 인증 스킵 (public endpoints)
+    retry?: boolean; // 재시도 여부
+    timeout?: number; // 타임아웃 (밀리초)
+  }
 
   /**
    * API 요청 핵심 함수
@@ -37,226 +48,226 @@ interface APIRequestOptions extends RequestInit {
    * - 성능 측정
    */
   async function apiRequest<T>(
-  endpoint: string,
-  options: APIRequestOptions = {}
-): Promise<T> {
-  const apiUrl = getAPIUrl();
-  const {
-    skipAuth = false,
-    retry = false,
-    timeout = API_CONSTANTS.DEFAULT_TIMEOUT,
-    ...fetchOptions
-  } = options;
+    endpoint: string,
+    options: APIRequestOptions = {}
+  ): Promise<T> {
+    const apiUrl = getAPIUrl();
+    const {
+      skipAuth = false,
+      retry = false,
+      timeout = API_CONSTANTS.DEFAULT_TIMEOUT,
+      ...fetchOptions
+    } = options;
 
-  // Access Token 가져오기 (자동 갱신)
-  let accessToken: string | null = null;
-  if (!skipAuth) {
-    try {
-      accessToken = await tokenManager.getAccessToken();
-      logger.log('[apiRequest] Access token check:', {
-        hasAccessToken: !!accessToken,
-        accessTokenLength: accessToken?.length || 0,
-        endpoint,
-      });
-    } catch (error) {
-      // 토큰 갱신 실패는 무시 (401 에러로 처리됨)
-      logger.warn('[apiRequest] Token refresh failed:', error);
-    }
-  }
-
-  // 헤더 구성
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(fetchOptions.headers as Record<string, string> || {}),
-  };
-
-  const url = `${apiUrl}${endpoint}`;
-  const method = fetchOptions.method || 'GET';
-
-  // 인증 헤더 추가
-  if (accessToken && !skipAuth) {
-    headers['Authorization'] = `Bearer ${accessToken}`;
-  }
-
-  // CSRF 토큰 추가 (POST, PUT, DELETE 요청에만 필요)
-  const csrfToken = tokenManager.getCSRFToken();
-  const needsCSRF = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase());
-  if (csrfToken && !skipAuth && needsCSRF) {
-    headers['X-CSRF-Token'] = csrfToken;
-  }
-
-  // 성능 측정 시작
-  // ✅ P1-Next-Fix-3: performance 측정 시작 - typeof window 체크 제거 (trackPerformanceMetric이 SSR-safe)
-  const startTime = typeof performance !== 'undefined'
-    ? performance.now()
-    : 0;
-
-  // 강제 로깅 - 항상 출력 (콘솔 필터링 우회)
-  console.log('[API Request] ====== START ======');
-  console.log('[API Request] URL:', url);
-  console.log('[API Request] Method:', method);
-  console.log('[API Request] Endpoint:', endpoint);
-  console.log('[API Request] Has Auth:', !!accessToken);
-  console.log('[API Request] Has CSRF:', !!csrfToken);
-  console.log('[API Request] Full URL:', `${apiUrl}${endpoint}`);
-  
-  // 디버그 로그 (개발 환경만)
-  logger.log('[API Request]', {
-    url,
-    method,
-    endpoint,
-    hasAuth: !!accessToken,
-    hasCSRF: !!csrfToken,
-  });
-
-  // 요청 실행 (재시도 포함)
-  const executeRequest = async (attempt: number = 1): Promise<Response> => {
-    // 타임아웃 처리
-    const controller = typeof AbortController !== 'undefined'
-      ? new AbortController()
-      : null;
-    
-    const timeoutId = controller
-      ? setTimeout(() => controller.abort(), timeout)
-      : null;
-
-    try {
-      // body 처리: 객체면 JSON.stringify, 문자열이면 그대로 사용
-      let requestBody: string | undefined = undefined;
-      if (fetchOptions.body) {
-        if (typeof fetchOptions.body === 'string') {
-          requestBody = fetchOptions.body;
-        } else {
-          requestBody = JSON.stringify(fetchOptions.body);
-        }
-      }
-      
-      logger.log('[executeRequest] Request details:', {
-        url,
-        method,
-        attempt,
-        hasBody: !!requestBody,
-        bodyLength: requestBody?.length || 0,
-        bodyPreview: requestBody ? requestBody.substring(0, 200) : 'none',
-        hasAuth: !!accessToken,
-        hasCSRF: !!csrfToken,
-        endpoint,
-      });
-      
-      // 강제 로깅 - fetch 호출 전
-      console.log('[executeRequest] About to fetch:', {
-        url,
-        method,
-        headers: Object.keys(headers),
-        hasBody: !!requestBody,
-        bodyPreview: requestBody ? requestBody.substring(0, 200) : 'none',
-      });
-      
-      const fetchStartTime = Date.now();
-      const response = await fetch(url, {
-        ...fetchOptions,
-        body: requestBody,
-        headers,
-        credentials: 'include', // ★ 필수: 쿠키 기반 인증을 위해 항상 포함
-        signal: controller?.signal,
-      });
-      
-      const fetchDuration = Date.now() - fetchStartTime;
-      console.log('[executeRequest] Fetch completed:', {
-        url,
-        status: response.status,
-        statusText: response.statusText,
-        duration: `${fetchDuration}ms`,
-        ok: response.ok,
-      });
-
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-
-      return response;
-    } catch (error) {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-
-      // 타임아웃 또는 네트워크 에러
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('Request timeout');
-      }
-
-      throw error;
-    }
-  };
-
-  try {
-    let response: Response;
-    let lastError: Error | null = null;
-
-    // 재시도 로직
-    for (let attempt = 1; attempt <= (retry ? API_CONSTANTS.MAX_RETRIES : 1); attempt++) {
+    // Access Token 가져오기 (자동 갱신)
+    let accessToken: string | null = null;
+    if (!skipAuth) {
       try {
-        response = await executeRequest(attempt);
-        lastError = null;
-        break;
+        accessToken = await tokenManager.getAccessToken();
+        logger.log('[apiRequest] Access token check:', {
+          hasAccessToken: !!accessToken,
+          accessTokenLength: accessToken?.length || 0,
+          endpoint,
+        });
       } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        
-        // 마지막 시도가 아니면 재시도
-        if (attempt < (retry ? API_CONSTANTS.MAX_RETRIES : 1)) {
-          logger.debug('[apiRequest] Retrying request', { 
-            attempt, 
-            maxRetries: retry ? API_CONSTANTS.MAX_RETRIES : 1,
-            url,
-            method 
-          });
-          await new Promise(resolve => 
-            setTimeout(resolve, API_CONSTANTS.RETRY_DELAY * attempt)
-          );
-          continue;
-        }
-        
-        throw lastError;
+        // 토큰 갱신 실패는 무시 (401 에러로 처리됨)
+        logger.warn('[apiRequest] Token refresh failed:', error);
       }
     }
 
-    if (!response!) {
-      throw lastError || new Error('No response received');
-    }
-
-    // ✅ P1-Next-Fix-3: 성능 측정 종료 - trackPerformanceMetric은 항상 호출 (SSR-safe no-op)
-    let duration = 0;
-    if (startTime > 0 && typeof performance !== 'undefined') {
-      duration = performance.now() - startTime;
-    }
-    // trackPerformanceMetric은 analytics 모듈에서 typeof window 체크를 하므로 여기서는 항상 호출
-    if (startTime > 0) {
-      trackPerformanceMetric(
-        `api_${method.toLowerCase()}_${endpoint.replace(/\//g, '_')}`,
-        duration
-      );
-    }
-
-    // 디버그 로그 (CORS 헤더 확인 포함)
-    const corsHeaders = {
-      'access-control-allow-credentials': response.headers.get('access-control-allow-credentials'),
-      'access-control-allow-headers': response.headers.get('access-control-allow-headers'),
-      'access-control-allow-origin': response.headers.get('access-control-allow-origin'),
-      'access-control-allow-methods': response.headers.get('access-control-allow-methods'),
+    // 헤더 구성
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(fetchOptions.headers as Record<string, string> || {}),
     };
-    logger.log('[API Response]', {
+
+    const url = `${apiUrl}${endpoint}`;
+    const method = fetchOptions.method || 'GET';
+
+    // 인증 헤더 추가
+    if (accessToken && !skipAuth) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+
+    // CSRF 토큰 추가 (POST, PUT, DELETE 요청에만 필요)
+    const csrfToken = tokenManager.getCSRFToken();
+    const needsCSRF = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase());
+    if (csrfToken && !skipAuth && needsCSRF) {
+      headers['X-CSRF-Token'] = csrfToken;
+    }
+
+    // 성능 측정 시작
+    // ✅ P1-Next-Fix-3: performance 측정 시작 - typeof window 체크 제거 (trackPerformanceMetric이 SSR-safe)
+    const startTime = typeof performance !== 'undefined'
+      ? performance.now()
+      : 0;
+
+    // 강제 로깅 - 항상 출력 (콘솔 필터링 우회)
+    console.log('[API Request] ====== START ======');
+    console.log('[API Request] URL:', url);
+    console.log('[API Request] Method:', method);
+    console.log('[API Request] Endpoint:', endpoint);
+    console.log('[API Request] Has Auth:', !!accessToken);
+    console.log('[API Request] Has CSRF:', !!csrfToken);
+    console.log('[API Request] Full URL:', `${apiUrl}${endpoint}`);
+    
+    // 디버그 로그 (개발 환경만)
+    logger.log('[API Request]', {
       url,
       method,
-      status: response.status,
-      duration: duration > 0 ? `${duration.toFixed(2)}ms` : 'N/A',
-      corsHeaders,
+      endpoint,
+      hasAuth: !!accessToken,
+      hasCSRF: !!csrfToken,
     });
 
-    // 헬퍼 함수들 (호이스팅을 위해 apiRequest 함수 내부에 정의)
-    /**
-     * 응답 처리
-     */
-    async function handleResponse<T>(
+    // 요청 실행 (재시도 포함)
+    const executeRequest = async (attempt: number = 1): Promise<Response> => {
+      // 타임아웃 처리
+      const controller = typeof AbortController !== 'undefined'
+        ? new AbortController()
+        : null;
+      
+      const timeoutId = controller
+        ? setTimeout(() => controller.abort(), timeout)
+        : null;
+
+      try {
+        // body 처리: 객체면 JSON.stringify, 문자열이면 그대로 사용
+        let requestBody: string | undefined = undefined;
+        if (fetchOptions.body) {
+          if (typeof fetchOptions.body === 'string') {
+            requestBody = fetchOptions.body;
+          } else {
+            requestBody = JSON.stringify(fetchOptions.body);
+          }
+        }
+        
+        logger.log('[executeRequest] Request details:', {
+          url,
+          method,
+          attempt,
+          hasBody: !!requestBody,
+          bodyLength: requestBody?.length || 0,
+          bodyPreview: requestBody ? requestBody.substring(0, 200) : 'none',
+          hasAuth: !!accessToken,
+          hasCSRF: !!csrfToken,
+          endpoint,
+        });
+        
+        // 강제 로깅 - fetch 호출 전
+        console.log('[executeRequest] About to fetch:', {
+          url,
+          method,
+          headers: Object.keys(headers),
+          hasBody: !!requestBody,
+          bodyPreview: requestBody ? requestBody.substring(0, 200) : 'none',
+        });
+        
+        const fetchStartTime = Date.now();
+        const response = await fetch(url, {
+          ...fetchOptions,
+          body: requestBody,
+          headers,
+          credentials: 'include', // ★ 필수: 쿠키 기반 인증을 위해 항상 포함
+          signal: controller?.signal,
+        });
+        
+        const fetchDuration = Date.now() - fetchStartTime;
+        console.log('[executeRequest] Fetch completed:', {
+          url,
+          status: response.status,
+          statusText: response.statusText,
+          duration: `${fetchDuration}ms`,
+          ok: response.ok,
+        });
+
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+
+        return response;
+      } catch (error) {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+
+        // 타임아웃 또는 네트워크 에러
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error('Request timeout');
+        }
+
+        throw error;
+      }
+      };
+
+    try {
+      let response: Response;
+      let lastError: Error | null = null;
+
+      // 재시도 로직
+      for (let attempt = 1; attempt <= (retry ? API_CONSTANTS.MAX_RETRIES : 1); attempt++) {
+        try {
+          response = await executeRequest(attempt);
+          lastError = null;
+          break;
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          
+          // 마지막 시도가 아니면 재시도
+          if (attempt < (retry ? API_CONSTANTS.MAX_RETRIES : 1)) {
+            logger.debug('[apiRequest] Retrying request', { 
+              attempt, 
+              maxRetries: retry ? API_CONSTANTS.MAX_RETRIES : 1,
+              url,
+              method 
+            });
+            await new Promise(resolve => 
+              setTimeout(resolve, API_CONSTANTS.RETRY_DELAY * attempt)
+            );
+            continue;
+          }
+          
+          throw lastError;
+        }
+      }
+
+      if (!response!) {
+        throw lastError || new Error('No response received');
+      }
+
+      // ✅ P1-Next-Fix-3: 성능 측정 종료 - trackPerformanceMetric은 항상 호출 (SSR-safe no-op)
+      let duration = 0;
+      if (startTime > 0 && typeof performance !== 'undefined') {
+        duration = performance.now() - startTime;
+      }
+      // trackPerformanceMetric은 analytics 모듈에서 typeof window 체크를 하므로 여기서는 항상 호출
+      if (startTime > 0) {
+        trackPerformanceMetric(
+          `api_${method.toLowerCase()}_${endpoint.replace(/\//g, '_')}`,
+          duration
+        );
+      }
+
+      // 디버그 로그 (CORS 헤더 확인 포함)
+      const corsHeaders = {
+        'access-control-allow-credentials': response.headers.get('access-control-allow-credentials'),
+        'access-control-allow-headers': response.headers.get('access-control-allow-headers'),
+        'access-control-allow-origin': response.headers.get('access-control-allow-origin'),
+        'access-control-allow-methods': response.headers.get('access-control-allow-methods'),
+      };
+      logger.log('[API Response]', {
+        url,
+        method,
+        status: response.status,
+        duration: duration > 0 ? `${duration.toFixed(2)}ms` : 'N/A',
+        corsHeaders,
+      });
+
+      // 헬퍼 함수들 (호이스팅을 위해 apiRequest 함수 내부에 정의)
+      /**
+       * 응답 처리
+       */
+      async function handleResponse<T>(
       response: Response,
       endpoint: string,
       url: string,
@@ -521,273 +532,20 @@ interface APIRequestOptions extends RequestInit {
       }
     }
 
-    // 응답 처리
-    return await handleResponse<T>(response, endpoint, url, method);
-  } catch (error) {
-    // 네트워크 에러 처리
-    const apiError: APIError = error instanceof Error
-      ? error
-      : new Error(String(error));
+      // 응답 처리
+      return await handleResponse<T>(response, endpoint, url, method);
+    } catch (error) {
+      // 네트워크 에러 처리
+      const apiError: APIError = error instanceof Error
+        ? error
+        : new Error(String(error));
 
-    trackAPIError(endpoint, 0, apiError, {
-      action: 'network_error',
-      component: 'api_client',
-    });
-
-    throw apiError;
-  }
-        
-        // 타입 가드: Record<string, unknown>인지 확인
-        const isRecord = (v: unknown): v is Record<string, unknown> => 
-          typeof v === 'object' && v !== null && !Array.isArray(v);
-        
-        try {
-          const errorText = await response.text();
-          if (errorText) {
-            try {
-              errorDetails = JSON.parse(errorText);
-              if (isRecord(errorDetails)) {
-                errorMessage = (typeof errorDetails.message === 'string' ? errorDetails.message : null) ||
-                              (typeof errorDetails.error === 'string' ? errorDetails.error : null) ||
-                              errorMessage;
-              }
-            } catch {
-              errorMessage = errorText.substring(0, 200);
-            }
-          }
-        } catch {
-          // 응답 본문 읽기 실패는 무시
-        }
-        
-        // wait 관련 응답인지 확인
-        const isWaitError = errorMessage.toLowerCase().includes('wait') || 
-                            errorMessage.toLowerCase().includes('retry') ||
-                            errorMessage.toLowerCase().includes('please wait') ||
-                            (isRecord(errorDetails) && (
-                              (typeof errorDetails.error === 'string' && errorDetails.error.toLowerCase().includes('wait')) ||
-                              (typeof errorDetails.message === 'string' && errorDetails.message.toLowerCase().includes('wait'))
-                            ));
-        
-        if (isWaitError) {
-          // wait 관련 오류는 특별한 에러 타입으로 표시
-          const waitError: APIError & { isWaitError?: boolean; details?: unknown } = new Error(errorMessage) as APIError & { isWaitError?: boolean; details?: unknown };
-          waitError.status = 500;
-          waitError.isWaitError = true;
-          if (errorDetails) {
-            waitError.details = errorDetails;
-          }
-          throw waitError;
-        }
-        
-        console.error('[handleResponse] 500 Internal Server Error:', {
-          endpoint,
-          url,
-          method,
-          errorMessage,
-          errorDetails,
-          status: response.status,
-          statusText: response.statusText,
-        });
-        
-        const error: APIError = new Error(errorMessage);
-        error.status = 500;
-        if (errorDetails) {
-          (error as APIError & { details?: unknown }).details = errorDetails;
-        }
-        throw error;
-      }
-
-      // 404 처리
-      if (response.status === 404) {
-        const error: APIError = new Error('Not Found');
-        error.status = 404;
-        throw error;
-      }
-
-      // 401 처리 - 토큰 갱신 시도
-      if (response.status === 401) {
-        // 토큰 갱신 시도
-        try {
-          const newAccessToken = await tokenManager.getAccessToken();
-          
-          if (newAccessToken) {
-            // 새 토큰으로 재시도
-            const retryHeaders: Record<string, string> = {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${newAccessToken}`,
-            };
-
-            // CSRF 토큰은 POST, PUT, DELETE에만 필요
-            // method는 handleResponse 함수의 파라미터에서 가져옴
-            const needsCSRF = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase());
-            const csrfToken = tokenManager.getCSRFToken();
-            if (csrfToken && needsCSRF) {
-              retryHeaders['X-CSRF-Token'] = csrfToken;
-            }
-
-            const retryResponse = await fetch(url, {
-              method,
-              headers: retryHeaders,
-              credentials: 'include',
-            });
-
-            if (retryResponse.ok) {
-              return await parseResponse<T>(retryResponse, endpoint);
-            }
-          }
-        } catch (refreshError) {
-          // 토큰 갱신 실패
-          const refreshErrorMessage = refreshError instanceof Error ? refreshError.message : String(refreshError);
-          logger.warn('[apiRequest] Token refresh failed:', refreshError);
-          
-          // Refresh token이 만료되었거나 유효하지 않은 경우
-          if (refreshErrorMessage.includes('Invalid or expired refresh token') || 
-              refreshErrorMessage.includes('expired') ||
-              refreshErrorMessage.includes('invalid')) {
-            // 토큰 클리어 및 로그인 페이지로 리다이렉트
-            tokenManager.clearTokens();
-            
-            if (typeof window !== 'undefined') {
-              logger.warn('[apiRequest] Refresh token expired, redirecting to login');
-              // AuthGuard가 자동으로 처리하도록 하기 위해 약간의 지연을 두고 리다이렉트
-              setTimeout(() => {
-                window.location.href = '/login';
-              }, 100);
-            }
-          }
-        }
-
-        // 토큰 갱신 실패 또는 재시도 실패
-        const error: APIError = new Error('Authentication required');
-        error.status = 401;
-        
-        trackAPIError(endpoint, 401, error, {
-          action: 'api_request',
-          component: 'api_client',
-        });
-
-        throw error;
-      }
-
-      // 403 처리
-      if (response.status === 403) {
-        const errorData = await response.json().catch(() => ({ message: 'Forbidden' }));
-        const error: APIError = new Error(errorData.message || 'Forbidden');
-        error.status = 403;
-        
-        trackAPIError(endpoint, 403, error, {
-          action: 'api_request',
-          component: 'api_client',
-        });
-
-        throw error;
-      }
-
-      // 기타 에러 처리
-      if (!response.ok) {
-        const errorData = await parseErrorResponse(response);
-        const error: APIError = new Error(
-          errorData.message || errorData.error || `HTTP error! status: ${response.status}`
-        );
-        error.status = response.status;
-        error.response = response;
-        error.data = errorData;
-
-        trackAPIError(endpoint, response.status, error, {
-          action: 'api_request',
-          component: 'api_client',
-          errorMessage: errorData.message || errorData.error,
-        });
-
-        throw error;
-      }
-
-      // 성공 응답 처리
-      return await parseResponse<T>(response, endpoint);
-    }
-
-    /**
-     * 에러 응답 파싱
-     */
-    async function parseErrorResponse(response: Response): Promise<{ message?: string; error?: string; [key: string]: unknown }> {
-      try {
-        const text = await response.text();
-        if (text) {
-          try {
-            return JSON.parse(text);
-          } catch {
-            return { message: text || response.statusText || 'Unknown error' };
-          }
-        }
-      } catch {
-        // 파싱 실패
-      }
-      
-      return { message: response.statusText || 'Unknown error' };
-    }
-
-    /**
-     * 성공 응답 파싱
-     */
-    async function parseResponse<T>(response: Response, endpoint: string): Promise<T> {
-      // 상세 로깅 (개발 환경만)
-      const contentLength = response.headers.get('content-length');
-      logger.log('[parseResponse] Response details:', {
-        status: response.status,
-        statusText: response.statusText,
-        contentLength,
-        contentType: response.headers.get('content-type'),
-        endpoint,
+      trackAPIError(endpoint, 0, apiError, {
+        action: 'network_error',
+        component: 'api_client',
       });
-      
-      // 204 No Content
-      if (response.status === 204 || contentLength === '0') {
-        logger.log('[parseResponse] 204 No Content or content-length=0, returning empty object');
-        return {} as T;
-      }
 
-      // JSON 파싱
-      const text = await response.text();
-      
-      logger.log('[parseResponse] Response text:', {
-        hasText: !!text,
-        textLength: text?.length || 0,
-        textPreview: text ? text.substring(0, 300) : 'empty',
-        endpoint,
-      });
-      
-      if (!text || text.trim() === '') {
-        logger.warn('[parseResponse] Empty response body, returning empty object');
-        return {} as T;
-      }
-
-      try {
-        const parsed = JSON.parse(text) as T;
-        logger.log('[parseResponse] Parsed response:', {
-          hasData: !!parsed,
-          keys: parsed ? Object.keys(parsed) : [],
-          dataPreview: parsed ? JSON.stringify(parsed).substring(0, 300) : 'empty',
-          endpoint,
-        });
-        return parsed;
-      } catch (err) {
-        logger.error(err instanceof Error ? err : new Error(String(err)), {
-          component: 'parseResponse',
-          action: 'json_parse',
-          text: text.substring(0, 300),
-          endpoint,
-        });
-        const parseError: APIError = new Error('Failed to parse server response');
-        parseError.status = response.status;
-        
-        trackAPIError(endpoint, response.status, parseError, {
-          action: 'parse_response',
-          component: 'api_client',
-          responseText: text.substring(0, 100),
-        });
-
-        throw parseError;
-      }
+      throw apiError;
     }
   }
 

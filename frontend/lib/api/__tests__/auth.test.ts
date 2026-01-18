@@ -7,7 +7,6 @@
 
 import { authAPI } from '../auth'
 import { tokenManager } from '../../tokenManager'
-import { apiRequest } from '../client'
 
 // tokenManager 모킹
 jest.mock('../../tokenManager', () => ({
@@ -19,11 +18,13 @@ jest.mock('../../tokenManager', () => ({
   },
 }))
 
-// apiRequest 모킹
-jest.mock('../client', () => ({
+// ✅ P1-Next-Fix-Module: clientApi.ts의 apiRequest를 mock
+// auth.ts가 './clientApi'에서 import하는 apiRequest를 mock
+jest.mock('../clientApi', () => ({
   apiRequest: jest.fn(),
 }))
 
+import { apiRequest } from '../clientApi'
 const mockApiRequest = apiRequest as jest.MockedFunction<typeof apiRequest>
 
 // logger 모킹
