@@ -369,11 +369,12 @@ export function createTokenManager(
   return new TokenManager(defaultStorage, defaultSessionStorage, defaultClock, defaultLocation);
 }
 
-// 싱글톤 인스턴스 (기존 호환성 유지)
-// 브라우저 환경에서만 사용 가능
-export const tokenManager = typeof window !== 'undefined'
-  ? createTokenManager()
-  : createTokenManager(createMemoryStoragePort(), createMemorySessionStoragePort(), createMemoryClockPort(), createMemoryLocationPort('/'));
+// ✅ P1-Next-Fix-Module: top-level 싱글톤 생성 제거
+// 브라우저 전용 인스턴스는 'use client' 파일(lib/api/clientApi.ts)에서만 생성
+// 
+// 기존 코드에서 tokenManager를 import하는 경우:
+// - 브라우저 코드: lib/api/clientApi.ts에서 import
+// - 테스트: createTokenManager(deps)로 직접 생성
 
 // ✅ 제품 코드는 순수하게 유지
 // 테스트 훅(__test)은 frontend/e2e/tokenManager-test-entry.ts에서 부착

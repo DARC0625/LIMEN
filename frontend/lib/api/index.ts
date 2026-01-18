@@ -3,8 +3,11 @@
  * 모든 API를 여기서 export하여 일관된 import 경로 제공
  */
 
-// API 클라이언트
-export { apiRequest } from './client';
+// ✅ P1-Next-Fix-Module: 브라우저 전용 API 클라이언트
+// core 모듈에서는 createApiClient만 export
+export { createApiClient, type ApiClientDeps } from './client';
+// 브라우저 전용 기본 인스턴스는 clientApi.ts에서
+export { apiRequest, tokenManager } from './clientApi';
 
 // 인증 API
 export { authAPI } from './auth';
@@ -26,7 +29,8 @@ export type * from '../types';
 
 // 하위 호환성을 위한 유틸리티 함수
 import { getUserRoleFromToken, isUserApprovedFromToken } from '../utils/token';
-import { tokenManager } from '../tokenManager';
+// ✅ P1-Next-Fix-Module: tokenManager는 clientApi에서 import
+import { tokenManager } from './clientApi';
 import { logger } from '../utils/logger';
 
 /**

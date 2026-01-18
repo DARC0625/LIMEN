@@ -5,7 +5,7 @@
 
 import { trackAPIError } from '../errorTracking';
 import { trackPerformanceMetric } from '../analytics';
-import { tokenManager } from '../tokenManager';
+import type { TokenManagerPort } from '../tokenManager';
 import { API_CONSTANTS } from '../constants';
 import type { APIError } from '../types';
 import { logger } from '../utils/logger';
@@ -29,14 +29,14 @@ interface APIRequestOptions extends RequestInit {
   timeout?: number; // 타임아웃 (밀리초)
 }
 
-/**
- * API 요청 핵심 함수
- * - 자동 토큰 갱신
- * - 에러 처리 통합
- * - 재시도 로직
- * - 성능 측정
- */
-export async function apiRequest<T>(
+  /**
+   * API 요청 핵심 함수
+   * - 자동 토큰 갱신
+   * - 에러 처리 통합
+   * - 재시도 로직
+   * - 성능 측정
+   */
+  async function apiRequest<T>(
   endpoint: string,
   options: APIRequestOptions = {}
 ): Promise<T> {
@@ -252,6 +252,275 @@ export async function apiRequest<T>(
       corsHeaders,
     });
 
+    // 헬퍼 함수들 (호이스팅을 위해 apiRequest 함수 내부에 정의)
+    /**
+     * 응답 처리
+     */
+    async function handleResponse<T>(
+      response: Response,
+      endpoint: string,
+      url: string,
+      method: string
+    ): Promise<T> {
+      // 500 Internal Server Error 처리
+      if (response.status === 500) {
+        // 응답 본문을 읽어서 상세 에러 정보 확인
+        let errorMessage = 'Internal server error';
+        let errorDetails: unknown = null;
+        
+        // 타입 가드: Record<string, unknown>인지 확인
+        const isRecord = (v: unknown): v is Record<string, unknown> => 
+          typeof v === 'object' && v !== null && !Array.isArray(v);
+        
+        try {
+          const errorText = await response.text();
+          if (errorText) {
+            try {
+              errorDetails = JSON.parse(errorText);
+              if (isRecord(errorDetails)) {
+                errorMessage = (typeof errorDetails.message === 'string' ? errorDetails.message : null) ||
+                              (typeof errorDetails.error === 'string' ? errorDetails.error : null) ||
+                              errorMessage;
+              }
+            } catch {
+              errorMessage = errorText.substring(0, 200);
+            }
+          }
+        } catch {
+          // 응답 본문 읽기 실패는 무시
+        }
+        
+        // wait 관련 응답인지 확인
+        const isWaitError = errorMessage.toLowerCase().includes('wait') || 
+                            errorMessage.toLowerCase().includes('retry') ||
+                            errorMessage.toLowerCase().includes('please wait') ||
+                            (isRecord(errorDetails) && (
+                              (typeof errorDetails.error === 'string' && errorDetails.error.toLowerCase().includes('wait')) ||
+                              (typeof errorDetails.message === 'string' && errorDetails.message.toLowerCase().includes('wait'))
+                            ));
+        
+        if (isWaitError) {
+          // wait 관련 오류는 특별한 에러 타입으로 표시
+          const waitError: APIError & { isWaitError?: boolean; details?: unknown } = new Error(errorMessage) as APIError & { isWaitError?: boolean; details?: unknown };
+          waitError.status = 500;
+          waitError.isWaitError = true;
+          if (errorDetails) {
+            waitError.details = errorDetails;
+          }
+          throw waitError;
+        }
+        
+        console.error('[handleResponse] 500 Internal Server Error:', {
+          endpoint,
+          url,
+          method,
+          errorMessage,
+          errorDetails,
+          status: response.status,
+          statusText: response.statusText,
+        });
+        
+        const error: APIError = new Error(errorMessage);
+        error.status = 500;
+        if (errorDetails) {
+          (error as APIError & { details?: unknown }).details = errorDetails;
+        }
+        throw error;
+      }
+
+      // 404 처리
+      if (response.status === 404) {
+        const error: APIError = new Error('Not Found');
+        error.status = 404;
+        throw error;
+      }
+
+      // 401 처리 - 토큰 갱신 시도
+      if (response.status === 401) {
+        // 토큰 갱신 시도
+        try {
+          const newAccessToken = await tokenManager.getAccessToken();
+          
+          if (newAccessToken) {
+            // 새 토큰으로 재시도
+            const retryHeaders: Record<string, string> = {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${newAccessToken}`,
+            };
+
+            // CSRF 토큰은 POST, PUT, DELETE에만 필요
+            // method는 handleResponse 함수의 파라미터에서 가져옴
+            const needsCSRF = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase());
+            const csrfToken = tokenManager.getCSRFToken();
+            if (csrfToken && needsCSRF) {
+              retryHeaders['X-CSRF-Token'] = csrfToken;
+            }
+
+            const retryResponse = await fetch(url, {
+              method,
+              headers: retryHeaders,
+              credentials: 'include',
+            });
+
+            if (retryResponse.ok) {
+              return await parseResponse<T>(retryResponse, endpoint);
+            }
+          }
+        } catch (refreshError) {
+          // 토큰 갱신 실패
+          const refreshErrorMessage = refreshError instanceof Error ? refreshError.message : String(refreshError);
+          logger.warn('[apiRequest] Token refresh failed:', refreshError);
+          
+          // Refresh token이 만료되었거나 유효하지 않은 경우
+          if (refreshErrorMessage.includes('Invalid or expired refresh token') || 
+              refreshErrorMessage.includes('expired') ||
+              refreshErrorMessage.includes('invalid')) {
+            // 토큰 클리어 및 로그인 페이지로 리다이렉트
+            tokenManager.clearTokens();
+            
+            if (typeof window !== 'undefined') {
+              logger.warn('[apiRequest] Refresh token expired, redirecting to login');
+              // AuthGuard가 자동으로 처리하도록 하기 위해 약간의 지연을 두고 리다이렉트
+              setTimeout(() => {
+                window.location.href = '/login';
+              }, 100);
+            }
+          }
+        }
+
+        // 토큰 갱신 실패 또는 재시도 실패
+        const error: APIError = new Error('Authentication required');
+        error.status = 401;
+        
+        trackAPIError(endpoint, 401, error, {
+          action: 'api_request',
+          component: 'api_client',
+        });
+
+        throw error;
+      }
+
+      // 403 처리
+      if (response.status === 403) {
+        const errorData = await response.json().catch(() => ({ message: 'Forbidden' }));
+        const error: APIError = new Error(errorData.message || 'Forbidden');
+        error.status = 403;
+        
+        trackAPIError(endpoint, 403, error, {
+          action: 'api_request',
+          component: 'api_client',
+        });
+
+        throw error;
+      }
+
+      // 기타 에러 처리
+      if (!response.ok) {
+        const errorData = await parseErrorResponse(response);
+        const error: APIError = new Error(
+          errorData.message || errorData.error || `HTTP error! status: ${response.status}`
+        );
+        error.status = response.status;
+        error.response = response;
+        error.data = errorData;
+
+        trackAPIError(endpoint, response.status, error, {
+          action: 'api_request',
+          component: 'api_client',
+          errorMessage: errorData.message || errorData.error,
+        });
+
+        throw error;
+      }
+
+      // 성공 응답 처리
+      return await parseResponse<T>(response, endpoint);
+    }
+
+    /**
+     * 에러 응답 파싱
+     */
+    async function parseErrorResponse(response: Response): Promise<{ message?: string; error?: string; [key: string]: unknown }> {
+      try {
+        const text = await response.text();
+        if (text) {
+          try {
+            return JSON.parse(text);
+          } catch {
+            return { message: text || response.statusText || 'Unknown error' };
+          }
+        }
+      } catch {
+        // 파싱 실패
+      }
+      
+      return { message: response.statusText || 'Unknown error' };
+    }
+
+    /**
+     * 성공 응답 파싱
+     */
+    async function parseResponse<T>(response: Response, endpoint: string): Promise<T> {
+      // 상세 로깅 (개발 환경만)
+      const contentLength = response.headers.get('content-length');
+      logger.log('[parseResponse] Response details:', {
+        status: response.status,
+        statusText: response.statusText,
+        contentLength,
+        contentType: response.headers.get('content-type'),
+        endpoint,
+      });
+      
+      // 204 No Content
+      if (response.status === 204 || contentLength === '0') {
+        logger.log('[parseResponse] 204 No Content or content-length=0, returning empty object');
+        return {} as T;
+      }
+
+      // JSON 파싱
+      const text = await response.text();
+      
+      logger.log('[parseResponse] Response text:', {
+        hasText: !!text,
+        textLength: text?.length || 0,
+        textPreview: text ? text.substring(0, 300) : 'empty',
+        endpoint,
+      });
+      
+      if (!text || text.trim() === '') {
+        logger.warn('[parseResponse] Empty response body, returning empty object');
+        return {} as T;
+      }
+
+      try {
+        const parsed = JSON.parse(text) as T;
+        logger.log('[parseResponse] Parsed response:', {
+          hasData: !!parsed,
+          keys: parsed ? Object.keys(parsed) : [],
+          dataPreview: parsed ? JSON.stringify(parsed).substring(0, 300) : 'empty',
+          endpoint,
+        });
+        return parsed;
+      } catch (err) {
+        logger.error(err instanceof Error ? err : new Error(String(err)), {
+          component: 'parseResponse',
+          action: 'json_parse',
+          text: text.substring(0, 300),
+          endpoint,
+        });
+        const parseError: APIError = new Error('Failed to parse server response');
+        parseError.status = response.status;
+        
+        trackAPIError(endpoint, response.status, parseError, {
+          action: 'parse_response',
+          component: 'api_client',
+          responseText: text.substring(0, 100),
+        });
+
+        throw parseError;
+      }
+    }
+
     // 응답 처리
     return await handleResponse<T>(response, endpoint, url, method);
   } catch (error) {
@@ -267,273 +536,267 @@ export async function apiRequest<T>(
 
     throw apiError;
   }
-}
-
-/**
- * 응답 처리
- */
-async function handleResponse<T>(
-  response: Response,
-  endpoint: string,
-  url: string,
-  method: string
-): Promise<T> {
-  // 500 Internal Server Error 처리
-  if (response.status === 500) {
-    // 응답 본문을 읽어서 상세 에러 정보 확인
-    let errorMessage = 'Internal server error';
-    let errorDetails: unknown = null;
-    
-    // 타입 가드: Record<string, unknown>인지 확인
-    const isRecord = (v: unknown): v is Record<string, unknown> => 
-      typeof v === 'object' && v !== null && !Array.isArray(v);
-    
-    try {
-      const errorText = await response.text();
-      if (errorText) {
+      // 500 Internal Server Error 처리
+      if (response.status === 500) {
+        // 응답 본문을 읽어서 상세 에러 정보 확인
+        let errorMessage = 'Internal server error';
+        let errorDetails: unknown = null;
+        
+        // 타입 가드: Record<string, unknown>인지 확인
+        const isRecord = (v: unknown): v is Record<string, unknown> => 
+          typeof v === 'object' && v !== null && !Array.isArray(v);
+        
         try {
-          errorDetails = JSON.parse(errorText);
-          if (isRecord(errorDetails)) {
-            errorMessage = (typeof errorDetails.message === 'string' ? errorDetails.message : null) ||
-                          (typeof errorDetails.error === 'string' ? errorDetails.error : null) ||
-                          errorMessage;
+          const errorText = await response.text();
+          if (errorText) {
+            try {
+              errorDetails = JSON.parse(errorText);
+              if (isRecord(errorDetails)) {
+                errorMessage = (typeof errorDetails.message === 'string' ? errorDetails.message : null) ||
+                              (typeof errorDetails.error === 'string' ? errorDetails.error : null) ||
+                              errorMessage;
+              }
+            } catch {
+              errorMessage = errorText.substring(0, 200);
+            }
           }
         } catch {
-          errorMessage = errorText.substring(0, 200);
+          // 응답 본문 읽기 실패는 무시
         }
-      }
-    } catch {
-      // 응답 본문 읽기 실패는 무시
-    }
-    
-    // wait 관련 응답인지 확인
-    const isWaitError = errorMessage.toLowerCase().includes('wait') || 
-                        errorMessage.toLowerCase().includes('retry') ||
-                        errorMessage.toLowerCase().includes('please wait') ||
-                        (isRecord(errorDetails) && (
-                          (typeof errorDetails.error === 'string' && errorDetails.error.toLowerCase().includes('wait')) ||
-                          (typeof errorDetails.message === 'string' && errorDetails.message.toLowerCase().includes('wait'))
-                        ));
-    
-    if (isWaitError) {
-      // wait 관련 오류는 특별한 에러 타입으로 표시
-      const waitError: APIError & { isWaitError?: boolean; details?: unknown } = new Error(errorMessage) as APIError & { isWaitError?: boolean; details?: unknown };
-      waitError.status = 500;
-      waitError.isWaitError = true;
-      if (errorDetails) {
-        waitError.details = errorDetails;
-      }
-      throw waitError;
-    }
-    
-    console.error('[handleResponse] 500 Internal Server Error:', {
-      endpoint,
-      url,
-      method,
-      errorMessage,
-      errorDetails,
-      status: response.status,
-      statusText: response.statusText,
-    });
-    
-    const error: APIError = new Error(errorMessage);
-    error.status = 500;
-    if (errorDetails) {
-      (error as APIError & { details?: unknown }).details = errorDetails;
-    }
-    throw error;
-  }
-
-  // 404 처리
-  if (response.status === 404) {
-    const error: APIError = new Error('Not Found');
-    error.status = 404;
-    throw error;
-  }
-
-  // 401 처리 - 토큰 갱신 시도
-  if (response.status === 401) {
-    // 토큰 갱신 시도
-    try {
-      const newAccessToken = await tokenManager.getAccessToken();
-      
-      if (newAccessToken) {
-        // 새 토큰으로 재시도
-        const retryHeaders: Record<string, string> = {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${newAccessToken}`,
-        };
-
-        // CSRF 토큰은 POST, PUT, DELETE에만 필요
-        // method는 handleResponse 함수의 파라미터에서 가져옴
-        const needsCSRF = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase());
-        const csrfToken = tokenManager.getCSRFToken();
-        if (csrfToken && needsCSRF) {
-          retryHeaders['X-CSRF-Token'] = csrfToken;
+        
+        // wait 관련 응답인지 확인
+        const isWaitError = errorMessage.toLowerCase().includes('wait') || 
+                            errorMessage.toLowerCase().includes('retry') ||
+                            errorMessage.toLowerCase().includes('please wait') ||
+                            (isRecord(errorDetails) && (
+                              (typeof errorDetails.error === 'string' && errorDetails.error.toLowerCase().includes('wait')) ||
+                              (typeof errorDetails.message === 'string' && errorDetails.message.toLowerCase().includes('wait'))
+                            ));
+        
+        if (isWaitError) {
+          // wait 관련 오류는 특별한 에러 타입으로 표시
+          const waitError: APIError & { isWaitError?: boolean; details?: unknown } = new Error(errorMessage) as APIError & { isWaitError?: boolean; details?: unknown };
+          waitError.status = 500;
+          waitError.isWaitError = true;
+          if (errorDetails) {
+            waitError.details = errorDetails;
+          }
+          throw waitError;
         }
-
-        const retryResponse = await fetch(url, {
+        
+        console.error('[handleResponse] 500 Internal Server Error:', {
+          endpoint,
+          url,
           method,
-          headers: retryHeaders,
-          credentials: 'include',
+          errorMessage,
+          errorDetails,
+          status: response.status,
+          statusText: response.statusText,
+        });
+        
+        const error: APIError = new Error(errorMessage);
+        error.status = 500;
+        if (errorDetails) {
+          (error as APIError & { details?: unknown }).details = errorDetails;
+        }
+        throw error;
+      }
+
+      // 404 처리
+      if (response.status === 404) {
+        const error: APIError = new Error('Not Found');
+        error.status = 404;
+        throw error;
+      }
+
+      // 401 처리 - 토큰 갱신 시도
+      if (response.status === 401) {
+        // 토큰 갱신 시도
+        try {
+          const newAccessToken = await tokenManager.getAccessToken();
+          
+          if (newAccessToken) {
+            // 새 토큰으로 재시도
+            const retryHeaders: Record<string, string> = {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${newAccessToken}`,
+            };
+
+            // CSRF 토큰은 POST, PUT, DELETE에만 필요
+            // method는 handleResponse 함수의 파라미터에서 가져옴
+            const needsCSRF = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase());
+            const csrfToken = tokenManager.getCSRFToken();
+            if (csrfToken && needsCSRF) {
+              retryHeaders['X-CSRF-Token'] = csrfToken;
+            }
+
+            const retryResponse = await fetch(url, {
+              method,
+              headers: retryHeaders,
+              credentials: 'include',
+            });
+
+            if (retryResponse.ok) {
+              return await parseResponse<T>(retryResponse, endpoint);
+            }
+          }
+        } catch (refreshError) {
+          // 토큰 갱신 실패
+          const refreshErrorMessage = refreshError instanceof Error ? refreshError.message : String(refreshError);
+          logger.warn('[apiRequest] Token refresh failed:', refreshError);
+          
+          // Refresh token이 만료되었거나 유효하지 않은 경우
+          if (refreshErrorMessage.includes('Invalid or expired refresh token') || 
+              refreshErrorMessage.includes('expired') ||
+              refreshErrorMessage.includes('invalid')) {
+            // 토큰 클리어 및 로그인 페이지로 리다이렉트
+            tokenManager.clearTokens();
+            
+            if (typeof window !== 'undefined') {
+              logger.warn('[apiRequest] Refresh token expired, redirecting to login');
+              // AuthGuard가 자동으로 처리하도록 하기 위해 약간의 지연을 두고 리다이렉트
+              setTimeout(() => {
+                window.location.href = '/login';
+              }, 100);
+            }
+          }
+        }
+
+        // 토큰 갱신 실패 또는 재시도 실패
+        const error: APIError = new Error('Authentication required');
+        error.status = 401;
+        
+        trackAPIError(endpoint, 401, error, {
+          action: 'api_request',
+          component: 'api_client',
         });
 
-        if (retryResponse.ok) {
-          return await parseResponse<T>(retryResponse, endpoint);
-        }
+        throw error;
       }
-    } catch (refreshError) {
-      // 토큰 갱신 실패
-      const refreshErrorMessage = refreshError instanceof Error ? refreshError.message : String(refreshError);
-      logger.warn('[apiRequest] Token refresh failed:', refreshError);
-      
-      // Refresh token이 만료되었거나 유효하지 않은 경우
-      if (refreshErrorMessage.includes('Invalid or expired refresh token') || 
-          refreshErrorMessage.includes('expired') ||
-          refreshErrorMessage.includes('invalid')) {
-        // 토큰 클리어 및 로그인 페이지로 리다이렉트
-        tokenManager.clearTokens();
+
+      // 403 처리
+      if (response.status === 403) {
+        const errorData = await response.json().catch(() => ({ message: 'Forbidden' }));
+        const error: APIError = new Error(errorData.message || 'Forbidden');
+        error.status = 403;
         
-        if (typeof window !== 'undefined') {
-          logger.warn('[apiRequest] Refresh token expired, redirecting to login');
-          // AuthGuard가 자동으로 처리하도록 하기 위해 약간의 지연을 두고 리다이렉트
-          setTimeout(() => {
-            window.location.href = '/login';
-          }, 100);
-        }
+        trackAPIError(endpoint, 403, error, {
+          action: 'api_request',
+          component: 'api_client',
+        });
+
+        throw error;
       }
-    }
 
-    // 토큰 갱신 실패 또는 재시도 실패
-    const error: APIError = new Error('Authentication required');
-    error.status = 401;
+      // 기타 에러 처리
+      if (!response.ok) {
+        const errorData = await parseErrorResponse(response);
+        const error: APIError = new Error(
+          errorData.message || errorData.error || `HTTP error! status: ${response.status}`
+        );
+        error.status = response.status;
+        error.response = response;
+        error.data = errorData;
+
+        trackAPIError(endpoint, response.status, error, {
+          action: 'api_request',
+          component: 'api_client',
+          errorMessage: errorData.message || errorData.error,
+        });
+
+        throw error;
+      }
+
+      // 성공 응답 처리
+      return await parseResponse<T>(response, endpoint);
+    } // handleResponse 함수 끝
     
-    trackAPIError(endpoint, 401, error, {
-      action: 'api_request',
-      component: 'api_client',
-    });
-
-    throw error;
-  }
-
-  // 403 처리
-  if (response.status === 403) {
-    const errorData = await response.json().catch(() => ({ message: 'Forbidden' }));
-    const error: APIError = new Error(errorData.message || 'Forbidden');
-    error.status = 403;
-    
-    trackAPIError(endpoint, 403, error, {
-      action: 'api_request',
-      component: 'api_client',
-    });
-
-    throw error;
-  }
-
-  // 기타 에러 처리
-  if (!response.ok) {
-    const errorData = await parseErrorResponse(response);
-    const error: APIError = new Error(
-      errorData.message || errorData.error || `HTTP error! status: ${response.status}`
-    );
-    error.status = response.status;
-    error.response = response;
-    error.data = errorData;
-
-    trackAPIError(endpoint, response.status, error, {
-      action: 'api_request',
-      component: 'api_client',
-      errorMessage: errorData.message || errorData.error,
-    });
-
-    throw error;
-  }
-
-  // 성공 응답 처리
-  return await parseResponse<T>(response, endpoint);
-}
-
-/**
- * 에러 응답 파싱
- */
-async function parseErrorResponse(response: Response): Promise<{ message?: string; error?: string; [key: string]: unknown }> {
-  try {
-    const text = await response.text();
-    if (text) {
+    /**
+     * 에러 응답 파싱
+     */
+    async function parseErrorResponse(response: Response): Promise<{ message?: string; error?: string; [key: string]: unknown }> {
       try {
-        return JSON.parse(text);
+        const text = await response.text();
+        if (text) {
+          try {
+            return JSON.parse(text);
+          } catch {
+            return { message: text || response.statusText || 'Unknown error' };
+          }
+        }
       } catch {
-        return { message: text || response.statusText || 'Unknown error' };
+        // 파싱 실패
+      }
+      
+      return { message: response.statusText || 'Unknown error' };
+    }
+
+    /**
+     * 성공 응답 파싱
+     */
+    async function parseResponse<T>(response: Response, endpoint: string): Promise<T> {
+      // 상세 로깅 (개발 환경만)
+      const contentLength = response.headers.get('content-length');
+      logger.log('[parseResponse] Response details:', {
+        status: response.status,
+        statusText: response.statusText,
+        contentLength,
+        contentType: response.headers.get('content-type'),
+        endpoint,
+      });
+      
+      // 204 No Content
+      if (response.status === 204 || contentLength === '0') {
+        logger.log('[parseResponse] 204 No Content or content-length=0, returning empty object');
+        return {} as T;
+      }
+
+      // JSON 파싱
+      const text = await response.text();
+      
+      logger.log('[parseResponse] Response text:', {
+        hasText: !!text,
+        textLength: text?.length || 0,
+        textPreview: text ? text.substring(0, 300) : 'empty',
+        endpoint,
+      });
+      
+      if (!text || text.trim() === '') {
+        logger.warn('[parseResponse] Empty response body, returning empty object');
+        return {} as T;
+      }
+
+      try {
+        const parsed = JSON.parse(text) as T;
+        logger.log('[parseResponse] Parsed response:', {
+          hasData: !!parsed,
+          keys: parsed ? Object.keys(parsed) : [],
+          dataPreview: parsed ? JSON.stringify(parsed).substring(0, 300) : 'empty',
+          endpoint,
+        });
+        return parsed;
+      } catch (err) {
+        logger.error(err instanceof Error ? err : new Error(String(err)), {
+          component: 'parseResponse',
+          action: 'json_parse',
+          text: text.substring(0, 300),
+          endpoint,
+        });
+        const parseError: APIError = new Error('Failed to parse server response');
+        parseError.status = response.status;
+        
+        trackAPIError(endpoint, response.status, parseError, {
+          action: 'parse_response',
+          component: 'api_client',
+          responseText: text.substring(0, 100),
+        });
+
+        throw parseError;
       }
     }
-  } catch {
-    // 파싱 실패
-  }
-  
-  return { message: response.statusText || 'Unknown error' };
-}
 
-/**
- * 성공 응답 파싱
- */
-async function parseResponse<T>(response: Response, endpoint: string): Promise<T> {
-  // 상세 로깅 (개발 환경만)
-  const contentLength = response.headers.get('content-length');
-  logger.log('[parseResponse] Response details:', {
-    status: response.status,
-    statusText: response.statusText,
-    contentLength,
-    contentType: response.headers.get('content-type'),
-    endpoint,
-  });
-  
-  // 204 No Content
-  if (response.status === 204 || contentLength === '0') {
-    logger.log('[parseResponse] 204 No Content or content-length=0, returning empty object');
-    return {} as T;
-  }
-
-  // JSON 파싱
-  const text = await response.text();
-  
-  logger.log('[parseResponse] Response text:', {
-    hasText: !!text,
-    textLength: text?.length || 0,
-    textPreview: text ? text.substring(0, 300) : 'empty',
-    endpoint,
-  });
-  
-  if (!text || text.trim() === '') {
-    logger.warn('[parseResponse] Empty response body, returning empty object');
-    return {} as T;
-  }
-
-  try {
-    const parsed = JSON.parse(text) as T;
-    logger.log('[parseResponse] Parsed response:', {
-      hasData: !!parsed,
-      keys: parsed ? Object.keys(parsed) : [],
-      dataPreview: parsed ? JSON.stringify(parsed).substring(0, 300) : 'empty',
-      endpoint,
-    });
-    return parsed;
-  } catch (err) {
-    logger.error(err instanceof Error ? err : new Error(String(err)), {
-      component: 'parseResponse',
-      action: 'json_parse',
-      text: text.substring(0, 300),
-      endpoint,
-    });
-    const parseError: APIError = new Error('Failed to parse server response');
-    parseError.status = response.status;
-    
-    trackAPIError(endpoint, response.status, parseError, {
-      action: 'parse_response',
-      component: 'api_client',
-      responseText: text.substring(0, 100),
-    });
-
-    throw parseError;
-  }
+  return {
+    apiRequest,
+  };
 }
 
