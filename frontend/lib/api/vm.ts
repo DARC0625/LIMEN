@@ -1,8 +1,8 @@
 /**
- * VM API 클라이언트
+ * VM API 클라이언트 (Factory 패턴)
+ * ✅ P1-Next-Fix-Module-3B: core 모듈은 DI로만 동작
  */
 
-import { apiRequest } from './client';
 import type {
   VM,
   VMStats,
@@ -10,6 +10,7 @@ import type {
   ISOList,
   BootOrder,
 } from '../types';
+import type { ApiRequestFn } from './admin';
 
 // ============================================================================
 // 타입 가드 및 DTO
@@ -77,7 +78,14 @@ export function normalizeBootOrderToBackend(frontendBootOrder: BootOrder): strin
   return mapping[frontendBootOrder] || 'hd';
 }
 
-export const vmAPI = {
+export interface VMAPIDeps {
+  apiRequest: ApiRequestFn;
+}
+
+export function createVMAPI(deps: VMAPIDeps) {
+  const { apiRequest } = deps;
+
+  return {
   /**
    * VM 목록 조회
    */
@@ -560,7 +568,8 @@ export const vmAPI = {
       throw error;
     }
   },
-};
+  };
+}
 
 
 

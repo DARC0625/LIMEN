@@ -15,11 +15,17 @@
 
 'use client';
 
-import { createApiClient } from './client';
+// ✅ P1-Next-Fix-Module-3B: createApiClient는 core 파일에서 import
+import { createApiClient } from './apiClient';
 // ✅ P1-Next-Fix-Module-2B: tokenManager는 별도 client 엔트리에서 import
 import { tokenManager } from '../tokenManager.client';
 // ✅ P1-Next-Fix-Module-2C: authAPI는 factory로 생성
 import { createAuthAPI } from './auth';
+// ✅ P1-Next-Fix-Module-3B: factory들을 import
+import { createAdminAPI } from './admin';
+import { createQuotaAPI } from './quota';
+import { createSnapshotAPI } from './snapshot';
+import { createVMAPI } from './vm';
 
 const api = createApiClient({
   tokenManager,
@@ -36,6 +42,12 @@ export const authAPI = createAuthAPI({
   fetch: window.fetch.bind(window),
 });
 
+// ✅ P1-Next-Fix-Module-3B: factory들을 wiring하여 싱글톤 생성
+export const adminAPI = createAdminAPI({ apiRequest });
+export const quotaAPI = createQuotaAPI({ apiRequest });
+export const snapshotAPI = createSnapshotAPI({ apiRequest });
+export const vmAPI = createVMAPI({ apiRequest });
+
 // 하위 호환성 함수들도 함께 export
 export {
   getUserRole,
@@ -45,10 +57,3 @@ export {
   removeToken,
   setTokens,
 } from './clientHelpers';
-
-// ✅ P1-Next-Fix-Module-2F: 브라우저 전용 API 모듈들 export
-// 이들은 내부적으로 clientApi를 import하므로 브라우저에서만 사용 가능
-export { vmAPI } from './vm';
-export { snapshotAPI } from './snapshot';
-export { quotaAPI } from './quota';
-export { adminAPI } from './admin';
