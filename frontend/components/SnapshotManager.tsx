@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { snapshotAPI } from '../lib/api';
+import { snapshotAPI } from '../lib/api/client';
 import type { VMSnapshot } from '../lib/types';
 import { useToast } from './ToastContainer';
 import { logger } from '../lib/utils/logger';

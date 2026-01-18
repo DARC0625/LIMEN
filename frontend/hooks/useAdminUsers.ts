@@ -1,7 +1,7 @@
 // Admin 사용자 관리 훅 (React Query)
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { startTransition } from 'react';
-import { adminAPI } from '../lib/api';
+import { adminAPI } from '../lib/api/client';
 import type { UserWithStats, CreateUserRequest, UpdateUserRequest } from '../lib/types';
 import { useToast } from '../components/ToastContainer';
 import { getErrorMessage } from '../lib/types/errors';

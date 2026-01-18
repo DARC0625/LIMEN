@@ -1,50 +1,21 @@
 /**
  * ✅ E2E 테스트 전용 tokenManager 엔트리
  * 
- * 제품 코드(tokenManager.ts)는 순수하게 유지하고,
- * 테스트 훅(__test)은 이 엔트리에서 top-level로 강제 부착
+ * ✅ P1-Next-Fix-Module-4: client tokenManager 싱글톤을 사용하여 E2E와 앱이 같은 인스턴스를 공유
+ * - 제품 코드(tokenManager.ts)는 순수하게 유지
+ * - 테스트 훅(__test)은 이 엔트리에서 top-level로 강제 부착
+ * - client tokenManager를 사용하여 E2E와 앱이 같은 인스턴스를 공유하도록 보장
  * 
  * ✅ Command E2E-2: E2E에서 TokenManager가 BrowserStoragePort를 사용하도록 고정
  * - snapshot === localStorage 상태가 일치
  * - "세션 정리"를 진짜 브라우저 저장소 기준으로 검증 가능
  * - CI hermetic 유지 가능 (네트워크는 route로 막고, 저장소는 브라우저 내부)
  */
-import { createTokenManager } from '../lib/tokenManager';
-import { createBrowserStoragePort } from '../lib/adapters/browserStoragePort';
-import { createBrowserClockPort } from '../lib/adapters/browserClockPort';
-import { createBrowserLocationPort } from '../lib/adapters/browserLocationPort';
-import { createBrowserCryptoPort } from '../lib/adapters/browserCryptoPort';
-import { createMemoryStoragePort, createMemorySessionStoragePort } from '../lib/adapters/memoryStoragePort';
-import { createMemoryClockPort } from '../lib/adapters/memoryClockPort';
-import { createMemoryLocationPort } from '../lib/adapters/memoryLocationPort';
+// ✅ P1-Next-Fix-Module-4: client tokenManager 싱글톤 사용
+import { tokenManager as clientTokenManager } from '../lib/tokenManager.client';
 
-// ✅ Command E2E-2: E2E에서만큼은 BrowserStoragePort 사용
-// snapshot === localStorage 상태가 일치하도록
-// 브라우저 환경에서만 실행되므로 window/localStorage는 항상 존재
-const storagePort = typeof window !== 'undefined' && window.localStorage
-  ? createBrowserStoragePort(window.localStorage)
-  : createMemoryStoragePort();
-const sessionStoragePort = typeof window !== 'undefined' && window.sessionStorage
-  ? createBrowserStoragePort(window.sessionStorage)
-  : createMemorySessionStoragePort();
-const clockPort = typeof window !== 'undefined'
-  ? createBrowserClockPort()
-  : createMemoryClockPort(Date.now());
-const locationPort = typeof window !== 'undefined'
-  ? (createBrowserLocationPort() ?? createMemoryLocationPort('/'))
-  : createMemoryLocationPort('/');
-const cryptoPort = typeof window !== 'undefined'
-  ? createBrowserCryptoPort()
-  : createNodeCryptoPort();
-
-// ✅ 테스트 전용 tokenManager 인스턴스 생성
-export const tokenManager = createTokenManager(
-  storagePort,
-  sessionStoragePort,
-  clockPort,
-  cryptoPort,
-  locationPort
-);
+// ✅ P1-Next-Fix-Module-4: client tokenManager를 그대로 사용 (E2E와 앱이 같은 인스턴스)
+export const tokenManager = clientTokenManager;
 
 // ✅ clearSession 호출 계측 (테스트용)
 let clearSessionCalledCount = 0;

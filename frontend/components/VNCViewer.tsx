@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { handleError } from '@/lib/utils/error';
-import { vmAPI } from '@/lib/api/index';
+import { vmAPI } from '@/lib/api/client';
 import { logger } from '@/lib/utils/logger';
 import { getErrorMessage } from '@/lib/types/errors';
 import type { VM } from '@/lib/types';

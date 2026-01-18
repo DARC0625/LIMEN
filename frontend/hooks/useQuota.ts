@@ -1,6 +1,6 @@
 // 할당량 조회 훅 (React Query)
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
-import { quotaAPI } from '../lib/api/index';
+import { quotaAPI } from '../lib/api/client';
 // QuotaUsage 타입은 현재 사용되지 않음
 import { useAuth } from '../components/AuthGuard';
 import { logger } from '../lib/utils/logger';

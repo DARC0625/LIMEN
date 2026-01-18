@@ -4,7 +4,7 @@
  */
 import { useQuery, useSuspenseQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { startTransition } from 'react';
-import { vmAPI } from '../lib/api/index';
+import { vmAPI } from '../lib/api/client';
 import type { VM, QuotaUsage } from '../lib/types';
 import { useToast } from '../components/ToastContainer';
 import { useAuth } from '../components/AuthGuard';
