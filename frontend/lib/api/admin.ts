@@ -2,7 +2,7 @@
  * Admin API 클라이언트
  */
 
-import { apiRequest } from './clientApi';
+import { apiRequest } from './client';
 import type {
   User,
   UserWithStats,

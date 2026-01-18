@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { authAPI, setToken } from '@/lib/api';
+import { authAPI, setToken } from '@/lib/api/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { logger } from '@/lib/utils/logger';
 import { sanitizeInput } from '@/lib/utils/validation';

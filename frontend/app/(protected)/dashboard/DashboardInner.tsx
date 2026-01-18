@@ -3,7 +3,7 @@
 import { useState, useEffect, startTransition } from 'react';
 import dynamicImport from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { removeToken, isAdmin, vmAPI } from '@/lib/api';
+import { removeToken, isAdmin, vmAPI } from '@/lib/api/client';
 import { isUserApproved } from '@/lib/auth';
 import { useToast } from '@/components/ToastContainer';
 import { useCreateVM, useVMAction } from '@/hooks/useVMs';

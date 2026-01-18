@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { authAPI } from '@/lib/api';
+import { authAPI } from '@/lib/api/client';
 import { useRouter } from 'next/navigation';
 import { useToast } from './ToastContainer';
 import { getErrorMessage } from '@/lib/types/errors';

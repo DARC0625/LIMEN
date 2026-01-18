@@ -341,12 +341,26 @@ export function createAuth(deps: AuthDeps) {
 
   /**
    * 로그아웃
+   * ✅ P1-Next-Fix-Module-3: 서버 사이드에서 안전하게 처리
    */
   function logout(): void {
     deps.tokenManager.clearTokens();
-    deps.authAPI.deleteSession().catch(() => {
-      // 세션 삭제 실패는 무시
-    });
+    
+    // ✅ 서버 사이드에서는 deleteSession 호출 스킵
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
+    // ✅ Promise가 아닌 값을 반환해도 안전하게 처리
+    try {
+      const deleteSessionResult = deps.authAPI.deleteSession();
+      // Promise.resolve로 래핑하여 항상 Promise로 처리
+      Promise.resolve(deleteSessionResult).catch(() => {
+        // 세션 삭제 실패는 무시
+      });
+    } catch {
+      // 동기 에러도 무시
+    }
   }
 
   return {

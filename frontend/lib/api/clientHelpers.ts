@@ -8,7 +8,7 @@
 'use client';
 
 import { getUserRoleFromToken, isUserApprovedFromToken } from '../utils/token';
-import { tokenManager } from './clientApi';
+import { tokenManager } from './client';
 import { logger } from '../utils/logger';
 
 /**
@@ -115,8 +115,8 @@ export async function setTokens(
   
   // 백엔드 세션 생성 요청 (순환 참조 방지를 위해 직접 import)
   try {
-    // ✅ P1-Next-Fix-Module-2C: authAPI는 clientApi에서 import
-    const { authAPI } = await import('./clientApi');
+    // ✅ P1-Next-Fix-Module-2C: authAPI는 client에서 import
+    const { authAPI } = await import('./client');
     await authAPI.createSession(accessToken, refreshToken);
   } catch (error) {
     logger.error(error instanceof Error ? error : new Error(String(error)), {

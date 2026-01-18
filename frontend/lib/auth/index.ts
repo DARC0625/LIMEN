@@ -8,7 +8,7 @@
 
 // ✅ P1-Next-Fix-Module-2F: 브라우저 전용 싱글톤은 clientApi에서만 import
 import { tokenManager } from '../tokenManager.client';
-import { authAPI } from '../api/clientApi';
+import { authAPI } from '../api/client';
 import { createBrowserClockPort } from '../adapters/browserClockPort';
 import { createAuth, type AuthCheckResult, type CheckAuthOptions } from './createAuth';
 
