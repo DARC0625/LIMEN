@@ -11,7 +11,8 @@
  */
 export function installMockFetch(): jest.MockedFunction<typeof fetch> {
   const mockFetch = jest.fn<ReturnType<typeof fetch>, Parameters<typeof fetch>>();
-  (globalThis as any).fetch = mockFetch as unknown as typeof fetch;
+  // ✅ P1-Next-Fix-4: 타입 안전한 fetch mock 설치
+  (globalThis as { fetch?: typeof fetch }).fetch = mockFetch as unknown as typeof fetch;
   return mockFetch;
 }
 
@@ -39,7 +40,8 @@ export function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
  * @returns Response 객체 (getSetCookie 메서드 추가됨)
  */
 export function attachSetCookie(res: Response, cookies: string[]): Response {
-  (res.headers as any).getSetCookie = () => cookies;
+  // ✅ P1-Next-Fix-4: Headers에 getSetCookie 메서드 추가 (타입 안전)
+  (res.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie = () => cookies;
   return res;
 }
 
