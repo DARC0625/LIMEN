@@ -536,11 +536,6 @@ interface APIRequestOptions extends RequestInit {
 
     throw apiError;
   }
-      // 500 Internal Server Error 처리
-      if (response.status === 500) {
-        // 응답 본문을 읽어서 상세 에러 정보 확인
-        let errorMessage = 'Internal server error';
-        let errorDetails: unknown = null;
         
         // 타입 가드: Record<string, unknown>인지 확인
         const isRecord = (v: unknown): v is Record<string, unknown> => 
@@ -709,8 +704,8 @@ interface APIRequestOptions extends RequestInit {
 
       // 성공 응답 처리
       return await parseResponse<T>(response, endpoint);
-    } // handleResponse 함수 끝
-    
+    }
+
     /**
      * 에러 응답 파싱
      */
@@ -794,6 +789,7 @@ interface APIRequestOptions extends RequestInit {
         throw parseError;
       }
     }
+  }
 
   return {
     apiRequest,
