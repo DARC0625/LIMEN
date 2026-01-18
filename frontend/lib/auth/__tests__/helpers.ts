@@ -74,9 +74,8 @@ export function createFakeAuthAPI(options: {
   } = options;
 
   return {
-    checkSession: jest.fn(checkSessionImpl || (async () => {
-      return checkSessionResult || { ok: true, status: 200, data: { valid: true } };
-    })),
+    // checkSession이 undefined이면 fetch를 사용하도록 함
+    checkSession: checkSessionImpl ? jest.fn(checkSessionImpl) : (checkSessionResult !== undefined ? jest.fn(async () => checkSessionResult) : undefined),
     deleteSession: jest.fn(deleteSessionImpl || (async () => {})),
     refreshToken: refreshTokenImpl ? jest.fn(refreshTokenImpl) : undefined,
   };

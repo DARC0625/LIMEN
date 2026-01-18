@@ -885,30 +885,32 @@ describe('checkLocalStorageToken', () => {
   })
 
   it('handles checkLocalStorageToken with valid token', async () => {
-    // ✅ P1-4: factory 기반 테스트 - 시나리오 입력/출력만 검증
+    // ✅ P1-Next-2: factory 기반 테스트 - 시나리오 입력/출력만 검증
+    // checkLocalStorageToken은 hasValidToken()이 false일 때 두 번째 try 블록에서 호출됨
     const clock = createTestClock();
     const now = clock.now();
     
-    // ✅ P1-4: 토큰이 유효하도록 설정 (expiresAt를 충분히 큰 미래값으로)
+    // ✅ P1-Next-2: hasValidToken이 false를 반환하도록 설정 (expiresAt를 과거로 설정)
+    // 그러면 두 번째 try 블록에서 checkBackendSession이 호출되고, 실패하면 checkLocalStorageToken으로 폴백
     const tokenManager = createFakeTokenManager({
       accessToken: 'valid-token',
-      refreshToken: 'refresh-token',
-      expiresAt: now + 60000, // 1분 후 만료
+      refreshToken: null, // refreshToken이 null이면 hasValidToken이 false
+      expiresAt: null, // expiresAt가 null이면 hasValidToken이 false
       getAccessTokenImpl: async () => 'valid-token',
+      clock,
     });
     
-    // ✅ P1-4: checkBackendSession이 실패하도록 설정 (네트워크 에러)
+    // ✅ P1-Next-2: checkBackendSession이 throw하도록 설정 (네트워크 에러)
+    // fetch가 throw하면 checkBackendSession의 catch 블록에서 throw하고,
+    // checkAuth의 두 번째 try 블록의 catch에서 checkLocalStorageToken이 호출됨
     const fetchFn = createFakeFetch({
       sessionResponse: { status: 500, ok: false },
     });
-    
-    // fetch가 실패하면 checkBackendSession()이 실패하고 checkLocalStorageToken()이 호출됨
     fetchFn.mockRejectedValueOnce(new Error('Network error'));
     
+    // authAPI.checkSession을 undefined로 설정하여 fetch를 사용하도록 함
     const authAPI = createFakeAuthAPI({
-      checkSessionImpl: async () => {
-        throw new Error('Network error');
-      },
+      // checkSession을 undefined로 설정하면 fetch를 사용
     });
     
     mockIsTokenValid.mockReturnValue(true);
@@ -916,9 +918,10 @@ describe('checkLocalStorageToken', () => {
     const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
     const result = await auth.checkAuth({ debug: true });
 
-    // ✅ P1-4: 시나리오 입력에 따른 출력만 검증
+    // ✅ P1-Next-2: 시나리오 입력에 따른 출력만 검증
     console.log('[TEST] checkLocalStorageToken debug:', result.debug)
     expect(result.debug).toBeDefined()
+    // checkBackendSession이 실패하면 두 번째 try 블록의 catch에서 checkLocalStorageToken이 호출됨
     expect(result.debug?.checkLocalStorageTokenCalled).toBe(true)
     expect(result.debug?.hasAccessToken).toBe(true)
     
