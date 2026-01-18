@@ -3,6 +3,29 @@
  * ✅ P1-4: Factory 패턴 기반 테스트 (mock 지옥 탈출)
  */
 
+// ✅ P1-Next-Fix-Module-2F: clientApi와 tokenManager.client를 mock
+jest.mock('../../api/clientApi', () => ({
+  tokenManager: {
+    getAccessToken: jest.fn(),
+    getCSRFToken: jest.fn(),
+    clearTokens: jest.fn(),
+    setTokens: jest.fn(),
+  },
+  authAPI: {
+    checkSession: jest.fn(),
+    deleteSession: jest.fn(),
+  },
+}))
+
+jest.mock('../../tokenManager.client', () => ({
+  tokenManager: {
+    getAccessToken: jest.fn(),
+    getCSRFToken: jest.fn(),
+    clearTokens: jest.fn(),
+    setTokens: jest.fn(),
+  },
+}))
+
 import { checkAuth, getUserRole, isUserApproved, isAdmin, logout } from '../index';
 import { createAuth } from '../createAuth';
 import { createTestAuthDeps, createFakeTokenManager, createFakeAuthAPI, createTestClock, createFakeFetch } from './helpers';

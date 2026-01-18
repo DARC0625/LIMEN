@@ -13,6 +13,7 @@ import { createTokenManager } from '../lib/tokenManager';
 import { createBrowserStoragePort } from '../lib/adapters/browserStoragePort';
 import { createBrowserClockPort } from '../lib/adapters/browserClockPort';
 import { createBrowserLocationPort } from '../lib/adapters/browserLocationPort';
+import { createBrowserCryptoPort } from '../lib/adapters/browserCryptoPort';
 import { createMemoryStoragePort, createMemorySessionStoragePort } from '../lib/adapters/memoryStoragePort';
 import { createMemoryClockPort } from '../lib/adapters/memoryClockPort';
 import { createMemoryLocationPort } from '../lib/adapters/memoryLocationPort';
@@ -32,12 +33,16 @@ const clockPort = typeof window !== 'undefined'
 const locationPort = typeof window !== 'undefined'
   ? (createBrowserLocationPort() ?? createMemoryLocationPort('/'))
   : createMemoryLocationPort('/');
+const cryptoPort = typeof window !== 'undefined'
+  ? createBrowserCryptoPort()
+  : createNodeCryptoPort();
 
 // ✅ 테스트 전용 tokenManager 인스턴스 생성
 export const tokenManager = createTokenManager(
   storagePort,
   sessionStoragePort,
   clockPort,
+  cryptoPort,
   locationPort
 );
 

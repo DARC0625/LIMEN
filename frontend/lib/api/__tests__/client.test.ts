@@ -3,36 +3,67 @@
  * @jest-environment node
  */
 
-import { apiRequest } from '../client'
-import { tokenManager } from '../../tokenManager'
+// ✅ P1-Next-Fix-Module-2F: Factory 패턴 사용 (싱글톤 import 금지)
+import { createApiClient } from '../client'
+import { createTokenManager } from '../../tokenManager'
+import { createMemoryStoragePort } from '../../adapters/memoryStoragePort'
+import { createMemoryClockPort } from '../../adapters/memoryClockPort'
+import { createFakeCryptoPort } from '../../adapters/fakeCryptoPort'
+import { createMemoryLocationPort } from '../../adapters/memoryLocationPort'
 import { trackAPIError } from '../../errorTracking'
 import { trackPerformanceMetric } from '../../analytics'
+import type { TokenManagerPort } from '../../tokenManager'
 
 // 의존성 모킹
-jest.mock('../../tokenManager', () => ({
-  tokenManager: {
-    getAccessToken: jest.fn(),
-    getCSRFToken: jest.fn(),
-    hasValidToken: jest.fn(),
-    getExpiresAt: jest.fn(),
-    clearTokens: jest.fn(),
-  },
-}))
 jest.mock('../../errorTracking')
 jest.mock('../../analytics')
 
-const mockTokenManager = tokenManager as jest.Mocked<typeof tokenManager>
 const mockTrackAPIError = trackAPIError as jest.MockedFunction<typeof trackAPIError>
 const mockTrackPerformanceMetric = trackPerformanceMetric as jest.MockedFunction<typeof trackPerformanceMetric>
 
 // fetch 모킹
 global.fetch = jest.fn()
 
+// ✅ P1-Next-Fix-Module-2F: Factory 패턴으로 테스트 인스턴스 생성
+function createTestApiClient() {
+  const tokenManager = createTokenManager(
+    createMemoryStoragePort(),
+    createMemoryStoragePort(),
+    createMemoryClockPort(),
+    createFakeCryptoPort(),
+    createMemoryLocationPort('/')
+  )
+  return createApiClient({ tokenManager })
+}
+
 describe('apiRequest', () => {
+  let apiRequest: ReturnType<typeof createTestApiClient>['apiRequest']
+  let tokenManager: TokenManagerPort
+  let storage: ReturnType<typeof createMemoryStoragePort>
+
   beforeEach(() => {
     jest.clearAllMocks()
-    mockTokenManager.getAccessToken = jest.fn().mockResolvedValue('test-access-token')
-    mockTokenManager.getCSRFToken = jest.fn().mockReturnValue('test-csrf-token')
+    // ✅ P1-Next-Fix-Module-2F: 각 테스트마다 새로운 인스턴스 생성
+    storage = createMemoryStoragePort()
+    const sessionStorage = createMemoryStoragePort()
+    tokenManager = createTokenManager(
+      storage,
+      sessionStorage,
+      createMemoryClockPort(),
+      createFakeCryptoPort(),
+      createMemoryLocationPort('/')
+    )
+    // 기본 토큰 설정 (tokenManager 생성 후에 설정)
+    storage.set('access_token', 'test-access-token')
+    storage.set('refresh_token', 'test-refresh-token')
+    
+    const api = createApiClient({ tokenManager })
+    apiRequest = api.apiRequest
+    
+    // CSRF 토큰 mock
+    jest.spyOn(tokenManager, 'getCSRFToken').mockReturnValue('test-csrf-token')
+    // getAccessToken mock (tokenManager는 refresh token만 storage에 저장하고 access token은 메모리에만 있음)
+    jest.spyOn(tokenManager, 'getAccessToken').mockResolvedValue('test-access-token')
     
     // performance 모킹
     global.performance = {
@@ -112,7 +143,7 @@ describe('apiRequest', () => {
 
     await apiRequest('/public', { skipAuth: true })
 
-    expect(mockTokenManager.getAccessToken).not.toHaveBeenCalled()
+    expect(tokenManager.getAccessToken).not.toHaveBeenCalled()
     expect(global.fetch).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
@@ -143,7 +174,7 @@ describe('apiRequest', () => {
       .mockResolvedValueOnce(mock401Response)
       .mockResolvedValueOnce(mock200Response)
 
-    mockTokenManager.getAccessToken
+    jest.spyOn(tokenManager, 'getAccessToken')
       .mockResolvedValueOnce('old-token')
       .mockResolvedValueOnce('new-token')
 
@@ -242,7 +273,7 @@ describe('apiRequest', () => {
     }
 
     ;(global.fetch as jest.Mock).mockResolvedValue(mock401Response)
-    mockTokenManager.getAccessToken.mockResolvedValue(null) // 토큰 갱신 실패
+    jest.spyOn(tokenManager, 'getAccessToken').mockResolvedValue(null) // 토큰 갱신 실패
 
     await expect(apiRequest('/test')).rejects.toThrow('Authentication required')
     expect(mockTrackAPIError).toHaveBeenCalled()
@@ -264,7 +295,7 @@ describe('apiRequest', () => {
       .mockResolvedValueOnce(mock401Response)
       .mockResolvedValueOnce(mock401RetryResponse)
 
-    mockTokenManager.getAccessToken
+    jest.spyOn(tokenManager, 'getAccessToken')
       .mockResolvedValueOnce('old-token')
       .mockResolvedValueOnce('new-token')
 
@@ -403,7 +434,7 @@ describe('apiRequest', () => {
   })
 
   it('should handle request without CSRF token when skipAuth is true', async () => {
-    mockTokenManager.getCSRFToken.mockReturnValue(null)
+    jest.spyOn(tokenManager, 'getCSRFToken').mockReturnValue(null)
     const mockData = { public: true }
     const mockResponse = {
       ok: true,
@@ -511,7 +542,7 @@ describe('apiRequest', () => {
 
   it('should handle token refresh failure gracefully', async () => {
     // 토큰 갱신 실패 시 로그만 출력하고 계속 진행
-    mockTokenManager.getAccessToken.mockRejectedValueOnce(new Error('Token refresh failed'))
+    jest.spyOn(tokenManager, 'getAccessToken').mockRejectedValueOnce(new Error('Token refresh failed'))
     
     const mockData = { id: 1 }
     const mockResponse = {
@@ -600,10 +631,10 @@ describe('apiRequest', () => {
       .mockResolvedValueOnce(mock401Response)
       .mockResolvedValueOnce(mockRetryResponse)
 
-    mockTokenManager.getAccessToken
+    jest.spyOn(tokenManager, 'getAccessToken')
       .mockResolvedValueOnce('old-token')
       .mockResolvedValueOnce('new-token')
-    mockTokenManager.getCSRFToken.mockReturnValue('csrf-token')
+    jest.spyOn(tokenManager, 'getCSRFToken').mockReturnValue('csrf-token')
 
     const result = await apiRequest('/test', {
       method: 'POST',
@@ -625,7 +656,7 @@ describe('apiRequest', () => {
 
     ;(global.fetch as jest.Mock).mockResolvedValue(mock401Response)
     // 토큰 갱신 시도 중 에러 발생
-    mockTokenManager.getAccessToken.mockRejectedValue(new Error('Token refresh failed'))
+    jest.spyOn(tokenManager, 'getAccessToken').mockRejectedValue(new Error('Token refresh failed'))
 
     await expect(apiRequest('/test')).rejects.toThrow('Authentication required')
     expect(mockTrackAPIError).toHaveBeenCalled()

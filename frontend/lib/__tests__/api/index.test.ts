@@ -1,14 +1,26 @@
 /**
- * lib/api/index.ts 테스트
- * @jest-environment node
+ * lib/api/clientHelpers.ts 테스트 (브라우저 전용)
+ * @jest-environment jsdom
+ * 
+ * ✅ P1-Next-Fix-Module-2F: clientHelpers는 브라우저 전용이므로 jsdom 환경 필요
+ * clientApi를 직접 import하지 않고 clientHelpers를 직접 테스트
  */
 
-import { getUserRole, isApproved, isAdmin, setToken, removeToken, setTokens } from '../../api/index'
-import { tokenManager } from '../../tokenManager'
-import { waitFor } from '@testing-library/react'
+// ✅ P1-Next-Fix-Module-2F: clientApi와 tokenManager.client를 mock하여 Node.js 환경에서의 window 접근 방지
+jest.mock('../../api/clientApi', () => ({
+  tokenManager: {
+    getAccessToken: jest.fn(),
+    getCSRFToken: jest.fn(),
+    clearTokens: jest.fn(),
+    setTokens: jest.fn(),
+  },
+  authAPI: {
+    createSession: jest.fn(),
+    deleteSession: jest.fn(),
+  },
+}))
 
-// 의존성 모킹
-jest.mock('../../../lib/tokenManager', () => ({
+jest.mock('../../tokenManager.client', () => ({
   tokenManager: {
     getAccessToken: jest.fn(),
     getCSRFToken: jest.fn(),
@@ -16,6 +28,10 @@ jest.mock('../../../lib/tokenManager', () => ({
     setTokens: jest.fn(),
   },
 }))
+
+import { getUserRole, isApproved, isAdmin, setToken, removeToken, setTokens } from '../../api/clientHelpers'
+import { tokenManager } from '../../api/clientApi'
+import { waitFor } from '@testing-library/react'
 
 jest.mock('../../../lib/api/auth', () => ({
   authAPI: {

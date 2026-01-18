@@ -1,10 +1,14 @@
 /**
- * 인증 관련 로직 통합
+ * 인증 관련 로직 통합 (브라우저 전용)
  * ✅ P1-2: Factory 패턴으로 전환, 기본 deps로 createAuth 호출
+ * ✅ P1-Next-Fix-Module-2F: 브라우저 전용이므로 'use client' 지시어 추가
  */
 
-import { tokenManager } from '../tokenManager';
-import { authAPI } from '../api/auth';
+'use client';
+
+// ✅ P1-Next-Fix-Module-2F: 브라우저 전용 싱글톤은 clientApi에서만 import
+import { tokenManager } from '../tokenManager.client';
+import { authAPI } from '../api/clientApi';
 import { createBrowserClockPort } from '../adapters/browserClockPort';
 import { createAuth, type AuthCheckResult, type CheckAuthOptions } from './createAuth';
 

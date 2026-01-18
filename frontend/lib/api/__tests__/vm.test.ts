@@ -144,7 +144,7 @@ describe('vmAPI', () => {
       name: 'WindowsVM',
       cpu: 2,
       memory: 4096,
-      os_type: 'windows',
+      os_type: 'windows10', // ✅ P1-Next-Fix-Module-2E: vm.ts의 GUI OS 목록에 'windows10'이 포함되어 있음
     }
 
     mockApiRequest.mockResolvedValue(mockVM)

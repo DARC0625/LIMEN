@@ -52,7 +52,21 @@ export function createFakeTokenManager(options: {
     getAccessToken: jest.fn(getAccessTokenImpl || (async () => accessToken)),
     getRefreshToken: jest.fn(() => refreshToken),
     getExpiresAt: jest.fn(() => expiresAt),
-    getCSRFToken: jest.fn(() => csrfToken),
+    getCSRFToken: jest.fn((options?: { ensure?: boolean }) => {
+      if (options?.ensure && !csrfToken) {
+        // ensure가 true이고 csrfToken이 없으면 생성
+        // 테스트에서는 간단히 랜덤 문자열 생성
+        csrfToken = Math.random().toString(36).substring(2, 34) + Math.random().toString(36).substring(2, 34);
+      }
+      return csrfToken;
+    }),
+    ensureCSRFToken: jest.fn(() => {
+      if (!csrfToken) {
+        // 테스트에서는 간단히 랜덤 문자열 생성
+        csrfToken = Math.random().toString(36).substring(2, 34) + Math.random().toString(36).substring(2, 34);
+      }
+      return csrfToken;
+    }),
     clearTokens: jest.fn(),
   };
 }

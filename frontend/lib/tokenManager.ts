@@ -6,12 +6,15 @@ import { logger } from './utils/logger';
 import { StoragePort, SessionStoragePort } from './ports/storagePort';
 import { LocationPort } from './ports/locationPort';
 import { ClockPort } from './ports/clockPort';
+import { CryptoPort } from './ports/cryptoPort';
 import { browserLocalStoragePort, browserSessionStoragePort } from './adapters/browserStoragePort';
 import { createBrowserLocationPort } from './adapters/browserLocationPort';
 import { createBrowserClockPort } from './adapters/browserClockPort';
 import { createMemoryStoragePort, createMemorySessionStoragePort } from './adapters/memoryStoragePort';
 import { createMemoryLocationPort } from './adapters/memoryLocationPort';
 import { createMemoryClockPort } from './adapters/memoryClockPort';
+import { createBrowserCryptoPort } from './adapters/browserCryptoPort';
+import { createNodeCryptoPort } from './adapters/nodeCryptoPort';
 
 export type TokenPair = {
   accessToken: string;
@@ -38,7 +41,8 @@ export interface TokenManagerPort {
   getAccessToken(): Promise<string | null>;
   getRefreshToken(): string | null;
   getExpiresAt(): number | null; // ✅ Command Jest-2: 추가된 계약
-  getCSRFToken(): string | null;
+  getCSRFToken(options?: { ensure?: boolean }): string | null;
+  ensureCSRFToken(): string; // ✅ P1-Next-Fix-Module-2D: CSRF 생성 계약 명확화
   clearTokens(): void;
 }
 
@@ -61,6 +65,7 @@ class TokenManager implements TokenManagerPort {
     private storage: StoragePort,
     private sessionStorage: SessionStoragePort,
     private clock: ClockPort,
+    private crypto: CryptoPort, // ✅ P1-Next-Fix-Module-2D: CryptoPort 주입
     private location?: LocationPort
   ) {
     logger.log('[tokenManager] Constructor called');
@@ -75,29 +80,25 @@ class TokenManager implements TokenManagerPort {
     });
   }
 
-  // CSRF 토큰 관리
-  private ensureCSRFToken(): void {
+  // ✅ P1-Next-Fix-Module-2D: CSRF 토큰 생성 계약 명확화
+  ensureCSRFToken(): string {
     // 세션 스토리지에서 CSRF 토큰 확인
     let csrf = this.sessionStorage.get('csrf_token');
     
     if (!csrf) {
       // 새로운 CSRF 토큰 생성 (32바이트 랜덤)
-      // crypto는 브라우저/Node 모두에서 사용 가능
-      if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-        const array = new Uint8Array(32);
-        crypto.getRandomValues(array);
-        csrf = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-      } else {
-        // Node 환경 fallback (테스트용)
-        csrf = Math.random().toString(36).substring(2, 34) + Math.random().toString(36).substring(2, 34);
-      }
+      csrf = this.crypto.randomHex(32);
       this.sessionStorage.set('csrf_token', csrf);
     }
     
     this.csrfToken = csrf;
+    return csrf;
   }
 
-  getCSRFToken(): string | null {
+  getCSRFToken(options?: { ensure?: boolean }): string | null {
+    if (options?.ensure) {
+      return this.ensureCSRFToken();
+    }
     return this.csrfToken;
   }
 
@@ -347,6 +348,7 @@ export function createTokenManager(
   storage?: StoragePort,
   sessionStorage?: SessionStoragePort,
   clock?: ClockPort,
+  crypto?: CryptoPort, // ✅ P1-Next-Fix-Module-2D: CryptoPort 주입
   location?: LocationPort
 ): TokenManager {
   // 기본값: 브라우저 환경이면 browser adapter, 아니면 memory adapter
@@ -362,11 +364,17 @@ export function createTokenManager(
     ? createBrowserClockPort()
     : createMemoryClockPort());
   
+  // ✅ P1-Next-Fix-Module-2D: CryptoPort 기본값 설정
+  // 브라우저: browserCryptoPort, Node: nodeCryptoPort
+  const defaultCrypto = crypto ?? (typeof window !== 'undefined'
+    ? createBrowserCryptoPort()
+    : createNodeCryptoPort());
+  
   const defaultLocation = location ?? (typeof window !== 'undefined'
     ? (createBrowserLocationPort() ?? createMemoryLocationPort('/'))
     : createMemoryLocationPort('/'));
   
-  return new TokenManager(defaultStorage, defaultSessionStorage, defaultClock, defaultLocation);
+  return new TokenManager(defaultStorage, defaultSessionStorage, defaultClock, defaultCrypto, defaultLocation);
 }
 
 // ✅ P1-Next-Fix-Module: top-level 싱글톤 생성 제거

@@ -3,6 +3,13 @@
  * 이 파일은 re-export만 있으므로 간단한 테스트만 작성
  */
 
+// ✅ P1-Next-Fix-Module-2E: clientApi를 mock하여 Node.js 테스트 환경에서 window 접근 방지
+jest.mock('../api/clientApi', () => ({
+  apiRequest: jest.fn(),
+  authAPI: {},
+  tokenManager: {},
+}))
+
 import * as apiModule from '../api'
 import * as apiIndexModule from '../api/index'
 import * as typesModule from '../types'

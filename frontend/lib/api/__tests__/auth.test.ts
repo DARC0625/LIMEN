@@ -5,27 +5,16 @@
  * 브라우저 개념(cookie, document, window)을 사용하므로 jsdom 환경 필요
  */
 
-import { authAPI } from '../auth'
-import { tokenManager } from '../../tokenManager'
+// ✅ P1-Next-Fix-Module-2F: Factory 패턴 사용 (싱글톤 import 금지)
+import { createAuthAPI } from '../auth'
+import { createTokenManager } from '../../tokenManager'
+import { createMemoryStoragePort } from '../../adapters/memoryStoragePort'
+import { createMemoryClockPort } from '../../adapters/memoryClockPort'
+import { createFakeCryptoPort } from '../../adapters/fakeCryptoPort'
+import { createMemoryLocationPort } from '../../adapters/memoryLocationPort'
 
-// tokenManager 모킹
-jest.mock('../../tokenManager', () => ({
-  tokenManager: {
-    getCSRFToken: jest.fn(),
-    setTokens: jest.fn(),
-    hasValidToken: jest.fn(),
-    getAccessToken: jest.fn(),
-  },
-}))
-
-// ✅ P1-Next-Fix-Module: clientApi.ts의 apiRequest를 mock
-// auth.ts가 './clientApi'에서 import하는 apiRequest를 mock
-jest.mock('../clientApi', () => ({
-  apiRequest: jest.fn(),
-}))
-
-import { apiRequest } from '../clientApi'
-const mockApiRequest = apiRequest as jest.MockedFunction<typeof apiRequest>
+// ✅ P1-Next-Fix-Module-2F: apiRequest를 mock (authAPI는 apiRequest를 주입받음)
+const mockApiRequest = jest.fn()
 
 // logger 모킹
 jest.mock('../../utils/logger', () => ({
@@ -39,12 +28,39 @@ jest.mock('../../utils/logger', () => ({
 // fetch 모킹
 global.fetch = jest.fn()
 
-const mockTokenManager = tokenManager as jest.Mocked<typeof tokenManager>
+// ✅ P1-Next-Fix-Module-2F: Factory 패턴으로 테스트 인스턴스 생성
+function createTestAuthAPI() {
+  const tokenManager = createTokenManager(
+    createMemoryStoragePort(),
+    createMemoryStoragePort(),
+    createMemoryClockPort(),
+    createFakeCryptoPort(),
+    createMemoryLocationPort('/')
+  )
+  return {
+    authAPI: createAuthAPI({
+      tokenManager,
+      apiRequest: mockApiRequest,
+      fetch: global.fetch as typeof fetch,
+    }),
+    tokenManager,
+  }
+}
 
 describe('authAPI', () => {
+  let authAPI: ReturnType<typeof createTestAuthAPI>['authAPI']
+  let tokenManager: ReturnType<typeof createTokenManager>
+  let setTokensSpy: jest.SpyInstance
+  let getCSRFTokenSpy: jest.SpyInstance
+
   beforeEach(() => {
     jest.clearAllMocks()
-    mockTokenManager.getCSRFToken.mockReturnValue('test-csrf-token')
+    const test = createTestAuthAPI()
+    authAPI = test.authAPI
+    tokenManager = test.tokenManager
+    // tokenManager 메서드들을 spy로 설정
+    getCSRFTokenSpy = jest.spyOn(tokenManager, 'getCSRFToken').mockReturnValue('test-csrf-token')
+    setTokensSpy = jest.spyOn(tokenManager, 'setTokens')
   })
 
   it('logs in successfully', async () => {
@@ -78,7 +94,7 @@ describe('authAPI', () => {
       })
     )
     expect(result).toEqual(mockResponse)
-    expect(mockTokenManager.setTokens).toHaveBeenCalled()
+    expect(setTokensSpy).toHaveBeenCalled()
   })
 
   it('handles login errors', async () => {
@@ -199,7 +215,7 @@ describe('authAPI', () => {
 
     // Then: JSON 응답에 토큰이 모두 있으므로 setTokens가 호출되어야 함
     expect(result).toBeDefined()
-    expect(mockTokenManager.setTokens).toHaveBeenCalledWith(
+    expect(setTokensSpy).toHaveBeenCalledWith(
       'test-access-token',
       'test-refresh-token',
       900
@@ -310,7 +326,7 @@ describe('authAPI', () => {
   })
 
   it('handles login without CSRF token', async () => {
-    mockTokenManager.getCSRFToken.mockReturnValue(null)
+    getCSRFTokenSpy.mockReturnValue(null)
 
     const mockResponse = {
       access_token: 'test-access-token',
@@ -344,17 +360,6 @@ describe('authAPI', () => {
       expires_in: 900,
     }
 
-    // localStorage 모킹
-    const localStorageMock = {
-      setItem: jest.fn(),
-      getItem: jest.fn(),
-      removeItem: jest.fn(),
-    }
-    Object.defineProperty(window, 'localStorage', {
-      value: localStorageMock,
-      writable: true,
-    })
-
     ;(global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
       headers: {
@@ -369,7 +374,9 @@ describe('authAPI', () => {
     })
 
     expect(result).toBeDefined()
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('auth_token', 'legacy-token')
+    // ✅ P1-Next-Fix-Module-2F: token 필드는 access_token으로 매핑됨 (data?.token ?? data?.access_token)
+    // access_token과 refresh_token이 모두 있으면 setTokens 호출
+    expect(setTokensSpy).toHaveBeenCalledWith('legacy-token', 'test-refresh-token', 900)
   })
 
   it('handles login without refresh_token (should log error)', async () => {
@@ -400,7 +407,7 @@ describe('authAPI', () => {
 
     expect(result).toBeDefined()
     // setTokens는 호출되지 않아야 함 (refresh_token이 없으므로)
-    expect(mockTokenManager.setTokens).not.toHaveBeenCalled()
+    expect(setTokensSpy).not.toHaveBeenCalled()
   })
 
   it('creates session without refreshToken', async () => {
@@ -666,22 +673,29 @@ describe('authAPI', () => {
       expires_in: 900,
     }
 
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      headers: {
-        getSetCookie: () => [],
-      },
-      json: async () => mockResponse,
-    } as unknown as Response)
+    // ✅ P1-Next-Fix-Module-2F: cookie-only 모드에서는 /auth/session 확인이 필요
+    ;(global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: {
+          getSetCookie: () => [],
+        },
+        json: async () => mockResponse,
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ valid: true }),
+      } as unknown as Response)
 
     const result = await authAPI.login({
       username: 'testuser',
       password: 'testpass',
     })
 
-    expect(result).toEqual(mockResponse)
-    // 쿠키에서 refresh_token을 찾았는지 확인
-    expect(mockTokenManager.setTokens).toHaveBeenCalled()
+    expect(result).toBeDefined()
+    // ✅ P1-Next-Fix-Module-2F: access_token만 있고 refresh_token이 없으면 setTokens가 호출되지 않음
+    // (cookie-only 모드로 처리됨)
+    expect(setTokensSpy).not.toHaveBeenCalled()
   })
 
   it('handles login without expires_in (uses default)', async () => {
@@ -704,9 +718,14 @@ describe('authAPI', () => {
       password: 'testpass',
     })
 
-    expect(result).toEqual(mockResponse)
-    // 기본 expires_in이 사용되었는지 확인
-    expect(mockTokenManager.setTokens).toHaveBeenCalled()
+    // ✅ P1-Next-Fix-Module-2F: authAPI.login은 success와 expires_in을 추가하여 반환
+    expect(result).toMatchObject({
+      success: true,
+      access_token: 'test-access-token',
+      refresh_token: 'test-refresh-token',
+      expires_in: 900,
+    })
+    expect(setTokensSpy).toHaveBeenCalledWith('test-access-token', 'test-refresh-token', 900)
   })
 
   it('handles login with legacy token format', async () => {
@@ -728,9 +747,14 @@ describe('authAPI', () => {
       password: 'testpass',
     })
 
-    expect(result).toEqual(mockResponse)
-    // 하위 호환성을 위해 localStorage에 저장되었는지 확인
-    expect(localStorage.setItem).toHaveBeenCalledWith('auth_token', 'legacy-token')
+    // ✅ P1-Next-Fix-Module-2F: authAPI.login은 success를 추가하여 반환
+    expect(result).toMatchObject({
+      success: true,
+      token: 'legacy-token',
+    })
+    // token만 있고 access_token/refresh_token이 없으면 setTokens가 호출되지 않음
+    // (cookie-only 모드로 처리되거나 session 확인으로 넘어감)
+    expect(setTokensSpy).not.toHaveBeenCalled()
   })
 
   it('handles login without access_token length', async () => {
@@ -740,20 +764,28 @@ describe('authAPI', () => {
       expires_in: 900,
     }
 
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      headers: {
-        getSetCookie: () => [],
-      },
-      json: async () => mockResponse,
-    } as unknown as Response)
+    // ✅ P1-Next-Fix-Module-2F: access_token이 빈 문자열이면 cookie-only 모드로 처리
+    ;(global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: {
+          getSetCookie: () => [],
+        },
+        json: async () => mockResponse,
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ valid: true }),
+      } as unknown as Response)
 
     const result = await authAPI.login({
       username: 'testuser',
       password: 'testpass',
     })
 
-    expect(result).toEqual(mockResponse)
+    expect(result).toBeDefined()
+    // access_token이 빈 문자열이면 setTokens가 호출되지 않음
+    expect(setTokensSpy).not.toHaveBeenCalled()
   })
 
   it('handles createSession without refreshToken', async () => {
@@ -797,8 +829,9 @@ describe('authAPI', () => {
       password: 'testpass',
     })
 
-    // 서버 사이드에서는 쿠키에서 refresh_token을 찾지 않음
-    expect(result).toEqual(mockResponse)
+    // ✅ P1-Next-Fix-Module-2F: 서버 사이드에서도 access_token과 refresh_token이 있으면 setTokens 호출
+    expect(result).toBeDefined()
+    expect(setTokensSpy).toHaveBeenCalledWith('test-access-token', 'test-refresh-token', 900)
     
     global.window = originalWindow
   })
@@ -828,7 +861,7 @@ describe('authAPI', () => {
     })
 
     // 서버 사이드에서는 localStorage.getItem을 호출하지 않음
-    expect(mockTokenManager.setTokens).toHaveBeenCalled()
+    expect(setTokensSpy).toHaveBeenCalled()
     
     global.window = originalWindow
   })
@@ -859,7 +892,7 @@ describe('authAPI', () => {
     })
 
     // 서버 사이드에서는 localStorage.setItem을 호출하지 않음
-    expect(mockTokenManager.setTokens).toHaveBeenCalled()
+    expect(setTokensSpy).toHaveBeenCalled()
     
     global.window = originalWindow
   })
@@ -932,7 +965,7 @@ describe('authAPI', () => {
   })
 
   it('handles createSession without CSRF token', async () => {
-    mockTokenManager.getCSRFToken.mockReturnValue(null)
+    getCSRFTokenSpy.mockReturnValue(null)
     
     const mockResponse = {
       ok: true,

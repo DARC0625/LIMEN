@@ -34,6 +34,20 @@ jest.mock('../../utils/logger', () => ({
   },
 }))
 
+// ✅ P1-Next-Fix-Module-2F: clientHelpers는 clientApi를 import하므로 mock 필요
+jest.mock('../clientApi', () => ({
+  tokenManager: {
+    getAccessToken: jest.fn(),
+    getCSRFToken: jest.fn(),
+    clearTokens: jest.fn(),
+    setTokens: jest.fn(),
+  },
+  authAPI: {
+    createSession: jest.fn(),
+    deleteSession: jest.fn(),
+  },
+}))
+
 // Mock이 선언된 후에 import
 import {
   getUserRole,
@@ -42,10 +56,10 @@ import {
   setToken,
   removeToken,
   setTokens,
-} from '../index'
-import { tokenManager } from '../../tokenManager'
+} from '../clientHelpers'
+import { tokenManager } from '../clientApi'
 import { getUserRoleFromToken, isUserApprovedFromToken } from '../../utils/token'
-import { authAPI } from '../auth'
+import { authAPI } from '../clientApi'
 
 // Mock이 선언된 후에 타입 캐스팅
 const mockTokenManager = tokenManager as jest.Mocked<typeof tokenManager>

@@ -8,6 +8,7 @@ import { logger } from '../utils/logger'
 import { createMemoryStoragePort, createMemorySessionStoragePort } from '../adapters/memoryStoragePort'
 import { createMemoryClockPort } from '../adapters/memoryClockPort'
 import { createMemoryLocationPort } from '../adapters/memoryLocationPort'
+import { createFakeCryptoPort } from '../adapters/fakeCryptoPort'
 
 // logger 모킹
 jest.mock('../utils/logger', () => ({
@@ -42,8 +43,10 @@ describe('tokenManager', () => {
     sessionStorage = createMemorySessionStoragePort()
     clock = createMemoryClockPort(Date.now())
     location = createMemoryLocationPort('/')
+    // ✅ P1-Next-Fix-Module-2D: CryptoPort 추가
+    const crypto = createFakeCryptoPort()
     // ✅ Port 기반으로 tokenManager 생성
-    tokenManager = createTokenManager(storage, sessionStorage, clock, location)
+    tokenManager = createTokenManager(storage, sessionStorage, clock, crypto, location)
   })
 
   it('sets tokens', () => {
@@ -106,22 +109,22 @@ describe('tokenManager', () => {
   it('generates new CSRF token if not exists', () => {
     sessionStorage.clear()
     
-    // 새로운 인스턴스 생성 시뮬레이션을 위해 getCSRFToken 호출
-    // 실제로는 constructor에서 생성되지만, 테스트를 위해 직접 확인
-    const csrfToken = tokenManager.getCSRFToken()
+    // ✅ P1-Next-Fix-Module-2E: ensure 옵션을 사용하여 토큰 생성 보장
+    const csrfToken = tokenManager.getCSRFToken({ ensure: true })
 
-    // CSRF 토큰이 생성되었거나 이미 존재할 수 있음
-    if (csrfToken) {
-      expect(typeof csrfToken).toBe('string')
-      expect(sessionStorage.get('csrf_token')).toBe(csrfToken)
-    }
+    // CSRF 토큰이 반드시 생성되어야 함
+    expect(csrfToken).not.toBeNull()
+    expect(typeof csrfToken).toBe('string')
+    expect(csrfToken!.length).toBeGreaterThan(0)
+    expect(sessionStorage.get('csrf_token')).toBe(csrfToken)
   })
 
   it('reuses existing CSRF token', () => {
     sessionStorage.set('csrf_token', 'existing-token')
 
     // 새로운 인스턴스 생성 (기존 토큰 재사용)
-    const newTokenManager = createTokenManager(storage, sessionStorage, clock, location)
+    const crypto = createFakeCryptoPort()
+    const newTokenManager = createTokenManager(storage, sessionStorage, clock, crypto, location)
     const csrfToken = newTokenManager.getCSRFToken()
 
     // 기존 토큰이 재사용되거나 새로 생성될 수 있음
@@ -191,7 +194,8 @@ describe('tokenManager', () => {
       clear: jest.fn(),
     }
 
-    const errorTokenManager = createTokenManager(errorStorage, sessionStorage, clock, location)
+    const crypto = createFakeCryptoPort()
+    const errorTokenManager = createTokenManager(errorStorage, sessionStorage, clock, crypto, location)
 
     expect(() => {
       errorTokenManager.setTokens('access-token', 'refresh-token', 3600)
@@ -203,7 +207,8 @@ describe('tokenManager', () => {
     storage.set('token_expires_at', (Date.now() + 3600000).toString())
 
     // 새로운 인스턴스 생성 시뮬레이션
-    const newTokenManager = createTokenManager(storage, sessionStorage, clock, location)
+    const crypto = createFakeCryptoPort()
+    const newTokenManager = createTokenManager(storage, sessionStorage, clock, crypto, location)
     const hasToken = newTokenManager.hasValidToken()
 
     expect(hasToken).toBe(true)
@@ -441,7 +446,8 @@ describe('tokenManager', () => {
 
     // tokenManager는 새로 생성하므로 이미 초기화됨
     // 하지만 hasValidToken을 호출하면 storage에서 로드됨
-    const newTokenManager = createTokenManager(storage, sessionStorage, clock, location)
+    const crypto = createFakeCryptoPort()
+    const newTokenManager = createTokenManager(storage, sessionStorage, clock, crypto, location)
     const hasToken = newTokenManager.hasValidToken()
 
     expect(hasToken).toBe(true)
@@ -453,7 +459,8 @@ describe('tokenManager', () => {
 
     // tokenManager는 새로 생성하므로 이미 초기화되어 있음
     // 하지만 storage에 값이 있으면 loadTokens가 호출되어야 함
-    const newTokenManager = createTokenManager(storage, sessionStorage, clock, location)
+    const crypto = createFakeCryptoPort()
+    const newTokenManager = createTokenManager(storage, sessionStorage, clock, crypto, location)
     const refreshToken = newTokenManager.getRefreshToken()
     
     // refreshToken이 로드되었는지 확인
