@@ -101,6 +101,53 @@ tokenManager.clearTokens = function() {
   },
   
   /**
+   * ✅ P1-Next-Fix-Module-4: 표준 토큰 시드 함수 (E2E 표준 계약)
+   * refresh를 확실히 트리거하기 위해 만료된 상태로 설정
+   * @param options - 토큰 시드 옵션
+   */
+  seedTokens: (options?: {
+    accessToken?: string;
+    refreshToken?: string;
+    expiresAt?: number; // 밀리초 epoch (만료된 상태로 설정하면 refresh 트리거)
+    csrfToken?: string;
+  }): void => {
+    const tm = tokenManager as unknown as {
+      storage?: { set: (key: string, value: string) => void };
+      sessionStorage?: { set: (key: string, value: string) => void };
+      clock?: { now: () => number };
+    };
+    
+    if (!tm.storage || !tm.sessionStorage) {
+      throw new Error('tokenManager.storage or sessionStorage is not available');
+    }
+    
+    const now = tm.clock?.now() || Date.now();
+    
+    // refreshToken 설정 (기본값: test-refresh-token)
+    const refreshToken = options?.refreshToken || 'test-refresh-token';
+    tm.storage.set('refresh_token', refreshToken);
+    (tokenManager as { refreshToken?: string }).refreshToken = refreshToken;
+    
+    // expiresAt 설정 (기본값: 만료된 상태로 설정하여 refresh 트리거)
+    const expiresAt = options?.expiresAt !== undefined 
+      ? options.expiresAt 
+      : now - 1000; // 확실히 만료된 상태
+    tm.storage.set('token_expires_at', expiresAt.toString());
+    (tokenManager as { expiresAt?: number }).expiresAt = expiresAt;
+    
+    // accessToken 설정 (기본값: expired-token)
+    if (options?.accessToken) {
+      (tokenManager as { accessToken?: string }).accessToken = options.accessToken;
+    }
+    
+    // csrfToken 설정
+    if (options?.csrfToken) {
+      tm.sessionStorage.set('csrf_token', options.csrfToken);
+      (tokenManager as { csrfToken?: string }).csrfToken = options.csrfToken;
+    }
+  },
+  
+  /**
    * 상태 확인 (테스트용)
    */
   getState: (): {

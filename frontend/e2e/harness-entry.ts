@@ -174,17 +174,24 @@ try {
       // smoke test fetch 제거로 fetchCallsBefore는 refreshOnce 호출 전 상태
       const fetchCallsBefore = (window.__FETCH_CALLS || []).length;
       
-      window.__S4_TRACE.push('before setRefreshToken/setExpiresAt');
-      // ✅ 2-B) 만료 조건을 실제로 refresh를 트리거하도록 강제
-      // ✅ Port 기반: clockPort를 사용하여 시간을 제어하여 만료 상태를 결정적으로 설정
-      // expiresAt을 clock.now() - 1000 같이 확실히 만료 상태로 설정
-      testHook.setRefreshToken('test-refresh-token');
-      // 현재 시간을 기준으로 과거로 설정하여 확실히 만료된 상태
-      const now = Date.now();
-      testHook.setExpiresAt(now - 1000); // 확실히 만료된 상태
-      // sessionStorage는 Port를 통해 설정 (tokenManager-test-entry에서 sessionStoragePort 사용)
-      if (typeof sessionStorage !== 'undefined') {
-        sessionStorage.setItem('csrf_token', 'test-csrf-token');
+      window.__S4_TRACE.push('before seedTokens');
+      // ✅ P1-Next-Fix-Module-4: 표준 seedTokens 사용 (refresh를 확실히 트리거)
+      // 만료된 상태로 설정하여 refresh가 반드시 발생하도록 보장
+      if (testHook.seedTokens) {
+        const now = Date.now();
+        testHook.seedTokens({
+          refreshToken: 'test-refresh-token',
+          expiresAt: now - 1000, // 확실히 만료된 상태 (refresh 트리거)
+          csrfToken: 'test-csrf-token',
+        });
+      } else {
+        // 하위 호환성: seedTokens가 없으면 기존 방식 사용
+        testHook.setRefreshToken('test-refresh-token');
+        const now = Date.now();
+        testHook.setExpiresAt(now - 1000);
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('csrf_token', 'test-csrf-token');
+        }
       }
       
       window.__S4_TRACE.push('before refreshOnce');

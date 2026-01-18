@@ -43,6 +43,7 @@ export interface TokenManagerPort {
   getExpiresAt(): number | null; // ✅ Command Jest-2: 추가된 계약
   getCSRFToken(options?: { ensure?: boolean }): string | null;
   ensureCSRFToken(): string; // ✅ P1-Next-Fix-Module-2D: CSRF 생성 계약 명확화
+  setTokens(accessToken: string, refreshToken: string, expiresIn: number): void; // ✅ P1-Next-Fix-Module-4: 계약에 포함
   clearTokens(): void;
 }
 

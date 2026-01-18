@@ -3,8 +3,8 @@
  * @jest-environment node
  */
 
-// ✅ P1-Next-Fix-Module-2F: Factory 패턴 사용 (싱글톤 import 금지)
-import { createApiClient } from '../client'
+// ✅ P1-Next-Fix-Module-4: core 테스트는 apiClient.ts에서 import (client.ts는 브라우저 전용)
+import { createApiClient } from '../apiClient'
 import { createTokenManager } from '../../tokenManager'
 import { createMemoryStoragePort } from '../../adapters/memoryStoragePort'
 import { createMemoryClockPort } from '../../adapters/memoryClockPort'

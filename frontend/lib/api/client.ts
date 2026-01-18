@@ -35,11 +35,22 @@ const api = createApiClient({
 export const apiRequest = api.apiRequest;
 export { tokenManager };
 
+// ✅ P1-Next-Fix-Module-4: fetch를 globalThis 기반으로 안전하게 처리
+const fetchImpl = (() => {
+  if (typeof globalThis !== 'undefined' && globalThis.fetch) {
+    return globalThis.fetch.bind(globalThis);
+  }
+  if (typeof window !== 'undefined' && window.fetch) {
+    return window.fetch.bind(window);
+  }
+  throw new Error('fetch is required but not available');
+})();
+
 // ✅ P1-Next-Fix-Module-2C: authAPI를 DI로 생성
 export const authAPI = createAuthAPI({
   tokenManager,
   apiRequest,
-  fetch: window.fetch.bind(window),
+  fetch: fetchImpl,
 });
 
 // ✅ P1-Next-Fix-Module-3B: factory들을 wiring하여 싱글톤 생성
