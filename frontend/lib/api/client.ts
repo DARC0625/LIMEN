@@ -86,7 +86,8 @@ export async function apiRequest<T>(
   }
 
   // 성능 측정 시작
-  const startTime = typeof window !== 'undefined' && typeof performance !== 'undefined'
+  // ✅ P1-Next-Fix-3: performance 측정 시작 - typeof window 체크 제거 (trackPerformanceMetric이 SSR-safe)
+  const startTime = typeof performance !== 'undefined'
     ? performance.now()
     : 0;
 
@@ -223,10 +224,13 @@ export async function apiRequest<T>(
       throw lastError || new Error('No response received');
     }
 
-    // 성능 측정 종료
+    // ✅ P1-Next-Fix-3: 성능 측정 종료 - trackPerformanceMetric은 항상 호출 (SSR-safe no-op)
     let duration = 0;
-    if (startTime > 0 && typeof window !== 'undefined' && typeof performance !== 'undefined') {
+    if (startTime > 0 && typeof performance !== 'undefined') {
       duration = performance.now() - startTime;
+    }
+    // trackPerformanceMetric은 analytics 모듈에서 typeof window 체크를 하므로 여기서는 항상 호출
+    if (startTime > 0) {
       trackPerformanceMetric(
         `api_${method.toLowerCase()}_${endpoint.replace(/\//g, '_')}`,
         duration

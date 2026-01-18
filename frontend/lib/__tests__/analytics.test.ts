@@ -1,20 +1,32 @@
 /**
  * lib/analytics.ts 테스트
+ * ✅ P1-Next-Fix-1: SSR-safe 테스트 (core/node 환경에서도 실행 가능)
  */
 
 import { trackPageView, trackEvent, trackPerformanceMetric, trackWebVitals } from '../analytics'
 import { setEnv, getEnv } from '../test-utils/env'
 
+// ✅ P1-Next-Fix-1: node 환경에서도 테스트 가능하도록 window를 globalThis에 정의
+if (typeof (globalThis as any).window === 'undefined') {
+  (globalThis as any).window = {};
+}
+
 describe('analytics', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    // gtag와 plausible을 완전히 삭제
-    if ((window as any).gtag) {
-      delete (window as any).gtag
+    // ✅ P1-Next-Fix-1: SSR-safe window 접근 + node 환경에서도 테스트 가능하도록 window mock
+    // node 환경(core 프로젝트)에서도 테스트 가능하도록 window를 globalThis에 정의
+    if (typeof (globalThis as any).window === 'undefined') {
+      (globalThis as any).window = {};
     }
-    if ((window as any).plausible) {
-      delete (window as any).plausible
+    
+    const w = (globalThis as any).window as any;
+    // ✅ P1-Next-Fix-1: delete가 실패할 수 있으므로 undefined로 설정
+    if (w) {
+      w.gtag = undefined;
+      w.plausible = undefined;
     }
+    
     delete process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
     delete process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN
   })
@@ -31,8 +43,12 @@ describe('analytics', () => {
     })
 
     it('sends page view to Google Analytics when available', () => {
+      // ✅ P1-Next-Fix-1: SSR-safe window 접근
+      const w = (globalThis as any).window as any | undefined;
+      if (!w) return; // node 환경에서는 스킵
+      
       const mockGtag = jest.fn()
-      ;(window as any).gtag = mockGtag
+      w.gtag = mockGtag
       process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID = 'GA-123'
 
       trackPageView('/test')
@@ -43,8 +59,12 @@ describe('analytics', () => {
     })
 
     it('sends page view to Plausible when available', () => {
+      // ✅ P1-Next-Fix-1: SSR-safe window 접근
+      const w = (globalThis as any).window as any | undefined;
+      if (!w) return; // node 환경에서는 스킵
+      
       const mockPlausible = jest.fn()
-      ;(window as any).plausible = mockPlausible
+      w.plausible = mockPlausible
       process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN = 'example.com'
 
       trackPageView('/test')
@@ -76,8 +96,12 @@ describe('analytics', () => {
     })
 
     it('sends event to Google Analytics when available', () => {
+      // ✅ P1-Next-Fix-1: SSR-safe window 접근
+      const w = (globalThis as any).window as any | undefined;
+      if (!w) return; // node 환경에서는 스킵
+      
       const mockGtag = jest.fn()
-      ;(window as any).gtag = mockGtag
+      w.gtag = mockGtag
 
       trackEvent('test-event', { key: 'value' })
 
@@ -85,8 +109,12 @@ describe('analytics', () => {
     })
 
     it('sends event to Plausible when available', () => {
+      // ✅ P1-Next-Fix-1: SSR-safe window 접근
+      const w = (globalThis as any).window as any | undefined;
+      if (!w) return; // node 환경에서는 스킵
+      
       const mockPlausible = jest.fn()
-      ;(window as any).plausible = mockPlausible
+      w.plausible = mockPlausible
       process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN = 'example.com'
 
       trackEvent('test-event', { key: 'value' })
@@ -128,8 +156,12 @@ describe('analytics', () => {
     })
 
     it('sends metric to Google Analytics when available', () => {
+      // ✅ P1-Next-Fix-1: SSR-safe window 접근
+      const w = (globalThis as any).window as any | undefined;
+      if (!w) return; // node 환경에서는 스킵
+      
       const mockGtag = jest.fn()
-      ;(window as any).gtag = mockGtag
+      w.gtag = mockGtag
 
       trackPerformanceMetric('test-metric', 100, 'ms')
 
@@ -156,8 +188,12 @@ describe('analytics', () => {
     })
 
     it('creates performance mark when available', () => {
+      // ✅ P1-Next-Fix-1: SSR-safe window 접근
+      const w = (globalThis as any).window as any | undefined;
+      if (!w) return; // node 환경에서는 스킵
+      
       const mockMark = jest.fn()
-      Object.defineProperty(window, 'performance', {
+      Object.defineProperty(w, 'performance', {
         value: { mark: mockMark },
         writable: true,
         configurable: true,
@@ -169,10 +205,14 @@ describe('analytics', () => {
     })
 
     it('handles performance mark errors gracefully', () => {
+      // ✅ P1-Next-Fix-1: SSR-safe window 접근
+      const w = (globalThis as any).window as any | undefined;
+      if (!w) return; // node 환경에서는 스킵
+      
       const mockMark = jest.fn().mockImplementation(() => {
         throw new Error('Mark error')
       })
-      Object.defineProperty(window, 'performance', {
+      Object.defineProperty(w, 'performance', {
         value: { mark: mockMark },
         writable: true,
         configurable: true,
@@ -199,8 +239,12 @@ describe('analytics', () => {
     })
 
     it('sends web vitals to Google Analytics when available', () => {
+      // ✅ P1-Next-Fix-1: SSR-safe window 접근
+      const w = (globalThis as any).window as any | undefined;
+      if (!w) return; // node 환경에서는 스킵
+      
       const mockGtag = jest.fn()
-      ;(window as any).gtag = mockGtag
+      w.gtag = mockGtag
 
       trackWebVitals({
         id: 'test-id',
@@ -240,8 +284,12 @@ describe('analytics', () => {
       process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID = 'GA-123'
       delete process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN
 
+      // ✅ P1-Next-Fix-1: SSR-safe window 접근
+      const w = (globalThis as any).window as any | undefined;
+      if (!w) return; // node 환경에서는 스킵
+      
       const mockGtag = jest.fn()
-      Object.defineProperty(window, 'gtag', {
+      Object.defineProperty(w, 'gtag', {
         writable: true,
         configurable: true,
         value: mockGtag,
@@ -265,7 +313,8 @@ describe('analytics', () => {
       const originalEnv = getEnv('NODE_ENV')
       setEnv('NODE_ENV', 'production')
       delete process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN
-      delete (window as any).gtag
+      const w = (globalThis as any).window as any | undefined;
+      if (w?.gtag) w.gtag = undefined;
 
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
 
@@ -282,8 +331,12 @@ describe('analytics', () => {
       setEnv('NODE_ENV', 'production')
       delete process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN
 
+      // ✅ P1-Next-Fix-1: SSR-safe window 접근
+      const w = (globalThis as any).window as any | undefined;
+      if (!w) return; // node 환경에서는 스킵
+      
       const mockGtag = jest.fn()
-      Object.defineProperty(window, 'gtag', {
+      Object.defineProperty(w, 'gtag', {
         writable: true,
         value: mockGtag,
       })
@@ -299,13 +352,17 @@ describe('analytics', () => {
     })
 
     it('handles trackEvent with no properties', () => {
+      // ✅ P1-Next-Fix-1: SSR-safe window 접근
+      const w = (globalThis as any).window as any | undefined;
+      if (!w) return; // node 환경에서는 스킵
+      
       // 이전 테스트에서 gtag가 정의되었을 수 있으므로 삭제 후 재정의
-      if ((window as any).gtag) {
-        delete (window as any).gtag
+      if (w.gtag) {
+        w.gtag = undefined
       }
       const mockGtag = jest.fn()
       // Object.defineProperty 대신 직접 할당 사용
-      ;(window as any).gtag = mockGtag
+      w.gtag = mockGtag
 
       trackEvent('test-event')
 
@@ -315,7 +372,11 @@ describe('analytics', () => {
 
   describe('trackPerformanceMetric edge cases', () => {
     it('handles trackPerformanceMetric with no gtag', () => {
-      Object.defineProperty(window, 'gtag', {
+      // ✅ P1-Next-Fix-1: SSR-safe window 접근
+      const w = (globalThis as any).window as any | undefined;
+      if (!w) return; // node 환경에서는 스킵
+      
+      Object.defineProperty(w, 'gtag', {
         writable: true,
         value: undefined,
       })

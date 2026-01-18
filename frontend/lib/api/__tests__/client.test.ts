@@ -9,7 +9,15 @@ import { trackAPIError } from '../../errorTracking'
 import { trackPerformanceMetric } from '../../analytics'
 
 // 의존성 모킹
-jest.mock('../../tokenManager')
+jest.mock('../../tokenManager', () => ({
+  tokenManager: {
+    getAccessToken: jest.fn(),
+    getCSRFToken: jest.fn(),
+    hasValidToken: jest.fn(),
+    getExpiresAt: jest.fn(),
+    clearTokens: jest.fn(),
+  },
+}))
 jest.mock('../../errorTracking')
 jest.mock('../../analytics')
 

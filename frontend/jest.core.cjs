@@ -27,5 +27,5 @@ module.exports = createJestConfig({
     '!lib/**/*.test.{ts,tsx}',
     '!lib/**/*.browser.test.{ts,tsx}',
   ],
-  setupFilesAfterEnv: [], // core는 브라우저 의존 제거
+  setupFilesAfterEnv: ['<rootDir>/jest.core.setup.js'], // ✅ P1-Next-Fix-1: analytics 테스트를 위해 window mock 추가
 });
