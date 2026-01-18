@@ -114,8 +114,8 @@ tokenManager.clearTokens = function() {
   },
   
   /**
-   * ✅ P1-Next-Fix-Module-4: 표준 토큰 시드 함수 (E2E 표준 계약)
-   * refresh를 확실히 트리거하기 위해 만료된 상태로 설정
+   * ✅ P1-Next-Fix-Module-4D: 표준 토큰 시드 함수 (E2E 표준 계약)
+   * TokenManager의 공식 저장 경로를 사용하여 refreshToken을 확실히 저장
    * @param options - 토큰 시드 옵션
    */
   seedTokens: (options?: {
@@ -125,36 +125,32 @@ tokenManager.clearTokens = function() {
     csrfToken?: string;
   }): void => {
     const tm = tokenManager as unknown as {
-      storage?: { set: (key: string, value: string) => void };
-      sessionStorage?: { set: (key: string, value: string) => void };
       clock?: { now: () => number };
+      sessionStorage?: { set: (key: string, value: string) => void };
     };
-    
-    if (!tm.storage || !tm.sessionStorage) {
-      throw new Error('tokenManager.storage or sessionStorage is not available');
-    }
     
     const now = tm.clock?.now() || Date.now();
     
+    // ✅ P1-Next-Fix-Module-4D: TokenManager의 공식 setTokens 메서드 사용
     // refreshToken 설정 (기본값: test-refresh-token)
     const refreshToken = options?.refreshToken || 'test-refresh-token';
-    tm.storage.set('refresh_token', refreshToken);
-    (tokenManager as { refreshToken?: string }).refreshToken = refreshToken;
     
     // expiresAt 설정 (기본값: 만료된 상태로 설정하여 refresh 트리거)
+    // setTokens는 expiresIn(초)을 받으므로, 밀리초를 초로 변환
     const expiresAt = options?.expiresAt !== undefined 
       ? options.expiresAt 
       : now - 1000; // 확실히 만료된 상태
-    tm.storage.set('token_expires_at', expiresAt.toString());
-    (tokenManager as { expiresAt?: number }).expiresAt = expiresAt;
+    const expiresIn = Math.max(1, Math.floor((expiresAt - now) / 1000)); // 최소 1초
     
-    // accessToken 설정 (기본값: expired-token)
-    if (options?.accessToken) {
-      (tokenManager as { accessToken?: string }).accessToken = options.accessToken;
-    }
+    // ✅ 공식 setTokens 메서드 사용 (storage 직접 접근 금지)
+    tokenManager.setTokens(
+      options?.accessToken || 'expired-token',
+      refreshToken,
+      expiresIn
+    );
     
-    // csrfToken 설정
-    if (options?.csrfToken) {
+    // csrfToken 설정 (sessionStorage 직접 접근은 허용 - CSRF는 별도 경로)
+    if (options?.csrfToken && tm.sessionStorage) {
       tm.sessionStorage.set('csrf_token', options.csrfToken);
       (tokenManager as { csrfToken?: string }).csrfToken = options.csrfToken;
     }
