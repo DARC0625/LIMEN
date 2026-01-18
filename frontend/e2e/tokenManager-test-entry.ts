@@ -114,8 +114,9 @@ tokenManager.clearTokens = function() {
   },
   
   /**
-   * ✅ P1-Next-Fix-Module-4D: 표준 토큰 시드 함수 (E2E 표준 계약)
+   * ✅ P1-Next-Fix-Module-4E: 표준 토큰 시드 함수 (E2E 표준 계약)
    * TokenManager의 공식 저장 경로를 사용하여 refreshToken을 확실히 저장
+   * 만료된 상태로 설정하여 refresh를 트리거
    * @param options - 토큰 시드 옵션
    */
   seedTokens: (options?: {
@@ -127,27 +128,35 @@ tokenManager.clearTokens = function() {
     const tm = tokenManager as unknown as {
       clock?: { now: () => number };
       sessionStorage?: { set: (key: string, value: string) => void };
+      storage?: { set: (key: string, value: string) => void };
+      expiresAt?: number;
     };
     
     const now = tm.clock?.now() || Date.now();
     
-    // ✅ P1-Next-Fix-Module-4D: TokenManager의 공식 setTokens 메서드 사용
+    // ✅ P1-Next-Fix-Module-4E: TokenManager의 공식 setTokens 메서드 사용
     // refreshToken 설정 (기본값: test-refresh-token)
     const refreshToken = options?.refreshToken || 'test-refresh-token';
     
-    // expiresAt 설정 (기본값: 만료된 상태로 설정하여 refresh 트리거)
-    // setTokens는 expiresIn(초)을 받으므로, 밀리초를 초로 변환
-    const expiresAt = options?.expiresAt !== undefined 
-      ? options.expiresAt 
-      : now - 1000; // 확실히 만료된 상태
-    const expiresIn = Math.max(1, Math.floor((expiresAt - now) / 1000)); // 최소 1초
-    
-    // ✅ 공식 setTokens 메서드 사용 (storage 직접 접근 금지)
+    // ✅ P1-Next-Fix-Module-4E: setTokens로 기본 저장 후, expiresAt을 만료된 상태로 직접 설정
+    // setTokens는 expiresIn(초)을 받아 미래 시간을 계산하므로, 만료 상태를 만들려면 expiresAt을 직접 수정해야 함
     tokenManager.setTokens(
       options?.accessToken || 'expired-token',
       refreshToken,
-      expiresIn
+      900 // 기본 15분 (일단 정상 값으로 저장)
     );
+    
+    // ✅ P1-Next-Fix-Module-4E: expiresAt을 만료된 상태로 직접 설정
+    const expiresAt = options?.expiresAt !== undefined 
+      ? options.expiresAt 
+      : now - 1000; // 확실히 만료된 상태
+    
+    // storage에 expiresAt 저장 (TokenManager가 읽는 키)
+    if (tm.storage) {
+      tm.storage.set('token_expires_at', expiresAt.toString());
+    }
+    // TokenManager 내부 필드도 동기화
+    tm.expiresAt = expiresAt;
     
     // csrfToken 설정 (sessionStorage 직접 접근은 허용 - CSRF는 별도 경로)
     if (options?.csrfToken && tm.sessionStorage) {
