@@ -194,11 +194,10 @@ try {
         }
       }
       
-      window.__S4_TRACE.push('before refreshOnce');
-      // ✅ refresh를 직접 호출 (만료 판단 로직에 의존하지 않음)
-      // ✅ P0-3: fetch 자체에 AbortController timeout을 걸어 절대 무한대기하지 않게
-      // refresh route를 401로 1회 강제 (테스트 코드에서 route 설정)
-      if (testHook.refreshOnce) {
+      window.__S4_TRACE.push('before forceRefresh');
+      // ✅ P1-Next-Fix-Module-4C: forceRefresh로 refresh를 강제 (정책 변화에 흔들리지 않는 계약)
+      // refreshCallCount는 무조건 1 이상이 됨
+      if (testHook.forceRefresh) {
         // ✅ AbortController로 fetch timeout 보장
         // withTimeout만으로는 fetch가 영원히 pending이면 잡히지 않는 경우가 있어
         // fetch 자체에 AbortController를 걸고 시간 지나면 abort하도록 해
@@ -207,7 +206,7 @@ try {
           abortController.abort();
         }, 2000); // 2초 타임아웃
         
-        // refreshOnce 내부에서 fetch를 호출하므로, 
+        // forceRefresh 내부에서 fetch를 호출하므로, 
         // 원본 fetch를 래핑하여 AbortController를 자동으로 추가
         const originalFetch = window.fetch;
         let pendingUrl: string | null = null;
@@ -226,27 +225,27 @@ try {
         window.fetch = wrappedFetch as typeof fetch;
         
         try {
-          window.__S4_TRACE.push('before refreshOnce call');
+          window.__S4_TRACE.push('before forceRefresh call');
           const refreshResult = await withTimeout(
-            testHook.refreshOnce(),
+            testHook.forceRefresh({ respond: 401 }), // 401로 실패하도록 설정
             3000,
-            'refreshOnce (expected to fail with 401)'
+            'forceRefresh (expected to fail with 401)'
           );
           
-          window.__S4_TRACE.push('after refreshOnce call: ' + (refreshResult.ok ? 'ok' : refreshResult.reason));
+          window.__S4_TRACE.push('after forceRefresh call: ' + (refreshResult.ok ? 'ok' : refreshResult.reason));
           // 401 에러는 예상된 동작이므로 무시
           if (!refreshResult.ok && refreshResult.reason.includes('401')) {
             // 정상적인 실패
-            window.__S4_TRACE.push('refreshOnce failed with 401 (expected)');
+            window.__S4_TRACE.push('forceRefresh failed with 401 (expected)');
           } else if (!refreshResult.ok) {
             // 예상치 못한 에러
             console.log('[HARNESS] runS4: Unexpected error:', refreshResult.reason);
-            window.__S4_TRACE.push('refreshOnce failed with unexpected error: ' + refreshResult.reason);
+            window.__S4_TRACE.push('forceRefresh failed with unexpected error: ' + refreshResult.reason);
           }
         } catch (error) {
           // ✅ Command 3: fetch timeout 시 {ok:false, reason:'fetch_timeout', trace, pendingUrl} 반환
           // throw 금지, 항상 결과 반환
-          window.__S4_TRACE.push('refreshOnce exception: ' + String(error));
+          window.__S4_TRACE.push('forceRefresh exception: ' + String(error));
           const timeoutReason = pendingUrl 
             ? `fetch_timeout: ${pendingUrl}`
             : 'fetch_timeout: unknown url';
@@ -262,7 +261,7 @@ try {
           window.__S4_TRACE.push('fetch wrapper restored');
         }
       } else {
-        return { ok: false, reason: 'testHook.refreshOnce is not available' };
+        return { ok: false, reason: 'testHook.forceRefresh is not available' };
       }
       
       window.__S4_TRACE.push('before fetchCallsAfter analysis');

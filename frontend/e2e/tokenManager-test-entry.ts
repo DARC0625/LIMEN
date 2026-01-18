@@ -32,16 +32,29 @@ tokenManager.clearTokens = function() {
 // 번들러가 tree-shake로 제거하지 않도록 side-effect로 명시
 (tokenManager as Record<string, unknown>).__test = {
   /**
-   * 강제 refresh 호출 (테스트용) - getAccessToken()을 통한 간접 호출
+   * ✅ P1-Next-Fix-Module-4C: 강제 refresh 호출 (정책 변화에 흔들리지 않는 계약)
+   * refreshAccessToken을 직접 호출하여 refresh를 확실히 트리거
    * @param options.respond - 응답 상태 코드 (401: 실패, 200: 성공)
    */
   forceRefresh: async (options?: { respond?: number }): Promise<void> => {
-    // 만료된 토큰 상태로 설정 (refresh 트리거)
-    tokenManager.setTokens('expired-token', 'test-refresh-token', -1);
+    // refreshToken이 없으면 에러 발생 (제품 코드와 동일한 검증)
+    if (!tokenManager.getRefreshToken()) {
+      throw new Error('No refresh token available');
+    }
     
-    // getAccessToken 호출로 refresh 강제 트리거
+    // ✅ P1-Next-Fix-Module-4C: refreshAccessToken을 직접 호출하여 refresh를 확실히 트리거
+    // TypeScript의 private는 컴파일 타임 체크일 뿐, 런타임에서는 접근 가능
+    const tokenManagerAny = tokenManager as unknown as {
+      refreshAccessToken?: () => Promise<string>;
+    };
+    
+    if (!tokenManagerAny.refreshAccessToken) {
+      throw new Error('refreshAccessToken method not found');
+    }
+    
     try {
-      await tokenManager.getAccessToken();
+      // refreshAccessToken() 직접 호출 (에러는 그대로 throw)
+      await tokenManagerAny.refreshAccessToken();
     } catch (error) {
       // 401 응답 시 에러는 예상된 동작
       if (options?.respond === 401) {

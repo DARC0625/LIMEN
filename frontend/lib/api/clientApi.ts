@@ -23,22 +23,30 @@ const api = createApiClient({
 export const apiRequest = api.apiRequest;
 export { tokenManager };
 
-// ✅ P1-Next-Fix-Module-4: fetch를 globalThis 기반으로 안전하게 처리
-const fetchImpl = (() => {
-  if (typeof globalThis !== 'undefined' && globalThis.fetch) {
-    return globalThis.fetch.bind(globalThis);
+// ✅ P1-Next-Fix-Module-4C: fetch를 lazy proxy로 처리 (import-time throw 제거)
+// import 시점에 throw하지 않고, 실제 호출 시점에만 검증
+function getFetch(): typeof fetch {
+  const f =
+    (typeof globalThis !== 'undefined' && (globalThis as any).fetch) ||
+    (typeof window !== 'undefined' && (window as any).fetch) ||
+    undefined;
+
+  if (!f) {
+    throw new Error('fetch is required but not available');
   }
-  if (typeof window !== 'undefined' && window.fetch) {
-    return window.fetch.bind(window);
-  }
-  throw new Error('fetch is required but not available');
-})();
+  return f.bind(globalThis || window);
+}
+
+// ✅ P1-Next-Fix-Module-4C: fetch proxy (호출 시점에만 getFetch() 실행)
+const fetchProxy: typeof fetch = ((input: any, init?: any) => {
+  return getFetch()(input, init);
+}) as typeof fetch;
 
 // ✅ P1-Next-Fix-Module-2C: authAPI를 DI로 생성
 export const authAPI = createAuthAPI({
   tokenManager,
   apiRequest,
-  fetch: fetchImpl,
+  fetch: fetchProxy,
 });
 
 // 하위 호환성 함수들도 함께 export
