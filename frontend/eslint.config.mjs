@@ -63,6 +63,7 @@ export default [
       "jest.config.cjs",
       "jest.config.*",
       "jest.setup.js",
+      "jest.*.cjs", // ✅ P1-Next-1A: jest.core.cjs, jest.browser.cjs 포함
       "extract-trace-payload.js",
       "ecosystem.config.js",
       "playwright.config.ts",
@@ -75,10 +76,14 @@ export default [
         ...globals.node, // module, exports, require, process 등 Node 글로벌
         console: "readonly",
       },
+      parserOptions: {
+        sourceType: "script", // ✅ P1-Next-1A: .cjs 파일은 script 모드
+      },
     },
     rules: {
       "@typescript-eslint/no-require-imports": "off",
       "no-undef": "off",
+      "@typescript-eslint/no-var-requires": "off", // ✅ P1-Next-1A: require() 허용
     },
   },
   // (D) novnc-browser-patch.js: Node + Browser 멀티타겟 패치

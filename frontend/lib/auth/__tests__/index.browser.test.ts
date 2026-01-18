@@ -3,6 +3,7 @@
  * ✅ P1-4: Factory 패턴 기반 테스트 (mock 지옥 탈출)
  */
 
+import { checkAuth, getUserRole, isUserApproved, isAdmin, logout } from '../index';
 import { createAuth } from '../createAuth';
 import { createTestAuthDeps, createFakeTokenManager, createFakeAuthAPI, createTestClock, createFakeFetch } from './helpers';
 import { getUserRoleFromToken, isUserApprovedFromToken, isTokenValid } from '../../utils/token';
@@ -68,19 +69,20 @@ describe('checkAuth', () => {
   })
 
   it('handles invalid session', async () => {
-    mockTokenManager.hasValidToken.mockReturnValue(false)
+    // ✅ P1-Next-2: factory 기반 테스트
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({ clock });
+    const authAPI = createFakeAuthAPI({
+      checkSessionResult: { ok: true, status: 200, data: { valid: false, reason: 'Session expired' } },
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 200, ok: true, data: { valid: false, reason: 'Session expired' } },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    const result = await auth.checkAuth({ debug: true })
 
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      headers: {
-        getSetCookie: () => [],
-      },
-      json: async () => ({ valid: false, reason: 'Session expired' }),
-    } as unknown as Response)
-
-    const result = await checkAuth({ debug: true })
-
-    // ✅ Jest: debug로 경로 확정
+    // ✅ P1-Next-2: 시나리오 입력에 따른 출력만 검증
     console.log('[TEST] invalid session debug:', result.debug)
     expect(result.debug).toBeDefined()
     expect(result.debug?.checkBackendSessionCalled).toBe(true)
@@ -88,24 +90,32 @@ describe('checkAuth', () => {
   })
 
   it('handles valid session', async () => {
-    // 캐시 초기화를 위해 약간의 시간 대기
-    await new Promise(resolve => setTimeout(resolve, 1100))
+    // ✅ P1-Next-2: factory 기반 테스트 + fake timers로 캐시 제어
+    jest.useFakeTimers();
+    const clock = createTestClock();
+    const now = clock.now();
     
-    mockTokenManager.hasValidToken.mockReturnValue(true)
-    mockTokenManager.getAccessToken.mockResolvedValue('test-token')
+    const tokenManager = createFakeTokenManager({
+      accessToken: 'test-token',
+      refreshToken: 'refresh-token',
+      expiresAt: now + 60000,
+      getAccessTokenImpl: async () => 'test-token',
+      clock,
+    });
+    
+    const authAPI = createFakeAuthAPI({
+      checkSessionResult: { ok: true, status: 200, data: { valid: true } },
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 200, ok: true, data: { valid: true } },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    
+    // ✅ P1-Next-3: fake timers로 캐시 시간 제어 (실제 setTimeout 대기 제거)
+    const result = await auth.checkAuth({ debug: true });
 
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: {
-        getSetCookie: () => [],
-      },
-      json: async () => ({ valid: true }),
-    } as unknown as Response)
-
-    const result = await checkAuth({ debug: true })
-
-    // ✅ Command 1: debug payload로 원인 확정
+    // ✅ P1-Next-2: 시나리오 입력에 따른 출력만 검증
     console.log('[TEST] valid session debug:', result.debug)
     expect(result.debug).toBeDefined()
     expect(result.debug?.checkBackendSessionCalled).toBe(true)
@@ -113,111 +123,118 @@ describe('checkAuth', () => {
     expect(result.debug?.backendOk).toBe(true)
     expect(result.debug?.hasAccessToken).toBe(true)
     
-    // checkBackendSession이 호출되었는지 확인
-    expect(global.fetch).toHaveBeenCalled()
-    // 결과는 캐싱이나 debounce에 따라 다를 수 있음
-    expect(result).toBeDefined()
-    expect(result.valid).toBeDefined()
+    expect(result.valid).toBe(true)
+    jest.useRealTimers();
   })
 
   it('handles 401 status', async () => {
-    // 모듈 재로드하여 캐시 초기화
-    jest.resetModules()
-    const { checkAuth: checkAuthReloaded } = require('../index')
+    // ✅ P1-Next-2: factory 기반 테스트 (각 테스트마다 새로운 auth 인스턴스 = 캐시 분리)
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: 'test-token',
+      refreshToken: 'refresh-token',
+      expiresAt: clock.now() + 60000,
+      csrfToken: 'csrf-token',
+      getAccessTokenImpl: async () => 'test-token',
+      clock,
+    });
     
-    // 캐시 초기화를 위해 충분한 시간 대기 (debounce + cache 시간 초과)
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    const authAPI = createFakeAuthAPI({
+      checkSessionResult: { ok: false, status: 401, data: { valid: false, reason: '인증이 필요합니다.' } },
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 401, ok: false, data: { valid: false, reason: '인증이 필요합니다.' } },
+    });
     
-    mockTokenManager.hasValidToken.mockReturnValue(true)
-    mockTokenManager.getAccessToken.mockResolvedValue('test-token')
-    mockTokenManager.getCSRFToken.mockReturnValue('csrf-token')
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    const result = await auth.checkAuth()
 
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: false,
-      status: 401,
-      statusText: 'Unauthorized',
-      headers: {
-        getSetCookie: () => [],
-      },
-    } as unknown as Response)
-
-    const result = await checkAuthReloaded()
-
-    // checkBackendSession이 호출되었는지 확인 (캐시가 초기화되었으므로 호출되어야 함)
-    // debounce 때문에 호출되지 않을 수 있으므로, 결과만 검증
+    // ✅ P1-Next-2: 시나리오 입력에 따른 출력만 검증
     expect(result).toBeDefined()
-    // 401 상태일 때 valid가 false여야 함
     expect(result.valid).toBe(false)
     expect(result.reason).toBeDefined()
   })
 
   it('handles 403 status', async () => {
-    // 모듈 재로드하여 캐시 초기화
-    jest.resetModules()
-    const { checkAuth: checkAuthReloaded } = require('../index')
+    // ✅ P1-Next-2: factory 기반 테스트
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: 'test-token',
+      refreshToken: 'refresh-token',
+      expiresAt: clock.now() + 60000,
+      csrfToken: 'csrf-token',
+      getAccessTokenImpl: async () => 'test-token',
+      clock,
+    });
     
-    // 캐시 초기화를 위해 충분한 시간 대기 (debounce + cache 시간 초과)
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    const authAPI = createFakeAuthAPI({
+      checkSessionResult: { ok: false, status: 403, data: { valid: false, reason: '권한이 없습니다.' } },
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 403, ok: false, data: { valid: false, reason: '권한이 없습니다.' } },
+    });
     
-    mockTokenManager.hasValidToken.mockReturnValue(true)
-    mockTokenManager.getAccessToken.mockResolvedValue('test-token')
-    mockTokenManager.getCSRFToken.mockReturnValue('csrf-token')
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    const result = await auth.checkAuth()
 
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: false,
-      status: 403,
-      statusText: 'Forbidden',
-      headers: {
-        getSetCookie: () => [],
-      },
-    } as unknown as Response)
-
-    const result = await checkAuthReloaded()
-
-    // checkBackendSession이 호출되었는지 확인 (캐시가 초기화되었으므로 호출되어야 함)
-    // debounce 때문에 호출되지 않을 수 있으므로, 결과만 검증
+    // ✅ P1-Next-2: 시나리오 입력에 따른 출력만 검증
     expect(result).toBeDefined()
-    // 403 상태일 때 valid가 false여야 함
     expect(result.valid).toBe(false)
     expect(result.reason).toBeDefined()
   })
 
   it('handles network errors', async () => {
-    mockTokenManager.hasValidToken.mockReturnValue(true)
-    mockTokenManager.getAccessToken.mockResolvedValue('test-token')
-
-    ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
-
-    // 네트워크 에러는 예외를 발생시키거나 폴백을 사용할 수 있음
-    try {
-      const result = await checkAuth()
-      // 폴백이 사용되면 valid가 false일 수 있음
-      expect(result.valid).toBeDefined()
-    } catch (error) {
-      // 또는 예외가 발생할 수 있음
-      expect(error).toBeInstanceOf(Error)
-    }
+    // ✅ P1-Next-2: factory 기반 테스트
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: 'test-token',
+      refreshToken: 'refresh-token',
+      expiresAt: clock.now() + 60000,
+      getAccessTokenImpl: async () => 'test-token',
+      clock,
+    });
+    
+    const fetchFn = createFakeFetch();
+    fetchFn.mockRejectedValueOnce(new Error('Network error'));
+    
+    const authAPI = createFakeAuthAPI({
+      checkSessionImpl: async () => {
+        throw new Error('Network error');
+      },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    
+    // 네트워크 에러는 checkLocalStorageToken으로 폴백
+    const result = await auth.checkAuth()
+    expect(result.valid).toBeDefined()
   })
 
   it('handles unexpected status codes', async () => {
-    // 캐시 초기화를 위해 약간의 시간 대기
-    await new Promise(resolve => setTimeout(resolve, 1100))
+    // ✅ P1-Next-2: factory 기반 테스트
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: 'test-token',
+      refreshToken: 'refresh-token',
+      expiresAt: clock.now() + 60000,
+      getAccessTokenImpl: async () => 'test-token',
+      clock,
+    });
     
-    mockTokenManager.hasValidToken.mockReturnValue(true)
-    mockTokenManager.getAccessToken.mockResolvedValue('test-token')
-
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: false,
-      status: 500,
-      statusText: 'Internal Server Error',
-      headers: {
-        getSetCookie: () => [],
+    const authAPI = createFakeAuthAPI({
+      checkSessionImpl: async () => {
+        throw new Error('HTTP 500');
       },
-    } as unknown as Response)
-
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 500, ok: false },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    
     // 500 에러는 예외를 발생시키거나 폴백을 사용할 수 있음
     try {
-      const result = await checkAuth()
+      const result = await auth.checkAuth()
       // 폴백이 사용되면 valid가 false일 수 있음
       expect(result.valid).toBeDefined()
     } catch (error) {
@@ -227,19 +244,30 @@ describe('checkAuth', () => {
   })
 
   it('falls back to localStorage token when session check fails', async () => {
-    mockTokenManager.hasValidToken.mockReturnValue(true)
-    mockTokenManager.getAccessToken.mockResolvedValue('valid-token')
-
-    ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
-
-    // checkLocalStorageToken이 호출되도록 설정
-    // 실제로는 catch 블록에서 checkLocalStorageToken이 호출됨
-    try {
-      await checkAuth()
-    } catch (error) {
-      // 네트워크 에러는 예외를 발생시킴
-      expect(error).toBeInstanceOf(Error)
-    }
+    // ✅ P1-Next-2: factory 기반 테스트
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: 'valid-token',
+      refreshToken: 'refresh-token',
+      expiresAt: clock.now() + 60000,
+      getAccessTokenImpl: async () => 'valid-token',
+      clock,
+    });
+    
+    const fetchFn = createFakeFetch();
+    fetchFn.mockRejectedValueOnce(new Error('Network error'));
+    
+    const authAPI = createFakeAuthAPI({
+      checkSessionImpl: async () => {
+        throw new Error('Network error');
+      },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    
+    // 네트워크 에러는 checkLocalStorageToken으로 폴백
+    const result = await auth.checkAuth()
+    expect(result.valid).toBeDefined()
   })
 })
 
@@ -261,29 +289,56 @@ describe('getUserRole', () => {
   })
 
   it('returns role from token', async () => {
-    mockTokenManager.getAccessToken.mockResolvedValue('test-token')
+    // ✅ P1-Next-2: index.ts의 export 함수는 내부적으로 defaultDeps를 사용
+    // 하지만 테스트에서는 createAuth를 직접 사용하여 factory 기반 테스트
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: 'test-token',
+      getAccessTokenImpl: async () => 'test-token',
+      clock,
+    });
+    
+    const authAPI = createFakeAuthAPI();
+    const fetchFn = createFakeFetch();
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    
     mockGetUserRoleFromToken.mockReturnValue('admin')
+    const result = await auth.getUserRole()
 
-    const result = await getUserRole()
-
-    expect(mockTokenManager.getAccessToken).toHaveBeenCalled()
-    // getUserRoleFromToken이 호출되었는지 확인
+    expect(tokenManager.getAccessToken).toHaveBeenCalled()
     expect(mockGetUserRoleFromToken).toHaveBeenCalled()
     expect(result).toBe('admin')
   })
 
   it('returns null when no access token', async () => {
-    mockTokenManager.getAccessToken.mockResolvedValue(null)
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: null,
+      getAccessTokenImpl: async () => null,
+      clock,
+    });
+    const authAPI = createFakeAuthAPI();
+    const fetchFn = createFakeFetch();
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
 
-    const result = await getUserRole()
+    const result = await auth.getUserRole()
 
     expect(result).toBeNull()
   })
 
   it('handles errors gracefully', async () => {
-    mockTokenManager.getAccessToken.mockRejectedValue(new Error('Token error'))
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      getAccessTokenImpl: async () => {
+        throw new Error('Token error');
+      },
+      clock,
+    });
+    const authAPI = createFakeAuthAPI();
+    const fetchFn = createFakeFetch();
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
 
-    const result = await getUserRole()
+    const result = await auth.getUserRole()
 
     expect(result).toBeNull()
   })
@@ -307,41 +362,73 @@ describe('isUserApproved', () => {
   })
 
   it('returns true when user is approved', async () => {
-    mockTokenManager.getAccessToken.mockResolvedValue('test-token')
+    // ✅ P1-Next-2: factory 기반 테스트
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: 'test-token',
+      getAccessTokenImpl: async () => 'test-token',
+      clock,
+    });
+    const authAPI = createFakeAuthAPI();
+    const fetchFn = createFakeFetch();
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    
     mockIsUserApprovedFromToken.mockReturnValue(true)
+    const result = await auth.isUserApproved()
 
-    const result = await isUserApproved()
-
-    expect(mockTokenManager.getAccessToken).toHaveBeenCalled()
+    expect(tokenManager.getAccessToken).toHaveBeenCalled()
     expect(mockIsUserApprovedFromToken).toHaveBeenCalledWith('test-token')
     expect(result).toBe(true)
   })
 
   it('returns false when user is not approved', async () => {
-    mockTokenManager.getAccessToken.mockResolvedValue('test-token')
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: 'test-token',
+      getAccessTokenImpl: async () => 'test-token',
+      clock,
+    });
+    const authAPI = createFakeAuthAPI();
+    const fetchFn = createFakeFetch();
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    
     mockIsUserApprovedFromToken.mockReturnValue(false)
+    const result = await auth.isUserApproved()
 
-    const result = await isUserApproved()
-
-    expect(mockTokenManager.getAccessToken).toHaveBeenCalled()
+    expect(tokenManager.getAccessToken).toHaveBeenCalled()
     expect(mockIsUserApprovedFromToken).toHaveBeenCalledWith('test-token')
     expect(result).toBe(false)
   })
 
   it('returns false when no access token', async () => {
-    mockTokenManager.getAccessToken.mockResolvedValue(null)
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: null,
+      getAccessTokenImpl: async () => null,
+      clock,
+    });
+    const authAPI = createFakeAuthAPI();
+    const fetchFn = createFakeFetch();
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
 
-    const result = await isUserApproved()
+    const result = await auth.isUserApproved()
 
     expect(result).toBe(false)
   })
 
   it('handles errors gracefully', async () => {
-    mockTokenManager.getAccessToken.mockResolvedValue('test-token')
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      getAccessTokenImpl: async () => {
+        throw new Error('Token error');
+      },
+      clock,
+    });
+    const authAPI = createFakeAuthAPI();
+    const fetchFn = createFakeFetch();
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
 
-    ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
-
-    const result = await isUserApproved()
+    const result = await auth.isUserApproved()
 
     expect(result).toBe(false)
   })
@@ -354,37 +441,69 @@ describe('isAdmin', () => {
   })
 
   it('returns false for non-admin role', async () => {
-    mockTokenManager.getAccessToken.mockResolvedValue('test-token')
+    // ✅ P1-Next-2: factory 기반 테스트
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: 'test-token',
+      getAccessTokenImpl: async () => 'test-token',
+      clock,
+    });
+    const authAPI = createFakeAuthAPI();
+    const fetchFn = createFakeFetch();
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
     
-    const { getUserRoleFromToken } = require('../../utils/token')
-    jest.spyOn(require('../../utils/token'), 'getUserRoleFromToken').mockReturnValue('user')
-
-    const result = await isAdmin()
+    mockGetUserRoleFromToken.mockReturnValue('user')
+    const result = await auth.isAdmin()
 
     expect(result).toBe(false)
   })
 
   it('returns true for admin role', async () => {
-    mockTokenManager.getAccessToken.mockResolvedValue('test-token')
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: 'test-token',
+      getAccessTokenImpl: async () => 'test-token',
+      clock,
+    });
+    const authAPI = createFakeAuthAPI();
+    const fetchFn = createFakeFetch();
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    
     mockGetUserRoleFromToken.mockReturnValue('admin')
-
-    const result = await isAdmin()
+    const result = await auth.isAdmin()
 
     expect(result).toBe(true)
   })
 
   it('returns false when no access token', async () => {
-    mockTokenManager.getAccessToken.mockResolvedValue(null)
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: null,
+      getAccessTokenImpl: async () => null,
+      clock,
+    });
+    const authAPI = createFakeAuthAPI();
+    const fetchFn = createFakeFetch();
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
 
-    const result = await isAdmin()
+    const result = await auth.isAdmin()
 
     expect(result).toBe(false)
   })
 
   it('handles errors gracefully', async () => {
-    mockTokenManager.getAccessToken.mockRejectedValue(new Error('Token error'))
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      getAccessTokenImpl: async () => {
+        throw new Error('Token error');
+      },
+      clock,
+    });
+    const authAPI = createFakeAuthAPI();
+    const fetchFn = createFakeFetch();
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
 
-    const result = await isAdmin()
+    const result = await auth.isAdmin()
 
     expect(result).toBe(false)
   })
@@ -393,28 +512,39 @@ describe('isAdmin', () => {
 describe('logout', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    // ✅ Jest: logout이 서버로 판정되지 않도록 window mock 유지
-    // logout은 typeof window === 'undefined' 체크를 하므로
-    // window가 없으면 아무 것도 안 함
     global.window = global.window || {} as any;
   })
 
   it('clears tokens and deletes session on client side', async () => {
-    mockAuthAPI.deleteSession.mockResolvedValue(undefined)
+    // ✅ P1-Next-2: factory 기반 테스트
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({ clock });
+    const authAPI = createFakeAuthAPI({
+      deleteSessionImpl: async () => {},
+    });
+    const fetchFn = createFakeFetch();
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
 
-    logout()
+    auth.logout()
 
-    // ✅ Jest: logout이 브라우저 환경으로 판정되어야 함
-    // window가 없으면 deleteSession / clearTokens가 호출되지 않음
-    expect(mockTokenManager.clearTokens).toHaveBeenCalled()
-    expect(mockAuthAPI.deleteSession).toHaveBeenCalled()
+    // ✅ P1-Next-2: 시나리오 입력에 따른 출력만 검증
+    expect(tokenManager.clearTokens).toHaveBeenCalled()
+    expect(authAPI.deleteSession).toHaveBeenCalled()
   })
 
   it('handles deleteSession errors gracefully', async () => {
-    mockAuthAPI.deleteSession.mockRejectedValue(new Error('Session delete failed'))
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({ clock });
+    const authAPI = createFakeAuthAPI({
+      deleteSessionImpl: async () => {
+        throw new Error('Session delete failed');
+      },
+    });
+    const fetchFn = createFakeFetch();
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
 
-    expect(() => logout()).not.toThrow()
-    expect(mockTokenManager.clearTokens).toHaveBeenCalled()
+    expect(() => auth.logout()).not.toThrow()
+    expect(tokenManager.clearTokens).toHaveBeenCalled()
   })
 
   it('does not throw on server side', () => {
@@ -434,13 +564,27 @@ describe('checkBackendSession edge cases', () => {
   })
 
   it('handles network error with localStorage fallback', async () => {
-    mockTokenManager.hasValidToken.mockReturnValue(false)
-    mockTokenManager.getAccessToken.mockResolvedValue('valid-token')
-
-    // fetch가 실패하면 checkLocalStorageToken이 호출됨
-    ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
-
-    const result = await checkAuth()
+    // ✅ P1-Next-2: factory 기반 테스트
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: 'valid-token',
+      refreshToken: null,
+      expiresAt: null,
+      getAccessTokenImpl: async () => 'valid-token',
+      clock,
+    });
+    
+    const fetchFn = createFakeFetch();
+    fetchFn.mockRejectedValueOnce(new Error('Network error'));
+    
+    const authAPI = createFakeAuthAPI({
+      checkSessionImpl: async () => {
+        throw new Error('Network error');
+      },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    const result = await auth.checkAuth()
 
     // 네트워크 오류 시 localStorage 토큰으로 폴백
     expect(result).toBeDefined()
@@ -448,24 +592,31 @@ describe('checkBackendSession edge cases', () => {
   })
 
   it('handles checkAuth with valid token and session', async () => {
-    // 캐시 초기화를 위해 충분한 시간 대기
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // ✅ P1-Next-2, P1-Next-3: factory 기반 테스트 + fake timers (setTimeout 제거)
+    jest.useFakeTimers();
+    const clock = createTestClock();
+    const now = clock.now();
     
-    mockTokenManager.hasValidToken.mockReturnValue(true)
-    mockTokenManager.getAccessToken.mockResolvedValue('test-token')
-
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: {
-        getSetCookie: () => [],
-      },
-      json: async () => ({ valid: true }),
-    } as unknown as Response)
-
-    const result = await checkAuth()
+    const tokenManager = createFakeTokenManager({
+      accessToken: 'test-token',
+      refreshToken: 'refresh-token',
+      expiresAt: now + 60000,
+      getAccessTokenImpl: async () => 'test-token',
+      clock,
+    });
+    
+    const authAPI = createFakeAuthAPI({
+      checkSessionResult: { ok: true, status: 200, data: { valid: true } },
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 200, ok: true, data: { valid: true } },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    const result = await auth.checkAuth()
 
     expect(result.valid).toBe(true)
+    jest.useRealTimers();
   })
 
   it.skip('handles checkAuth with valid token but invalid session', async () => {
@@ -491,26 +642,35 @@ describe('checkBackendSession edge cases', () => {
   })
 
   it('handles checkAuth token refresh failure', async () => {
-    // 캐시 초기화를 위해 충분한 시간 대기
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // ✅ P1-Next-2, P1-Next-3: factory 기반 테스트 + fake timers
+    jest.useFakeTimers();
+    const clock = createTestClock();
+    const now = clock.now();
     
-    mockTokenManager.hasValidToken.mockReturnValue(true)
-    mockTokenManager.getAccessToken.mockRejectedValue(new Error('Token refresh failed'))
-
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: {
-        getSetCookie: () => [],
+    const tokenManager = createFakeTokenManager({
+      accessToken: null,
+      refreshToken: 'refresh-token',
+      expiresAt: now + 60000,
+      getAccessTokenImpl: async () => {
+        throw new Error('Token refresh failed');
       },
-      json: async () => ({ valid: false }),
-    } as unknown as Response)
-
-    const result = await checkAuth()
+      clock,
+    });
+    
+    const authAPI = createFakeAuthAPI({
+      checkSessionResult: { ok: true, status: 200, data: { valid: false } },
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 200, ok: true, data: { valid: false } },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    const result = await auth.checkAuth()
 
     // 토큰 갱신 실패 후 백엔드 세션 확인으로 진행
     expect(result).toBeDefined()
     expect(typeof result.valid).toBe('boolean')
+    jest.useRealTimers();
   })
 
   it.skip('handles checkAuth with no valid token', async () => {
@@ -537,80 +697,88 @@ describe('checkBackendSession edge cases', () => {
   })
 
   it('handles checkAuth session check with network error reason', async () => {
-    // 캐시 초기화를 위해 모듈 리로드
-    jest.resetModules()
-    const { checkAuth: checkAuthReloaded } = require('../index')
+    // ✅ P1-Next-2: factory 기반 테스트 (각 테스트마다 새로운 auth 인스턴스 = 캐시 분리)
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: null,
+      refreshToken: null,
+      expiresAt: null,
+      csrfToken: null,
+      clock,
+    });
     
-    jest.clearAllMocks()
-    mockTokenManager.hasValidToken.mockReturnValue(false)
-    mockTokenManager.getCSRFToken.mockReturnValue(null)
-    mockTokenManager.getAccessToken.mockResolvedValue(null)
-
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: {
-        getSetCookie: () => [],
-      },
-      json: async () => ({ valid: false, reason: '네트워크 오류' }),
-    } as unknown as Response)
-
-    const result = await checkAuthReloaded()
+    const authAPI = createFakeAuthAPI({
+      checkSessionResult: { ok: true, status: 200, data: { valid: false, reason: '네트워크 오류' } },
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 200, ok: true, data: { valid: false, reason: '네트워크 오류' } },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    const result = await auth.checkAuth()
 
     // 네트워크 오류가 포함된 경우 토큰을 정리하지 않음
     expect(result.valid).toBe(false)
-    // clearTokens가 호출되지 않았는지 확인 (실제로는 호출되지 않아야 함)
     expect(result).toBeDefined()
   })
 
   it('handles checkAuth session check without network error reason', async () => {
-    // 캐시 초기화를 위해 모듈 리로드
-    jest.resetModules()
-    const { checkAuth: checkAuthReloaded } = require('../index')
+    // ✅ P1-Next-2: factory 기반 테스트
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: null,
+      refreshToken: null,
+      expiresAt: null,
+      csrfToken: null,
+      clock,
+    });
     
-    jest.clearAllMocks()
-    mockTokenManager.hasValidToken.mockReturnValue(false)
-    mockTokenManager.getCSRFToken.mockReturnValue(null)
-    mockTokenManager.getAccessToken.mockResolvedValue(null)
-
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: {
-        getSetCookie: () => [],
-      },
-      json: async () => ({ valid: false, reason: 'Session expired' }),
-    } as unknown as Response)
-
-    const result = await checkAuthReloaded()
+    const authAPI = createFakeAuthAPI({
+      checkSessionResult: { ok: true, status: 200, data: { valid: false, reason: 'Session expired' } },
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 200, ok: true, data: { valid: false, reason: 'Session expired' } },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    const result = await auth.checkAuth()
 
     // 네트워크 오류가 아닌 경우 토큰을 정리함
     expect(result.valid).toBe(false)
-    // clearTokens가 호출되었는지 확인 (실제로는 호출될 수 있음)
+    expect(tokenManager.clearTokens).toHaveBeenCalled()
     expect(result).toBeDefined()
   })
 
   it('handles checkBackendSession with cached result', async () => {
-    // 먼저 성공한 세션 확인을 수행하여 캐시 생성
-    mockTokenManager.hasValidToken.mockReturnValue(true)
-    mockTokenManager.getAccessToken.mockResolvedValue('test-token')
-
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: {
-        getSetCookie: () => [],
-      },
-      json: async () => ({ valid: true }),
-    } as unknown as Response)
-
-    const result1 = await checkAuth()
+    // ✅ P1-Next-2, P1-Next-3: factory 기반 테스트 + 같은 auth 인스턴스로 캐시 테스트
+    const clock = createTestClock();
+    const now = clock.now();
+    
+    const tokenManager = createFakeTokenManager({
+      accessToken: 'test-token',
+      refreshToken: 'refresh-token',
+      expiresAt: now + 60000,
+      getAccessTokenImpl: async () => 'test-token',
+      clock,
+    });
+    
+    const authAPI = createFakeAuthAPI({
+      checkSessionResult: { ok: true, status: 200, data: { valid: true } },
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 200, ok: true, data: { valid: true } },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    
+    // 첫 번째 호출로 캐시 생성
+    const result1 = await auth.checkAuth()
     expect(result1.valid).toBe(true)
 
-    // 캐시된 결과를 사용하는지 확인 (짧은 시간 내 재호출)
-    const result2 = await checkAuth({ debug: true })
+    // ✅ P1-Next-3: clock을 전진시키지 않고 바로 재호출 (캐시 사용)
+    const result2 = await auth.checkAuth({ debug: true })
     
-    // ✅ Command 1: debug payload로 원인 확정
+    // ✅ P1-Next-2: 시나리오 입력에 따른 출력만 검증
     console.log('[TEST] cached result debug:', result2.debug)
     expect(result2.debug).toBeDefined()
     expect(result2.debug?.usedCache).toBe(true)
@@ -620,22 +788,24 @@ describe('checkBackendSession edge cases', () => {
   })
 
   it('handles checkBackendSession with debounce', async () => {
-    mockTokenManager.hasValidToken.mockReturnValue(false)
+    // ✅ P1-Next-2, P1-Next-3: factory 기반 테스트 + 같은 auth 인스턴스로 debounce 테스트
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({ clock });
+    
+    const authAPI = createFakeAuthAPI({
+      checkSessionResult: { ok: true, status: 200, data: { valid: false } },
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 200, ok: true, data: { valid: false } },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
 
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: {
-        getSetCookie: () => [],
-      },
-      json: async () => ({ valid: false }),
-    } as unknown as Response)
-
-    // 짧은 시간 내 여러 번 호출
+    // 짧은 시간 내 여러 번 호출 (같은 auth 인스턴스 = 같은 캐시 상태)
     const promises = [
-      checkAuth(),
-      checkAuth(),
-      checkAuth(),
+      auth.checkAuth(),
+      auth.checkAuth(),
+      auth.checkAuth(),
     ]
 
     const results = await Promise.all(promises)
@@ -649,29 +819,46 @@ describe('checkBackendSession edge cases', () => {
   })
 
   it('handles checkBackendSession with sessionCheckInProgress', async () => {
-    mockTokenManager.hasValidToken.mockReturnValue(false)
-
-    ;(global.fetch as jest.Mock).mockImplementation(() => {
+    // ✅ P1-Next-2, P1-Next-3: factory 기반 테스트 + fake timers
+    jest.useFakeTimers();
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({ clock });
+    
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 200, ok: true, data: { valid: false } },
+    });
+    
+    // 지연된 응답 시뮬레이션
+    fetchFn.mockImplementation(() => {
       return new Promise(resolve => {
         setTimeout(() => {
           resolve({
             ok: true,
             status: 200,
-            headers: {
-              getSetCookie: () => [],
-            },
+            headers: { getSetCookie: () => [] },
             json: async () => ({ valid: false }),
-          } as unknown as Response)
-        }, 100)
-      })
-    })
+          } as Response);
+        }, 100);
+      });
+    });
+    
+    const authAPI = createFakeAuthAPI({
+      checkSessionImpl: async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        return { ok: true, status: 200, data: { valid: false } };
+      },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
 
     // 동시에 여러 번 호출
     const promises = [
-      checkAuth(),
-      checkAuth(),
+      auth.checkAuth(),
+      auth.checkAuth(),
     ]
 
+    // fake timers 진행
+    jest.advanceTimersByTime(200);
     const results = await Promise.all(promises)
 
     // sessionCheckInProgress로 인해 일부는 캐시된 결과를 반환할 수 있음
@@ -680,6 +867,7 @@ describe('checkBackendSession edge cases', () => {
       expect(result).toBeDefined()
       expect(typeof result.valid).toBe('boolean')
     })
+    jest.useRealTimers();
   })
 })
 
@@ -725,7 +913,7 @@ describe('checkLocalStorageToken', () => {
     
     mockIsTokenValid.mockReturnValue(true);
     
-    const auth = createAuth({ tokenManager, authAPI, clock, fetch });
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
     const result = await auth.checkAuth({ debug: true });
 
     // ✅ P1-4: 시나리오 입력에 따른 출력만 검증
@@ -799,36 +987,60 @@ describe('checkLocalStorageToken', () => {
   })
 
   it('handles checkLocalStorageToken with error', async () => {
-    // 캐시 초기화를 위해 모듈 리로드
-    jest.resetModules()
-    const { checkAuth: checkAuthReloaded } = require('../index')
+    // ✅ P1-Next-2: factory 기반 테스트
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: null,
+      refreshToken: null,
+      expiresAt: null,
+      csrfToken: null,
+      getAccessTokenImpl: async () => {
+        throw new Error('Token error');
+      },
+      clock,
+    });
     
-    jest.clearAllMocks()
-    mockTokenManager.hasValidToken.mockReturnValue(false)
-    mockTokenManager.getCSRFToken.mockReturnValue(null)
-    mockTokenManager.getAccessToken.mockRejectedValue(new Error('Token error'))
-
-    // fetch가 실패하면 checkLocalStorageToken이 호출됨
-    ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
-
-    const result = await checkAuthReloaded()
+    const fetchFn = createFakeFetch();
+    fetchFn.mockRejectedValueOnce(new Error('Network error'));
+    
+    const authAPI = createFakeAuthAPI({
+      checkSessionImpl: async () => {
+        throw new Error('Network error');
+      },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    const result = await auth.checkAuth()
 
     // 에러 발생 시 인증 실패
     expect(result.valid).toBe(false)
   })
 
   it('handles checkBackendSession with no cached result during debounce', async () => {
-    // 캐시 초기화를 위해 충분한 시간 대기
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // ✅ P1-Next-2, P1-Next-3: factory 기반 테스트 + 같은 auth 인스턴스로 debounce 테스트
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: null,
+      refreshToken: null,
+      expiresAt: null,
+      csrfToken: null,
+      clock,
+    });
     
-    mockTokenManager.hasValidToken.mockReturnValue(false)
-    mockTokenManager.getCSRFToken.mockReturnValue(null)
+    const authAPI = createFakeAuthAPI({
+      checkSessionResult: { ok: true, status: 200, data: { valid: false } },
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 200, ok: true, data: { valid: false } },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
 
     // 짧은 시간 내 여러 번 호출하여 debounce 상태 만들기
-    const promise1 = checkAuth()
+    const promise1 = auth.checkAuth()
     
     // 바로 다음 호출 (debounce 시간 내)
-    const promise2 = checkAuth()
+    const promise2 = auth.checkAuth()
 
     const results = await Promise.all([promise1, promise2])
 
@@ -840,33 +1052,40 @@ describe('checkLocalStorageToken', () => {
   })
 
   it('handles checkBackendSession with setCookieHeaders', async () => {
-    // 캐시 초기화를 위해 충분한 시간 대기
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // ✅ P1-Next-2, P1-Next-3: factory 기반 테스트 + fake timers
+    jest.useFakeTimers();
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: null,
+      refreshToken: null,
+      expiresAt: null,
+      csrfToken: null,
+      clock,
+    });
     
-    mockTokenManager.hasValidToken.mockReturnValue(false)
-    mockTokenManager.getCSRFToken.mockReturnValue(null)
-
-    const mockSetCookieHeaders = ['session=abc123; Path=/', 'csrf=xyz789; Path=/']
-
-    const mockHeaders = new Headers()
-    const mockResponse = {
+    const mockSetCookieHeaders = ['session=abc123; Path=/', 'csrf=xyz789; Path=/'];
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 200, ok: true, data: { valid: true } },
+    });
+    
+    // getSetCookie 헤더 시뮬레이션
+    fetchFn.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      headers: mockHeaders,
+      headers: {
+        getSetCookie: () => mockSetCookieHeaders,
+      },
       json: async () => ({ valid: true }),
-    } as unknown as Response
+    } as Response);
+    
+    const authAPI = createFakeAuthAPI({
+      checkSessionResult: { ok: true, status: 200, data: { valid: true } },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    const result = await auth.checkAuth({ debug: true })
 
-    // getSetCookie 메서드 추가
-    Object.defineProperty(mockHeaders, 'getSetCookie', {
-      value: () => mockSetCookieHeaders,
-      writable: true,
-    })
-
-    ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
-
-    const result = await checkAuth({ debug: true })
-
-    // ✅ Command 1: debug payload로 원인 확정
+    // ✅ P1-Next-2: 시나리오 입력에 따른 출력만 검증
     console.log('[TEST] setCookieHeaders debug:', result.debug)
     expect(result.debug).toBeDefined()
     expect(result.debug?.checkBackendSessionCalled).toBe(true)
@@ -874,54 +1093,69 @@ describe('checkLocalStorageToken', () => {
     expect(result.debug?.backendOk).toBe(true)
     
     expect(result.valid).toBe(true)
+    jest.useRealTimers();
   })
 
   it('handles checkBackendSession with 500 error', async () => {
-    // 캐시 초기화를 위해 충분한 시간 대기
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // ✅ P1-Next-2, P1-Next-3: factory 기반 테스트 + fake timers
+    jest.useFakeTimers();
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: null,
+      refreshToken: null,
+      expiresAt: null,
+      csrfToken: null,
+      clock,
+    });
     
-    mockTokenManager.hasValidToken.mockReturnValue(false)
-    mockTokenManager.getCSRFToken.mockReturnValue(null)
-    mockTokenManager.getAccessToken.mockResolvedValue(null)
-
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: false,
-      status: 500,
-      statusText: 'Internal Server Error',
-      headers: {
-        getSetCookie: () => [],
+    const authAPI = createFakeAuthAPI({
+      checkSessionImpl: async () => {
+        throw new Error('HTTP 500');
       },
-    } as unknown as Response)
-
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 500, ok: false },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    
     // 500 에러는 예외를 발생시키지만, checkAuth의 catch 블록에서 checkLocalStorageToken을 호출하므로
     // 실제로는 예외가 발생하지 않고 checkLocalStorageToken의 결과를 반환할 수 있음
-    const result = await checkAuth()
+    const result = await auth.checkAuth()
     expect(result).toBeDefined()
     expect(typeof result.valid).toBe('boolean')
+    jest.useRealTimers();
   })
 
   it('handles checkBackendSession with 404 error', async () => {
-    // 캐시 초기화를 위해 충분한 시간 대기
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // ✅ P1-Next-2, P1-Next-3: factory 기반 테스트 + fake timers
+    jest.useFakeTimers();
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: null,
+      refreshToken: null,
+      expiresAt: null,
+      csrfToken: null,
+      clock,
+    });
     
-    mockTokenManager.hasValidToken.mockReturnValue(false)
-    mockTokenManager.getCSRFToken.mockReturnValue(null)
-    mockTokenManager.getAccessToken.mockResolvedValue(null)
-
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: false,
-      status: 404,
-      statusText: 'Not Found',
-      headers: {
-        getSetCookie: () => [],
+    const authAPI = createFakeAuthAPI({
+      checkSessionImpl: async () => {
+        throw new Error('HTTP 404');
       },
-    } as unknown as Response)
-
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 404, ok: false },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    
     // 404 에러는 예외를 발생시키지만, checkAuth의 catch 블록에서 checkLocalStorageToken을 호출하므로
     // 실제로는 예외가 발생하지 않고 checkLocalStorageToken의 결과를 반환할 수 있음
-    const result = await checkAuth()
+    const result = await auth.checkAuth()
     expect(result).toBeDefined()
     expect(typeof result.valid).toBe('boolean')
+    jest.useRealTimers();
   })
 
   it.skip('handles checkBackendSession with invalid session data reason', async () => {
@@ -951,25 +1185,25 @@ describe('checkLocalStorageToken', () => {
   })
 
   it('handles checkBackendSession with empty reason', async () => {
-    // 캐시 초기화를 위해 모듈 리로드
-    jest.resetModules()
-    const { checkAuth: checkAuthReloaded } = require('../index')
+    // ✅ P1-Next-2: factory 기반 테스트 (각 테스트마다 새로운 auth 인스턴스 = 캐시 분리)
+    const clock = createTestClock();
+    const tokenManager = createFakeTokenManager({
+      accessToken: null,
+      refreshToken: null,
+      expiresAt: null,
+      csrfToken: null,
+      clock,
+    });
     
-    jest.clearAllMocks()
-    mockTokenManager.hasValidToken.mockReturnValue(false)
-    mockTokenManager.getCSRFToken.mockReturnValue(null)
-    mockTokenManager.getAccessToken.mockResolvedValue(null)
-
-    ;(global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: {
-        getSetCookie: () => [],
-      },
-      json: async () => ({ valid: false }),
-    } as unknown as Response)
-
-    const result = await checkAuthReloaded()
+    const authAPI = createFakeAuthAPI({
+      checkSessionResult: { ok: true, status: 200, data: { valid: false } },
+    });
+    const fetchFn = createFakeFetch({
+      sessionResponse: { status: 200, ok: true, data: { valid: false } },
+    });
+    
+    const auth = createAuth({ tokenManager, authAPI, clock, fetch: fetchFn });
+    const result = await auth.checkAuth()
 
     expect(result.valid).toBe(false)
     // reason이 없으면 기본 메시지가 반환됨

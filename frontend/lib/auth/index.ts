@@ -21,7 +21,7 @@ const defaultDeps = {
           status: 200,
           data,
         };
-      } catch (error: any) {
+      } catch (error: unknown) {
         // 에러 처리
         return {
           ok: false,

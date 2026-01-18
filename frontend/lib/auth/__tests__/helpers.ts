@@ -6,7 +6,8 @@
  */
 
 import type { AuthDeps } from '../createAuth';
-import { createMemoryClockPort } from '../../adapters/memoryClockPort';
+// ✅ P1-Next-1B: createMemoryClockPort는 테스트에서 직접 사용하지 않음 (createTestClock 사용)
+// import { createMemoryClockPort } from '../../adapters/memoryClockPort';
 import type { SessionResponse } from '../../types';
 
 /**
@@ -34,6 +35,7 @@ export function createFakeTokenManager(options: {
   expiresAt?: number | null;
   csrfToken?: string | null;
   getAccessTokenImpl?: () => Promise<string | null>;
+  clock?: { now(): number }; // ✅ P1-Next-1B: clock을 주입받아 expiresAt 검증
 } = {}) {
   const {
     accessToken = null,
@@ -43,11 +45,10 @@ export function createFakeTokenManager(options: {
     getAccessTokenImpl,
   } = options;
 
-  // ✅ P1-6: clock을 주입받아 사용하도록 변경 (테스트에서 clock을 전달해야 함)
-  // hasValidToken은 clock 없이도 동작하도록 기본값 사용
-  const defaultNow = typeof Date !== 'undefined' ? Date.now() : 0;
+  // ✅ P1-Next-1B: clock을 주입받아 expiresAt 검증
+  const clock = options.clock || { now: () => (typeof Date !== 'undefined' ? Date.now() : 0) };
   return {
-    hasValidToken: jest.fn(() => refreshToken !== null && expiresAt !== null && expiresAt > defaultNow),
+    hasValidToken: jest.fn(() => refreshToken !== null && expiresAt !== null && expiresAt > clock.now()),
     getAccessToken: jest.fn(getAccessTokenImpl || (async () => accessToken)),
     getRefreshToken: jest.fn(() => refreshToken),
     getExpiresAt: jest.fn(() => expiresAt),
@@ -86,11 +87,11 @@ export function createFakeAuthAPI(options: {
  */
 export function createFakeFetch(options: {
   sessionResponse?: { status: number; ok: boolean; data?: SessionResponse };
-  defaultResponse?: { status: number; ok: boolean; data?: any };
+  defaultResponse?: { status: number; ok: boolean; data?: unknown };
 } = {}) {
   const { sessionResponse, defaultResponse } = options;
 
-  return jest.fn(async (url: string | Request, init?: RequestInit) => {
+  return jest.fn(async (url: string | Request, _init?: RequestInit) => {
     const urlString = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
     
     if (urlString.includes('/api/auth/session')) {
