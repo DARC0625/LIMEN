@@ -79,11 +79,15 @@ tokenManager.clearTokens = function() {
   
   /**
    * 현재 시간 설정 (테스트용)
-   * ✅ Port 기반: clockPort.setNow() 사용
+   * ✅ P1-Next-Fix-Module-4: tokenManager 인스턴스 내부 clock 사용
    * @param now - 설정할 시간 (밀리초)
    */
   setNow: (now: number): void => {
-    (clockPort as { setNow?: (timestamp: number) => void }).setNow?.(now);
+    // ✅ P1-Next-Fix-Module-4: tokenManager 인스턴스 내부 clock 접근
+    const tm = tokenManager as unknown as {
+      clock?: { setNow?: (timestamp: number) => void };
+    };
+    tm.clock?.setNow?.(now);
   },
   
   /**
@@ -130,34 +134,55 @@ tokenManager.clearTokens = function() {
   
   /**
    * Refresh Token 설정 (테스트용)
-   * ✅ Command E2E-2: BrowserStoragePort 사용 (localStorage와 동일한 저장소)
+   * ✅ P1-Next-Fix-Module-4: tokenManager 인스턴스 내부 storage 사용
    * @param value - Refresh Token 값 또는 null
    */
   setRefreshToken: (value: string | null): void => {
+    // ✅ P1-Next-Fix-Module-4: tokenManager 인스턴스 내부 storage 접근
+    const tm = tokenManager as unknown as {
+      storage?: { get: (key: string) => string | null; set: (key: string, value: string) => void; remove: (key: string) => void };
+      refreshToken?: string | null;
+    };
+    
+    if (!tm.storage) {
+      throw new Error('tokenManager.storage is not available');
+    }
+    
     if (value === null) {
-      storagePort.remove('refresh_token');
-      (tokenManager as { refreshToken?: string | null }).refreshToken = null;
+      tm.storage.remove('refresh_token');
+      tm.refreshToken = null;
     } else {
-      storagePort.set('refresh_token', value);
-      (tokenManager as { refreshToken?: string | null }).refreshToken = value;
+      tm.storage.set('refresh_token', value);
+      tm.refreshToken = value;
     }
   },
   
   /**
    * 만료 시간 설정 (테스트용)
-   * ✅ Command E2E-2: BrowserStoragePort 사용 (localStorage와 동일한 저장소)
+   * ✅ P1-Next-Fix-Module-4: tokenManager 인스턴스 내부 storage 사용
    * @param msEpoch - 만료 시간 (밀리초 epoch) 또는 null
    */
   setExpiresAt: (msEpoch: number | null): void => {
+    // ✅ P1-Next-Fix-Module-4: tokenManager 인스턴스 내부 storage/clock 접근
+    const tm = tokenManager as unknown as {
+      storage?: { get: (key: string) => string | null; set: (key: string, value: string) => void; remove: (key: string) => void };
+      clock?: { now: () => number; setNow?: (timestamp: number) => void };
+      expiresAt?: number;
+    };
+    
+    if (!tm.storage) {
+      throw new Error('tokenManager.storage is not available');
+    }
+    
     if (msEpoch === null) {
-      storagePort.remove('token_expires_at');
-      (tokenManager as { expiresAt?: number }).expiresAt = 0;
+      tm.storage.remove('token_expires_at');
+      tm.expiresAt = 0;
     } else {
-      storagePort.set('token_expires_at', msEpoch.toString());
-      (tokenManager as { expiresAt?: number }).expiresAt = msEpoch;
+      tm.storage.set('token_expires_at', msEpoch.toString());
+      tm.expiresAt = msEpoch;
       // ✅ clockPort도 함께 설정하여 만료 상태를 결정적으로 만들기
       // expiresAt이 clock.now()보다 작으면 만료된 상태
-      if (msEpoch < clockPort.now()) {
+      if (tm.clock && msEpoch < tm.clock.now()) {
         // 이미 만료된 상태
       }
     }
@@ -165,18 +190,27 @@ tokenManager.clearTokens = function() {
   
   /**
    * 스토리지 스냅샷 (테스트용)
-   * ✅ Command E2E-2: BrowserStoragePort 사용 (localStorage와 동일한 저장소)
-   * snapshot === localStorage 상태가 일치
+   * ✅ P1-Next-Fix-Module-4: tokenManager 인스턴스 내부 storage 사용 (전역 변수 제거)
    */
   getStorageSnapshot: (): {
     refreshToken: string | null;
     expiresAt: string | null;
     csrfToken: string | null;
   } => {
+    // ✅ P1-Next-Fix-Module-4: tokenManager 인스턴스 내부 storage 접근
+    const tm = tokenManager as unknown as {
+      storage?: { get: (key: string) => string | null };
+      sessionStorage?: { get: (key: string) => string | null };
+    };
+    
+    if (!tm.storage || !tm.sessionStorage) {
+      throw new Error('tokenManager.storage or sessionStorage is not available');
+    }
+    
     return {
-      refreshToken: storagePort.get('refresh_token'),
-      expiresAt: storagePort.get('token_expires_at'),
-      csrfToken: sessionStoragePort.get('csrf_token'),
+      refreshToken: tm.storage.get('refresh_token'),
+      expiresAt: tm.storage.get('token_expires_at'),
+      csrfToken: tm.sessionStorage.get('csrf_token'),
     };
   },
   

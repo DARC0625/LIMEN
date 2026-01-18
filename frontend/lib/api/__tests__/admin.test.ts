@@ -3,20 +3,18 @@
  * @jest-environment node
  */
 
-import { adminAPI } from '../admin'
-
-// ✅ P1-Next-Fix-Module: clientApi.ts의 apiRequest를 mock
-// admin.ts가 './clientApi'에서 import하는 apiRequest를 mock
-jest.mock('../clientApi', () => ({
-  apiRequest: jest.fn(),
-}))
-
-import { apiRequest } from '../clientApi'
-const mockApiRequest = apiRequest as jest.MockedFunction<typeof apiRequest>
+// ✅ P1-Next-Fix-Module-4: factory 패턴 사용 (싱글톤 import 금지)
+import { createAdminAPI } from '../admin'
 
 describe('adminAPI', () => {
+  let adminAPI: ReturnType<typeof createAdminAPI>
+  let mockApiRequest: jest.Mock
+
   beforeEach(() => {
     jest.clearAllMocks()
+    // ✅ P1-Next-Fix-Module-4: factory로 생성
+    mockApiRequest = jest.fn()
+    adminAPI = createAdminAPI({ apiRequest: mockApiRequest as any })
   })
 
   it('should list users successfully', async () => {

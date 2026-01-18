@@ -3,16 +3,11 @@
  * @jest-environment node
  */
 
-import { vmAPI } from '../vm'
+// ✅ P1-Next-Fix-Module-4: factory 패턴 사용 (싱글톤 import 금지)
+import { createVMAPI } from '../vm'
 
-// ✅ P1-Next-Fix-Module: clientApi.ts의 apiRequest를 mock
-// vm.ts가 './clientApi'에서 import하는 apiRequest를 mock
-jest.mock('../clientApi', () => ({
-  apiRequest: jest.fn(),
-}))
-
-import { apiRequest } from '../clientApi'
-const mockApiRequest = apiRequest as jest.MockedFunction<typeof apiRequest>
+let vmAPI: ReturnType<typeof createVMAPI>
+let mockApiRequest: jest.Mock
 
 /**
  * 테스트에서 fetch 요청의 JSON body를 안전하게 추출하는 유틸
@@ -58,6 +53,9 @@ function getApiRequestJson(callIndex = 0): unknown {
 describe('vmAPI', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    // ✅ P1-Next-Fix-Module-4: factory로 생성
+    mockApiRequest = jest.fn()
+    vmAPI = createVMAPI({ apiRequest: mockApiRequest as any })
   })
 
   it('lists VMs', async () => {
