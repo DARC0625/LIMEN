@@ -202,9 +202,11 @@ class TokenManager implements TokenManagerPort {
     }
     
     try {
-      // authAPI 사용 (순환 참조 방지를 위해 동적 import)
+      // ✅ P1-Next-Fix-Module-4E: authAPI를 client에서 import (싱글톤)
+      // 순환 참조 방지를 위해 동적 import 사용
       console.log('[tokenManager.refreshAccessToken] Calling authAPI.refreshToken...');
-      const { authAPI } = await import('./api/auth');
+      const { authAPI } = await import('./api/client');
+      // ✅ P1-Next-Fix-Module-4E: refreshToken을 명시적으로 전달
       const data = await authAPI.refreshToken(this.refreshToken);
       
       logger.log('[tokenManager] Refresh token response:', {

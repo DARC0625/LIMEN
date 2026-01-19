@@ -7,7 +7,8 @@
  */
 
 // ✅ P1-Next-Fix-Module-2F: clientApi와 tokenManager.client를 mock하여 Node.js 환경에서의 window 접근 방지
-jest.mock('../../api/clientApi', () => ({
+// ✅ P1-Next-Fix-Module-4E: clientHelpers가 import하는 client를 mock
+jest.mock('../../api/client', () => ({
   tokenManager: {
     getAccessToken: jest.fn(),
     getCSRFToken: jest.fn(),
@@ -29,15 +30,12 @@ jest.mock('../../tokenManager.client', () => ({
   },
 }))
 
+// ✅ P1-Next-Fix-Module-4E: clientHelpers는 'use client'이므로 mock으로 처리
+// 실제 import는 mock으로 대체
 import { getUserRole, isApproved, isAdmin, setToken, removeToken, setTokens } from '../../api/clientHelpers'
-import { tokenManager } from '../../api/clientApi'
 import { waitFor } from '@testing-library/react'
 
-jest.mock('../../../lib/api/auth', () => ({
-  authAPI: {
-    createSession: jest.fn(),
-  },
-}))
+// ✅ P1-Next-Fix-Module-4E: authAPI는 client에서 mock (위에서 이미 처리됨)
 
 jest.mock('../../../lib/utils/token', () => ({
   getUserRoleFromToken: jest.fn(),
@@ -55,7 +53,8 @@ jest.mock('../../../lib/utils/logger', () => ({
 // fetch 모킹
 global.fetch = jest.fn()
 
-const mockTokenManager = tokenManager as jest.Mocked<typeof tokenManager>
+// ✅ P1-Next-Fix-Module-4E: tokenManager는 mock에서 가져옴
+const { tokenManager: mockTokenManager } = require('../../api/client')
 
 const { getUserRoleFromToken, isUserApprovedFromToken } = require('../../../lib/utils/token')
 const mockGetUserRoleFromToken = getUserRoleFromToken as jest.MockedFunction<typeof getUserRoleFromToken>
@@ -312,7 +311,8 @@ describe('lib/api/index', () => {
     })
 
     it('sets tokens in tokenManager', async () => {
-      const { authAPI } = require('../../api/auth')
+      // ✅ P1-Next-Fix-Module-4E: authAPI는 client에서 mock
+      const { authAPI } = require('../../api/client')
       authAPI.createSession.mockResolvedValue(undefined)
 
       await setTokens('access-token', 'refresh-token', 900)
@@ -321,7 +321,8 @@ describe('lib/api/index', () => {
     })
 
     it('creates session with tokens', async () => {
-      const { authAPI } = require('../../api/auth')
+      // ✅ P1-Next-Fix-Module-4E: authAPI는 client에서 mock
+      const { authAPI } = require('../../api/client')
       authAPI.createSession.mockResolvedValue(undefined)
 
       await setTokens('access-token', 'refresh-token', 900)
@@ -330,7 +331,8 @@ describe('lib/api/index', () => {
     })
 
     it('handles session creation error gracefully', async () => {
-      const { authAPI } = require('../../api/auth')
+      // ✅ P1-Next-Fix-Module-4E: authAPI는 client에서 mock
+      const { authAPI } = require('../../api/client')
       authAPI.createSession.mockRejectedValue(new Error('Session creation failed'))
 
       await setTokens('access-token', 'refresh-token', 900)
@@ -422,7 +424,8 @@ describe('lib/api/index', () => {
     })
 
     it('handles setTokens with session creation error', async () => {
-      const { authAPI } = require('../../api/auth')
+      // ✅ P1-Next-Fix-Module-4E: authAPI는 client에서 mock
+      const { authAPI } = require('../../api/client')
       authAPI.createSession.mockRejectedValue(new Error('Session creation failed'))
 
       await setTokens('access-token', 'refresh-token', 900)

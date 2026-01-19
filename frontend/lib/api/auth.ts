@@ -284,7 +284,7 @@ export function createAuthAPI(deps: AuthAPIDeps) {
         url,
       });
 
-      // apiRequest 대신 직접 fetch 사용 (쿠키 전송 보장)
+      // ✅ P1-Next-Fix-Module-4E: deps.fetch 사용 (주입받은 fetch)
       const response = await fetch(url, {
         method: 'POST',
         headers: {
