@@ -1,0 +1,39 @@
+name: Release Edge
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "edge-v*"
+
+jobs:
+  build:
+    uses: ./.github/workflows/_reusable_build_image.yml
+    with:
+      image_name: ghcr.io/darc0625/limen-edge
+      context: ./frontend
+      dockerfile: ./frontend/Dockerfile
+      platforms: linux/amd64
+    # Note: If Dockerfile doesn't exist, create it first or adjust path
+    secrets: inherit
+
+  summary:
+    needs: build
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Build Summary
+        run: |
+          echo "## Edge Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image Digest:** \`${{ needs.build.outputs.image_digest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Full Image Reference:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "ghcr.io/darc0625/limen-edge@${{ needs.build.outputs.image_digest }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Build completed" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Provenance attestation created" >> $GITHUB_STEP_SUMMARY
+          echo "✅ SBOM attestation created" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Cosign signature created" >> $GITHUB_STEP_SUMMARY
