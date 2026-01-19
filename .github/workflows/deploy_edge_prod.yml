@@ -19,7 +19,7 @@ env:
 
 jobs:
   verify-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, limen-edge]
     environment: prod-edge
     permissions:
       contents: read
@@ -108,26 +108,38 @@ jobs:
             --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/.*" \
             "${IMAGE_NAME}@${{ steps.digest.outputs.digest }}"
 
-      - name: Setup SSH
-        run: |
-          set -euo pipefail
-          install -m 700 -d ~/.ssh
-          echo "${{ secrets.PROD_EDGE_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${{ secrets.PROD_EDGE_SSH_HOST }}" >> ~/.ssh/known_hosts
-
-      - name: Deploy via SSH
-        env:
-          HOST: ${{ secrets.PROD_EDGE_SSH_HOST }}
-          USER: ${{ secrets.PROD_EDGE_SSH_USER }}
+      # SSH 방식 선택 (러너 설치 위치에 따라)
+      # 옵션 1: Edge 서버 직접 (SSH 제거, 로컬 실행) - 권고
+      # 옵션 2: 별도 VM (SSH 유지) - 아래 주석 해제
+      
+      # 옵션 1: Edge 서버 직접 - 로컬 실행 (SSH 제거)
+      - name: Deploy locally (Edge server direct)
         run: |
           set -euo pipefail
           IMAGE_REF="${IMAGE_NAME}@${{ steps.digest.outputs.digest }}"
-          
-          scp -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
-            scripts/deploy/edge/deploy-edge.sh \
-            "$USER@$HOST:/tmp/deploy-edge.sh"
-          
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
-            "$USER@$HOST" \
-            "chmod +x /tmp/deploy-edge.sh && sudo /tmp/deploy-edge.sh '${IMAGE_REF}'"
+          sudo scripts/deploy/edge/deploy-edge.sh "${IMAGE_REF}"
+      
+      # 옵션 2: 별도 VM - SSH 유지 (위 옵션 1 주석 처리 후 사용)
+      # - name: Setup SSH
+      #   run: |
+      #     set -euo pipefail
+      #     install -m 700 -d ~/.ssh
+      #     echo "${{ secrets.PROD_EDGE_SSH_KEY }}" > ~/.ssh/id_ed25519
+      #     chmod 600 ~/.ssh/id_ed25519
+      #     ssh-keyscan -H "${{ secrets.PROD_EDGE_SSH_HOST }}" >> ~/.ssh/known_hosts
+      #
+      # - name: Deploy via SSH
+      #   env:
+      #     HOST: ${{ secrets.PROD_EDGE_SSH_HOST }}
+      #     USER: ${{ secrets.PROD_EDGE_SSH_USER }}
+      #   run: |
+      #     set -euo pipefail
+      #     IMAGE_REF="${IMAGE_NAME}@${{ steps.digest.outputs.digest }}"
+      #     
+      #     scp -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
+      #       scripts/deploy/edge/deploy-edge.sh \
+      #       "$USER@$HOST:/tmp/deploy-edge.sh"
+      #     
+      #     ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
+      #       "$USER@$HOST" \
+      #       "chmod +x /tmp/deploy-edge.sh && sudo /tmp/deploy-edge.sh '${IMAGE_REF}'"
