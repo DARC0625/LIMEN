@@ -73,6 +73,7 @@ class TokenManager implements TokenManagerPort {
   private expiresAt: number = 0;
   private csrfToken: string | null = null;
   private refreshPromise: Promise<string> | null = null;
+  private authAPI?: AuthAPIForRefresh; // ✅ P1-Next-Fix-Module-4E: authAPI를 DI로 주입
 
   constructor(
     private storage: StoragePort,
@@ -80,8 +81,12 @@ class TokenManager implements TokenManagerPort {
     private clock: ClockPort,
     private crypto: CryptoPort, // ✅ P1-Next-Fix-Module-2D: CryptoPort 주입
     private location?: LocationPort,
-    private authAPI?: AuthAPIForRefresh // ✅ P1-Next-Fix-Module-4E: authAPI를 DI로 주입
+    authAPI?: AuthAPIForRefresh // ✅ P1-Next-Fix-Module-4E: authAPI를 DI로 주입
   ) {
+    // ✅ P1-Next-Fix-Module-4E: 생성자에서 authAPI 주입 시 즉시 설정
+    if (authAPI) {
+      this.authAPI = authAPI;
+    }
     logger.log('[tokenManager] Constructor called');
     // localStorage에서 토큰 복원 (페이지 새로고침 대비)
     this.loadTokens();
@@ -98,7 +103,7 @@ class TokenManager implements TokenManagerPort {
    * ✅ P1-Next-Fix-Module-4E: authAPI 설정 (DI, 나중에 주입 가능)
    */
   setAuthAPI(authAPI: AuthAPIForRefresh): void {
-    (this as { authAPI?: AuthAPIForRefresh }).authAPI = authAPI;
+    this.authAPI = authAPI;
   }
 
   // ✅ P1-Next-Fix-Module-2D: CSRF 토큰 생성 계약 명확화
@@ -220,10 +225,10 @@ class TokenManager implements TokenManagerPort {
     if (!this.refreshToken) {
       throw new Error('No refresh token available');
     }
-    
+
     // ✅ P1-Next-Fix-Module-4E: authAPI가 없으면 에러 (DI 필수)
     if (!this.authAPI) {
-      throw new Error('authAPI is required for token refresh. Please provide authAPI when creating TokenManager.');
+      throw new Error('authAPI is required for token refresh. Please provide authAPI when creating TokenManager or call setAuthAPI().');
     }
 
     try {
@@ -401,7 +406,10 @@ export function createTokenManager(
     ? (createBrowserLocationPort() ?? createMemoryLocationPort('/'))
     : createMemoryLocationPort('/'));
   
-  return new TokenManager(defaultStorage, defaultSessionStorage, defaultClock, defaultCrypto, defaultLocation, authAPI);
+  const tokenManager = new TokenManager(defaultStorage, defaultSessionStorage, defaultClock, defaultCrypto, defaultLocation, authAPI);
+  
+  // ✅ P1-Next-Fix-Module-4E: authAPI가 주입되었으면 이미 설정됨, 없으면 나중에 setAuthAPI로 설정 가능
+  return tokenManager;
 }
 
 // ✅ P1-Next-Fix-Module: top-level 싱글톤 생성 제거

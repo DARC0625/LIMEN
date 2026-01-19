@@ -136,14 +136,17 @@ describe('tokenManager', () => {
     expect(csrfToken === 'existing-token' || csrfToken === null || typeof csrfToken === 'string').toBe(true)
   })
 
-  it('handles token refresh', async () => {
-    const { authAPI } = require('../api/auth')
+  it('handles token refresh', async () {
+    // ✅ P1-Next-Fix-Module-4E: 테스트에서 직접 mock authAPI 생성
     const mockResponse = {
       access_token: 'new-access-token',
       refresh_token: 'new-refresh-token',
       expires_in: 900,
     }
-    authAPI.refreshToken.mockResolvedValue(mockResponse)
+    const mockAuthAPI = {
+      refreshToken: jest.fn().mockResolvedValue(mockResponse),
+    }
+    tokenManager.setAuthAPI(mockAuthAPI)
 
     // 만료된 토큰 설정 (expiresIn을 음수로)
     tokenManager.setTokens('old-access-token', 'old-refresh-token', -1)
@@ -155,11 +158,15 @@ describe('tokenManager', () => {
 
     // 토큰이 반환되었는지 확인 (갱신되었거나 기존 토큰일 수 있음)
     expect(accessToken).toBeTruthy()
+    expect(mockAuthAPI.refreshToken).toHaveBeenCalled()
   })
 
   it('handles token refresh failure', async () => {
-    const { authAPI } = require('../api/auth')
-    authAPI.refreshToken.mockRejectedValue(new Error('Refresh failed'))
+    // ✅ P1-Next-Fix-Module-4E: 테스트에서 직접 mock authAPI 생성
+    const mockAuthAPI = {
+      refreshToken: jest.fn().mockRejectedValue(new Error('Refresh failed')),
+    }
+    tokenManager.setAuthAPI(mockAuthAPI)
 
     // 만료된 토큰 설정
     tokenManager.setTokens('old-access-token', 'old-refresh-token', -1)
@@ -169,6 +176,7 @@ describe('tokenManager', () => {
 
     // authAPI.refreshToken이 실패하면 예외가 발생
     await expect(tokenManager.getAccessToken()).rejects.toThrow()
+    expect(mockAuthAPI.refreshToken).toHaveBeenCalled()
   })
 
   it('returns null when no refresh token', async () => {
@@ -222,15 +230,18 @@ describe('tokenManager', () => {
   })
 
   it('handles concurrent token refresh requests', async () => {
-    const { authAPI } = require('../api/auth')
+    // ✅ P1-Next-Fix-Module-4E: 테스트에서 직접 mock authAPI 생성
     const mockResponse = {
       access_token: 'new-access-token',
       refresh_token: 'new-refresh-token',
       expires_in: 900,
     }
-    authAPI.refreshToken.mockImplementation(() => 
-      new Promise(resolve => setTimeout(() => resolve(mockResponse), 100))
-    )
+    const mockAuthAPI = {
+      refreshToken: jest.fn().mockImplementation(() => 
+        new Promise(resolve => setTimeout(() => resolve(mockResponse), 100))
+      ),
+    }
+    tokenManager.setAuthAPI(mockAuthAPI)
 
     // 만료된 토큰 설정
     tokenManager.setTokens('old-access-token', 'old-refresh-token', -1)
@@ -295,13 +306,16 @@ describe('tokenManager', () => {
   })
 
   it('handles refresh token rotation', async () => {
-    const { authAPI } = require('../api/auth')
+    // ✅ P1-Next-Fix-Module-4E: 테스트에서 직접 mock authAPI 생성
     const mockResponse = {
       access_token: 'new-access-token',
       refresh_token: 'rotated-refresh-token',
       expires_in: 900,
     }
-    authAPI.refreshToken.mockResolvedValue(mockResponse)
+    const mockAuthAPI = {
+      refreshToken: jest.fn().mockResolvedValue(mockResponse),
+    }
+    tokenManager.setAuthAPI(mockAuthAPI)
 
     // 만료된 토큰 설정
     tokenManager.setTokens('old-access-token', 'old-refresh-token', -1)
@@ -313,15 +327,19 @@ describe('tokenManager', () => {
 
     // 새로운 refresh token이 저장되었는지 확인
     expect(storage.get('refresh_token')).toBe('rotated-refresh-token')
+    expect(mockAuthAPI.refreshToken).toHaveBeenCalled()
   })
 
   it('handles refresh without new refresh token', async () => {
-    const { authAPI } = require('../api/auth')
+    // ✅ P1-Next-Fix-Module-4E: 테스트에서 직접 mock authAPI 생성
     const mockResponse = {
       access_token: 'new-access-token',
       expires_in: 900,
     }
-    authAPI.refreshToken.mockResolvedValue(mockResponse)
+    const mockAuthAPI = {
+      refreshToken: jest.fn().mockResolvedValue(mockResponse),
+    }
+    tokenManager.setAuthAPI(mockAuthAPI)
 
     // 만료된 토큰 설정
     tokenManager.setTokens('old-access-token', 'old-refresh-token', -1)
@@ -333,6 +351,7 @@ describe('tokenManager', () => {
 
     // 기존 refresh token이 유지되어야 함
     expect(storage.get('refresh_token')).toBe('old-refresh-token')
+    expect(mockAuthAPI.refreshToken).toHaveBeenCalled()
   })
 
   it('handles refresh when no refresh token available', async () => {
@@ -344,12 +363,15 @@ describe('tokenManager', () => {
   })
 
   it('handles refresh when response has no access token', async () => {
-    const { authAPI } = require('../api/auth')
+    // ✅ P1-Next-Fix-Module-4E: 테스트에서 직접 mock authAPI 생성
     const mockResponse = {
       refresh_token: 'new-refresh-token',
       expires_in: 900,
     }
-    authAPI.refreshToken.mockResolvedValue(mockResponse)
+    const mockAuthAPI = {
+      refreshToken: jest.fn().mockResolvedValue(mockResponse),
+    }
+    tokenManager.setAuthAPI(mockAuthAPI)
 
     // 만료된 토큰 설정
     tokenManager.setTokens('old-access-token', 'old-refresh-token', -1)
@@ -359,11 +381,15 @@ describe('tokenManager', () => {
 
     // access_token이 없으면 예외가 발생할 수 있음
     await expect(tokenManager.getAccessToken()).rejects.toThrow()
+    expect(mockAuthAPI.refreshToken).toHaveBeenCalled()
   })
 
   it('clears tokens on refresh error', async () => {
-    const { authAPI } = require('../api/auth')
-    authAPI.refreshToken.mockRejectedValue(new Error('Refresh failed'))
+    // ✅ P1-Next-Fix-Module-4E: 테스트에서 직접 mock authAPI 생성
+    const mockAuthAPI = {
+      refreshToken: jest.fn().mockRejectedValue(new Error('Refresh failed')),
+    }
+    tokenManager.setAuthAPI(mockAuthAPI)
 
     // 만료된 토큰 설정
     tokenManager.setTokens('old-access-token', 'old-refresh-token', -1)
@@ -382,6 +408,7 @@ describe('tokenManager', () => {
       // 토큰이 삭제되었는지 확인
       expect(storage.get('refresh_token')).toBeNull()
     }
+    expect(mockAuthAPI.refreshToken).toHaveBeenCalled()
   })
 
   it('handles hasValidToken when storage has no expiresAt', () => {

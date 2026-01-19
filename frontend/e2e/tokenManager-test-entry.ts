@@ -147,9 +147,10 @@ tokenManager.clearTokens = function() {
     );
     
     // ✅ P1-Next-Fix-Module-4E: expiresAt을 만료된 상태로 직접 설정
+    // S4는 refresh 실패/로그아웃을 검증하는 시나리오이므로, 무조건 만료된 상태로 고정
     const expiresAt = options?.expiresAt !== undefined 
       ? options.expiresAt 
-      : now - 1000; // 확실히 만료된 상태
+      : now - 1000; // 확실히 만료된 상태 (refresh 트리거 보장)
     
     // storage에 expiresAt 저장 (TokenManager가 읽는 키)
     if (tm.storage) {
