@@ -22,12 +22,14 @@ jest.mock('../utils/logger', () => ({
 // fetch 모킹
 global.fetch = jest.fn()
 
-// authAPI 모킹
-jest.mock('../api/auth', () => ({
-  authAPI: {
-    refreshToken: jest.fn(),
-  },
-}))
+// ✅ P1-Next-Fix-Module-4E: authAPI를 mock으로 생성하여 주입
+const createMockAuthAPI = () => ({
+  refreshToken: jest.fn().mockResolvedValue({
+    access_token: 'new-access-token',
+    refresh_token: 'new-refresh-token',
+    expires_in: 900,
+  }),
+})
 
 describe('tokenManager', () => {
   let tokenManager: ReturnType<typeof createTokenManager>
@@ -45,8 +47,10 @@ describe('tokenManager', () => {
     location = createMemoryLocationPort('/')
     // ✅ P1-Next-Fix-Module-2D: CryptoPort 추가
     const crypto = createFakeCryptoPort()
+    // ✅ P1-Next-Fix-Module-4E: mock authAPI 생성 (모든 테스트에서 사용)
+    const mockAuthAPI = createMockAuthAPI()
     // ✅ Port 기반으로 tokenManager 생성
-    tokenManager = createTokenManager(storage, sessionStorage, clock, crypto, location)
+    tokenManager = createTokenManager(storage, sessionStorage, clock, crypto, location, mockAuthAPI)
   })
 
   it('sets tokens', () => {
@@ -124,7 +128,8 @@ describe('tokenManager', () => {
 
     // 새로운 인스턴스 생성 (기존 토큰 재사용)
     const crypto = createFakeCryptoPort()
-    const newTokenManager = createTokenManager(storage, sessionStorage, clock, crypto, location)
+    const mockAuthAPI = createMockAuthAPI()
+    const newTokenManager = createTokenManager(storage, sessionStorage, clock, crypto, location, mockAuthAPI)
     const csrfToken = newTokenManager.getCSRFToken()
 
     // 기존 토큰이 재사용되거나 새로 생성될 수 있음
@@ -195,7 +200,8 @@ describe('tokenManager', () => {
     }
 
     const crypto = createFakeCryptoPort()
-    const errorTokenManager = createTokenManager(errorStorage, sessionStorage, clock, crypto, location)
+    const mockAuthAPI = createMockAuthAPI()
+    const errorTokenManager = createTokenManager(errorStorage, sessionStorage, clock, crypto, location, mockAuthAPI)
 
     expect(() => {
       errorTokenManager.setTokens('access-token', 'refresh-token', 3600)
@@ -208,7 +214,8 @@ describe('tokenManager', () => {
 
     // 새로운 인스턴스 생성 시뮬레이션
     const crypto = createFakeCryptoPort()
-    const newTokenManager = createTokenManager(storage, sessionStorage, clock, crypto, location)
+    const mockAuthAPI = createMockAuthAPI()
+    const newTokenManager = createTokenManager(storage, sessionStorage, clock, crypto, location, mockAuthAPI)
     const hasToken = newTokenManager.hasValidToken()
 
     expect(hasToken).toBe(true)
@@ -447,7 +454,8 @@ describe('tokenManager', () => {
     // tokenManager는 새로 생성하므로 이미 초기화됨
     // 하지만 hasValidToken을 호출하면 storage에서 로드됨
     const crypto = createFakeCryptoPort()
-    const newTokenManager = createTokenManager(storage, sessionStorage, clock, crypto, location)
+    const mockAuthAPI = createMockAuthAPI()
+    const newTokenManager = createTokenManager(storage, sessionStorage, clock, crypto, location, mockAuthAPI)
     const hasToken = newTokenManager.hasValidToken()
 
     expect(hasToken).toBe(true)
@@ -460,7 +468,8 @@ describe('tokenManager', () => {
     // tokenManager는 새로 생성하므로 이미 초기화되어 있음
     // 하지만 storage에 값이 있으면 loadTokens가 호출되어야 함
     const crypto = createFakeCryptoPort()
-    const newTokenManager = createTokenManager(storage, sessionStorage, clock, crypto, location)
+    const mockAuthAPI = createMockAuthAPI()
+    const newTokenManager = createTokenManager(storage, sessionStorage, clock, crypto, location, mockAuthAPI)
     const refreshToken = newTokenManager.getRefreshToken()
     
     // refreshToken이 로드되었는지 확인

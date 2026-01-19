@@ -30,19 +30,34 @@ global.fetch = jest.fn()
 
 // ✅ P1-Next-Fix-Module-2F: Factory 패턴으로 테스트 인스턴스 생성
 function createTestAuthAPI() {
+  // ✅ P1-Next-Fix-Module-4E: mock authAPI 생성 (순환 참조 방지)
+  const mockAuthAPI = {
+    refreshToken: jest.fn().mockResolvedValue({
+      access_token: 'new-access-token',
+      refresh_token: 'new-refresh-token',
+      expires_in: 900,
+    }),
+  };
+  
   const tokenManager = createTokenManager(
     createMemoryStoragePort(),
     createMemoryStoragePort(),
     createMemoryClockPort(),
     createFakeCryptoPort(),
-    createMemoryLocationPort('/')
+    createMemoryLocationPort('/'),
+    mockAuthAPI // ✅ P1-Next-Fix-Module-4E: authAPI 주입
   )
+  const authAPI = createAuthAPI({
+    tokenManager,
+    apiRequest: mockApiRequest,
+    fetch: global.fetch as typeof fetch,
+  });
+  
+  // ✅ P1-Next-Fix-Module-4E: tokenManager에 authAPI 주입
+  tokenManager.setAuthAPI(authAPI);
+  
   return {
-    authAPI: createAuthAPI({
-      tokenManager,
-      apiRequest: mockApiRequest,
-      fetch: global.fetch as typeof fetch,
-    }),
+    authAPI,
     tokenManager,
   }
 }

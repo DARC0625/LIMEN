@@ -24,14 +24,24 @@ const mockTrackPerformanceMetric = trackPerformanceMetric as jest.MockedFunction
 // fetch 모킹
 global.fetch = jest.fn()
 
-// ✅ P1-Next-Fix-Module-2F: Factory 패턴으로 테스트 인스턴스 생성
+// ✅ P1-Next-Fix-Module-4E: Factory 패턴으로 테스트 인스턴스 생성
+// authAPI를 mock으로 주입
 function createTestApiClient() {
+  const mockAuthAPI = {
+    refreshToken: jest.fn().mockResolvedValue({
+      access_token: 'new-access-token',
+      refresh_token: 'new-refresh-token',
+      expires_in: 900,
+    }),
+  };
+  
   const tokenManager = createTokenManager(
     createMemoryStoragePort(),
     createMemoryStoragePort(),
     createMemoryClockPort(),
     createFakeCryptoPort(),
-    createMemoryLocationPort('/')
+    createMemoryLocationPort('/'),
+    mockAuthAPI // ✅ P1-Next-Fix-Module-4E: authAPI 주입
   )
   return createApiClient({ tokenManager })
 }
@@ -46,12 +56,23 @@ describe('apiRequest', () => {
     // ✅ P1-Next-Fix-Module-2F: 각 테스트마다 새로운 인스턴스 생성
     storage = createMemoryStoragePort()
     const sessionStorage = createMemoryStoragePort()
+    
+    // ✅ P1-Next-Fix-Module-4E: mock authAPI 생성
+    const mockAuthAPI = {
+      refreshToken: jest.fn().mockResolvedValue({
+        access_token: 'new-access-token',
+        refresh_token: 'new-refresh-token',
+        expires_in: 900,
+      }),
+    };
+    
     tokenManager = createTokenManager(
       storage,
       sessionStorage,
       createMemoryClockPort(),
       createFakeCryptoPort(),
-      createMemoryLocationPort('/')
+      createMemoryLocationPort('/'),
+      mockAuthAPI // ✅ P1-Next-Fix-Module-4E: authAPI 주입
     )
     // 기본 토큰 설정 (tokenManager 생성 후에 설정)
     storage.set('access_token', 'test-access-token')

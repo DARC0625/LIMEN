@@ -62,6 +62,10 @@ export const authAPI = createAuthAPI({
   fetch: fetchProxy,
 });
 
+// ✅ P1-Next-Fix-Module-4E: tokenManager에 authAPI 주입 (순환 참조 해결)
+// tokenManager가 refresh할 때 authAPI를 사용할 수 있도록 설정
+tokenManager.setAuthAPI(authAPI);
+
 // ✅ P1-Next-Fix-Module-3B: factory들을 wiring하여 싱글톤 생성
 export const adminAPI = createAdminAPI({ apiRequest });
 export const quotaAPI = createQuotaAPI({ apiRequest });
