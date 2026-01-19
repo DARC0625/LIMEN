@@ -181,7 +181,7 @@ try {
         testHook.seedTokens({
           accessToken: 'expired-access',
           refreshToken: 'test-refresh-token',
-          expiresAt: Date.now() - 1, // ✅ 핵심: 만료 (refresh 트리거 보장)
+          expiresAt: Date.now() - 60_000, // ✅ 핵심: 충분히 과거로 만료 (refresh 트리거 보장)
           csrfToken: 'test-csrf-token',
         });
       } else {

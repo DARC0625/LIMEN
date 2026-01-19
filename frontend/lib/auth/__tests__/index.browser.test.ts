@@ -23,6 +23,7 @@ jest.mock('../../tokenManager.client', () => ({
     getCSRFToken: jest.fn(),
     clearTokens: jest.fn(),
     setTokens: jest.fn(),
+    setAuthAPI: jest.fn(), // ✅ P1-Next-Fix-Module-4E: setAuthAPI 메서드 추가
   },
 }))
 

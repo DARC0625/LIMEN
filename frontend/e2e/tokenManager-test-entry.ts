@@ -13,9 +13,45 @@
  */
 // ✅ P1-Next-Fix-Module-4: client tokenManager 싱글톤 사용
 import { tokenManager as clientTokenManager } from '../lib/tokenManager.client';
+// ✅ P1-Next-Fix-Module-4E: authAPI를 생성하여 tokenManager에 주입
+import { createAuthAPI } from '../lib/api/auth';
+import { createApiClient } from '../lib/api/apiClient';
 
 // ✅ P1-Next-Fix-Module-4: client tokenManager를 그대로 사용 (E2E와 앱이 같은 인스턴스)
 export const tokenManager = clientTokenManager;
+
+// ✅ P1-Next-Fix-Module-4E: E2E harness에서 authAPI를 주입하여 refresh가 동작하도록 보장
+// client.ts와 동일한 방식으로 wiring
+const api = createApiClient({
+  tokenManager,
+});
+
+// fetch를 lazy proxy로 처리 (import-time throw 제거)
+function getFetch(): typeof fetch {
+  const f =
+    (typeof globalThis !== 'undefined' && (globalThis as { fetch?: typeof fetch }).fetch) ||
+    (typeof window !== 'undefined' && (window as { fetch?: typeof fetch }).fetch) ||
+    undefined;
+
+  if (!f) {
+    throw new Error('fetch is required but not available');
+  }
+  return f.bind(globalThis || window);
+}
+
+const fetchProxy: typeof fetch = ((input: unknown, init?: unknown) => {
+  return getFetch()(input as RequestInfo | URL, init as RequestInit | undefined);
+}) as typeof fetch;
+
+// authAPI 생성 및 주입
+const authAPI = createAuthAPI({
+  tokenManager,
+  apiRequest: api.apiRequest,
+  fetch: fetchProxy,
+});
+
+// ✅ P1-Next-Fix-Module-4E: tokenManager에 authAPI 주입 (E2E에서 refresh가 동작하도록)
+tokenManager.setAuthAPI(authAPI);
 
 // ✅ clearSession 호출 계측 (테스트용)
 let clearSessionCalledCount = 0;
@@ -148,9 +184,10 @@ tokenManager.clearTokens = function() {
     
     // ✅ P1-Next-Fix-Module-4E: expiresAt을 만료된 상태로 직접 설정
     // S4는 refresh 실패/로그아웃을 검증하는 시나리오이므로, 무조건 만료된 상태로 고정
+    // 충분히 과거로 설정하여 만료가 확실히 인식되도록 함
     const expiresAt = options?.expiresAt !== undefined 
       ? options.expiresAt 
-      : now - 1000; // 확실히 만료된 상태 (refresh 트리거 보장)
+      : now - 60_000; // 충분히 과거로 만료 (refresh 트리거 보장)
     
     // storage에 expiresAt 저장 (TokenManager가 읽는 키)
     if (tm.storage) {
