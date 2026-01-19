@@ -176,12 +176,12 @@ try {
       
       window.__S4_TRACE.push('before seedTokens');
       // ✅ P1-Next-Fix-Module-4: 표준 seedTokens 사용 (refresh를 확실히 트리거)
-      // 만료된 상태로 설정하여 refresh가 반드시 발생하도록 보장
+      // S4는 "refresh 실패 → 세션 정리" 시나리오이므로, 무조건 만료된 상태로 강제
       if (testHook.seedTokens) {
-        const now = Date.now();
         testHook.seedTokens({
+          accessToken: 'expired-access',
           refreshToken: 'test-refresh-token',
-          expiresAt: now - 1000, // 확실히 만료된 상태 (refresh 트리거)
+          expiresAt: Date.now() - 1, // ✅ 핵심: 만료 (refresh 트리거 보장)
           csrfToken: 'test-csrf-token',
         });
       } else {

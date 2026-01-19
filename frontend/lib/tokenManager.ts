@@ -50,14 +50,22 @@ export interface TokenManagerPort {
 /**
  * ✅ P1-Next-Fix-Module-4E: AuthAPI 인터페이스 (DI용)
  * TokenManager가 refresh할 때 사용하는 최소 계약
+ * 
+ * refreshToken은 refreshToken 문자열을 받아서 세션 응답을 반환
  */
-export interface AuthAPIForRefresh {
+export type AuthAPIForTokenManager = {
   refreshToken: (refreshToken: string) => Promise<{
     access_token: string;
     refresh_token?: string;
     expires_in: number;
   }>;
-}
+};
+
+/**
+ * @deprecated AuthAPIForRefresh는 AuthAPIForTokenManager로 대체됨
+ * 하위 호환성을 위해 유지
+ */
+export type AuthAPIForRefresh = AuthAPIForTokenManager;
 
 /**
  * @deprecated TokenManagerInterface는 TokenManagerPort로 대체됨
@@ -73,7 +81,7 @@ class TokenManager implements TokenManagerPort {
   private expiresAt: number = 0;
   private csrfToken: string | null = null;
   private refreshPromise: Promise<string> | null = null;
-  private authAPI?: AuthAPIForRefresh; // ✅ P1-Next-Fix-Module-4E: authAPI를 DI로 주입
+  private authAPI?: AuthAPIForTokenManager; // ✅ P1-Next-Fix-Module-4E: authAPI를 DI로 주입
 
   constructor(
     private storage: StoragePort,
@@ -81,7 +89,7 @@ class TokenManager implements TokenManagerPort {
     private clock: ClockPort,
     private crypto: CryptoPort, // ✅ P1-Next-Fix-Module-2D: CryptoPort 주입
     private location?: LocationPort,
-    authAPI?: AuthAPIForRefresh // ✅ P1-Next-Fix-Module-4E: authAPI를 DI로 주입
+    authAPI?: AuthAPIForTokenManager // ✅ P1-Next-Fix-Module-4E: authAPI를 DI로 주입
   ) {
     // ✅ P1-Next-Fix-Module-4E: 생성자에서 authAPI 주입 시 즉시 설정
     if (authAPI) {
@@ -101,9 +109,21 @@ class TokenManager implements TokenManagerPort {
 
   /**
    * ✅ P1-Next-Fix-Module-4E: authAPI 설정 (DI, 나중에 주입 가능)
+   * public 메서드로 노출하여 client.ts에서 주입 가능하도록 함
    */
-  setAuthAPI(authAPI: AuthAPIForRefresh): void {
+  public setAuthAPI(authAPI: AuthAPIForTokenManager): void {
     this.authAPI = authAPI;
+  }
+
+  /**
+   * ✅ P1-Next-Fix-Module-4E: authAPI가 설정되었는지 확인하고 반환
+   * refreshAccessToken에서 사용
+   */
+  private requireAuthAPI(): AuthAPIForTokenManager {
+    if (!this.authAPI) {
+      throw new Error('authAPI is required for token refresh. Please provide authAPI when creating TokenManager or call setAuthAPI().');
+    }
+    return this.authAPI;
   }
 
   // ✅ P1-Next-Fix-Module-2D: CSRF 토큰 생성 계약 명확화
@@ -226,16 +246,14 @@ class TokenManager implements TokenManagerPort {
       throw new Error('No refresh token available');
     }
 
-    // ✅ P1-Next-Fix-Module-4E: authAPI가 없으면 에러 (DI 필수)
-    if (!this.authAPI) {
-      throw new Error('authAPI is required for token refresh. Please provide authAPI when creating TokenManager or call setAuthAPI().');
-    }
+    // ✅ P1-Next-Fix-Module-4E: authAPI가 설정되었는지 확인하고 가져오기
+    const authAPI = this.requireAuthAPI();
 
     try {
       // ✅ P1-Next-Fix-Module-4E: DI로 주입받은 authAPI 사용 (client import 제거)
       console.log('[tokenManager.refreshAccessToken] Calling authAPI.refreshToken...');
       // ✅ P1-Next-Fix-Module-4E: refreshToken을 명시적으로 전달
-      const data = await this.authAPI.refreshToken(this.refreshToken);
+      const data = await authAPI.refreshToken(this.refreshToken);
       
       logger.log('[tokenManager] Refresh token response:', {
         hasAccessToken: !!data.access_token,
@@ -381,7 +399,7 @@ export function createTokenManager(
   clock?: ClockPort,
   crypto?: CryptoPort, // ✅ P1-Next-Fix-Module-2D: CryptoPort 주입
   location?: LocationPort,
-  authAPI?: AuthAPIForRefresh // ✅ P1-Next-Fix-Module-4E: authAPI를 DI로 주입
+  authAPI?: AuthAPIForTokenManager // ✅ P1-Next-Fix-Module-4E: authAPI를 DI로 주입
 ): TokenManager {
   // 기본값: 브라우저 환경이면 browser adapter, 아니면 memory adapter
   const defaultStorage = storage ?? (typeof window !== 'undefined' && browserLocalStoragePort

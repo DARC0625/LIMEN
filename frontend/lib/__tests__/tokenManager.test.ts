@@ -136,7 +136,7 @@ describe('tokenManager', () => {
     expect(csrfToken === 'existing-token' || csrfToken === null || typeof csrfToken === 'string').toBe(true)
   })
 
-  it('handles token refresh', async () {
+  it('handles token refresh', async () => {
     // ✅ P1-Next-Fix-Module-4E: 테스트에서 직접 mock authAPI 생성
     const mockResponse = {
       access_token: 'new-access-token',
