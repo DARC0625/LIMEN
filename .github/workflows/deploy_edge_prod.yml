@@ -35,14 +35,20 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             DIGEST="${{ github.event.inputs.image_digest }}"
           else
-            # Extract digest from workflow_run (would need to query API or use outputs)
-            echo "Workflow run deployment not yet implemented - use workflow_dispatch"
-            exit 1
+            # For workflow_run, extract digest from the triggering workflow
+            # This requires the release workflow to output the digest
+            echo "Extracting digest from workflow_run..."
+            DIGEST=$(gh run view "${{ github.event.workflow_run.id }}" --json jobs --jq '.jobs[] | select(.name=="build") | .steps[] | select(.name=="Build & Push (digest)") | .conclusion' || echo "")
+            if [ -z "${DIGEST}" ]; then
+              echo "Could not extract digest from workflow_run. Use workflow_dispatch instead."
+              exit 1
+            fi
           fi
           
           # Validate digest format
           if [[ ! "${DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
             echo "Invalid digest format. Must be sha256:..."
+            echo "Received: ${DIGEST}"
             exit 1
           fi
           
