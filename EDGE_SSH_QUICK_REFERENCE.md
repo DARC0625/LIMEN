@@ -34,5 +34,3 @@ chmod 600 ~/.ssh/authorized_keys
 # 대표님 PC에서
 ssh -i ./limen_edge_deploy_key <USER>@<HOST>
 ```
-
-**sudo 비밀번호**: `0625`

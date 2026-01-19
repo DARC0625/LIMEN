@@ -171,7 +171,6 @@ cat ./limen_edge_deploy_key  # 출력된 내용을 수동으로 복사
 
 - **워크플로 파일**: https://github.com/DARC0625/LIMEN/blob/main/.github/workflows/deploy_edge_prod.yml
 - **배포 스크립트**: https://github.com/DARC0625/LIMEN/blob/main/scripts/deploy/edge/deploy-edge.sh
-- **sudo 비밀번호**: `0625` (서버 작업 시 필요)
 
 ---
 
