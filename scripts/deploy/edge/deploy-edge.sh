@@ -61,7 +61,6 @@ docker compose pull || {
     docker compose up -d
   fi
   exit 1
-  exit 1
 }
 
 # 배포

@@ -73,7 +73,7 @@ jobs:
       - name: Install syft (pinned)
         env:
           SYFT_VERSION: "1.40.1"
-          SYFT_SHA256: "a8c3b5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5"
+          SYFT_SHA256: "c229137c919f22aa926c1c015388db5ec64e99c078e0baac053808e8f36e2e00"
         run: |
           set -euo pipefail
           curl -sSfL -o /tmp/syft.tgz "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz"
