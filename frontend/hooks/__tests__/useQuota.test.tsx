@@ -6,11 +6,12 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode, JSX } from 'react'
 import { useQuota, useQuotaSuspense } from '../useQuota'
-import { quotaAPI } from '../../lib/api/index'
+// ✅ P1-Next-Fix-Module-4E: 테스트는 client에서 싱글톤 import
+import { quotaAPI } from '../../lib/api/client'
 import { useAuth } from '../../components/AuthGuard'
 
 // 의존성 모킹
-jest.mock('../../lib/api/index', () => ({
+jest.mock('../../lib/api/client', () => ({
   quotaAPI: {
     get: jest.fn(),
   },

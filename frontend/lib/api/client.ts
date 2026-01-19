@@ -35,12 +35,12 @@ const api = createApiClient({
 export const apiRequest = api.apiRequest;
 export { tokenManager };
 
-// ✅ P1-Next-Fix-Module-4C: fetch를 lazy proxy로 처리 (import-time throw 제거)
+// ✅ P1-Next-Fix-Module-4E: fetch를 lazy proxy로 처리 (import-time throw 제거)
 // import 시점에 throw하지 않고, 실제 호출 시점에만 검증
 function getFetch(): typeof fetch {
   const f =
-    (typeof globalThis !== 'undefined' && (globalThis as any).fetch) ||
-    (typeof window !== 'undefined' && (window as any).fetch) ||
+    (typeof globalThis !== 'undefined' && (globalThis as { fetch?: typeof fetch }).fetch) ||
+    (typeof window !== 'undefined' && (window as { fetch?: typeof fetch }).fetch) ||
     undefined;
 
   if (!f) {
@@ -49,9 +49,10 @@ function getFetch(): typeof fetch {
   return f.bind(globalThis || window);
 }
 
-// ✅ P1-Next-Fix-Module-4C: fetch proxy (호출 시점에만 getFetch() 실행)
-const fetchProxy: typeof fetch = ((input: any, init?: any) => {
-  return getFetch()(input, init);
+// ✅ P1-Next-Fix-Module-4E: fetch proxy (호출 시점에만 getFetch() 실행)
+// any 타입 제거, unknown으로 안전하게 처리
+const fetchProxy: typeof fetch = ((input: unknown, init?: unknown) => {
+  return getFetch()(input as RequestInfo | URL, init as RequestInit | undefined);
 }) as typeof fetch;
 
 // ✅ P1-Next-Fix-Module-2C: authAPI를 DI로 생성

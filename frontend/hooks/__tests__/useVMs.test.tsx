@@ -6,12 +6,13 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode, JSX } from 'react'
 import { useVMs, useVMsSuspense, useCreateVM, useVMAction } from '../useVMs'
-import { vmAPI } from '../../lib/api/index'
+// ✅ P1-Next-Fix-Module-4E: 테스트는 client에서 싱글톤 import
+import { vmAPI } from '../../lib/api/client'
 import { useAuth } from '../../components/AuthGuard'
 import { useToast } from '../../components/ToastContainer'
 
 // 의존성 모킹
-jest.mock('../../lib/api/index', () => ({
+jest.mock('../../lib/api/client', () => ({
   vmAPI: {
     list: jest.fn(),
     create: jest.fn(),

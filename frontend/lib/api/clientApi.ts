@@ -9,7 +9,8 @@
 
 'use client';
 
-import { createApiClient } from './client';
+// ✅ P1-Next-Fix-Module-4E: createApiClient는 apiClient.ts에서 import
+import { createApiClient } from './apiClient';
 // ✅ P1-Next-Fix-Module-2B: tokenManager는 별도 client 엔트리에서 import
 import { tokenManager } from '../tokenManager.client';
 // ✅ P1-Next-Fix-Module-2C: authAPI는 factory로 생성
@@ -23,12 +24,12 @@ const api = createApiClient({
 export const apiRequest = api.apiRequest;
 export { tokenManager };
 
-// ✅ P1-Next-Fix-Module-4C: fetch를 lazy proxy로 처리 (import-time throw 제거)
+// ✅ P1-Next-Fix-Module-4E: fetch를 lazy proxy로 처리 (import-time throw 제거)
 // import 시점에 throw하지 않고, 실제 호출 시점에만 검증
 function getFetch(): typeof fetch {
   const f =
-    (typeof globalThis !== 'undefined' && (globalThis as any).fetch) ||
-    (typeof window !== 'undefined' && (window as any).fetch) ||
+    (typeof globalThis !== 'undefined' && (globalThis as { fetch?: typeof fetch }).fetch) ||
+    (typeof window !== 'undefined' && (window as { fetch?: typeof fetch }).fetch) ||
     undefined;
 
   if (!f) {
@@ -37,9 +38,10 @@ function getFetch(): typeof fetch {
   return f.bind(globalThis || window);
 }
 
-// ✅ P1-Next-Fix-Module-4C: fetch proxy (호출 시점에만 getFetch() 실행)
-const fetchProxy: typeof fetch = ((input: any, init?: any) => {
-  return getFetch()(input, init);
+// ✅ P1-Next-Fix-Module-4E: fetch proxy (호출 시점에만 getFetch() 실행)
+// any 타입 제거, unknown으로 안전하게 처리
+const fetchProxy: typeof fetch = ((input: unknown, init?: unknown) => {
+  return getFetch()(input as RequestInfo | URL, init as RequestInit | undefined);
 }) as typeof fetch;
 
 // ✅ P1-Next-Fix-Module-2C: authAPI를 DI로 생성
@@ -59,9 +61,5 @@ export {
   setTokens,
 } from './clientHelpers';
 
-// ✅ P1-Next-Fix-Module-2F: 브라우저 전용 API 모듈들 export
-// 이들은 내부적으로 clientApi를 import하므로 브라우저에서만 사용 가능
-export { vmAPI } from './vm';
-export { snapshotAPI } from './snapshot';
-export { quotaAPI } from './quota';
-export { adminAPI } from './admin';
+// ✅ P1-Next-Fix-Module-4E: 브라우저 전용 API 모듈들은 client.ts에서만 export
+// clientApi.ts는 하위 호환성을 위해 유지하되, 실제 싱글톤은 client.ts에서 제공
