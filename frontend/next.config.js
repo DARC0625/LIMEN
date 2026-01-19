@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // ✅ P1-Next-Fix-Module-4F: Standalone output for Docker
+  output: 'standalone',
+  
   // 빌드 ID를 타임스탬프 기반으로 생성하여 캐시 무효화 보장
   generateBuildId: async () => {
     // 타임스탬프 기반 빌드 ID 생성 (매 빌드마다 새로운 ID)

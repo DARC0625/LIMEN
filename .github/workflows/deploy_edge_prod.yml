@@ -1,0 +1,133 @@
+name: Deploy Edge Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: "Image digest (sha256:...)"
+        required: true
+        type: string
+  workflow_run:
+    workflows: ["Release Edge"]
+    types:
+      - completed
+    branches:
+      - main
+
+env:
+  IMAGE_NAME: ghcr.io/darc0625/limen-edge
+
+jobs:
+  verify-and-deploy:
+    runs-on: ubuntu-latest
+    environment: prod-edge
+    permissions:
+      contents: read
+      id-token: write
+      attestations: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Determine image digest
+        id: digest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            DIGEST="${{ github.event.inputs.image_digest }}"
+          else
+            # For workflow_run, get the digest from the triggering workflow's job summary or outputs
+            # The release workflow should have stored the digest in job summary
+            echo "Extracting digest from workflow_run ${{ github.event.workflow_run.id }}..."
+            
+            # Try to get from workflow run outputs (if available)
+            DIGEST=$(gh api \
+              "/repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}" \
+              --jq '.jobs_url' | \
+              xargs gh api --jq '.jobs[] | select(.name=="build") | .steps[] | select(.name=="Build & Push (digest)") | .name' || echo "")
+            
+            # If not found, require manual input via workflow_dispatch
+            if [ -z "${DIGEST}" ] || [[ ! "${DIGEST}" =~ ^sha256: ]]; then
+              echo "Could not automatically extract digest from workflow_run."
+              echo "Please use workflow_dispatch with the image_digest input instead."
+              echo "The digest can be found in the Release Edge workflow's job summary."
+              exit 1
+            fi
+          fi
+          
+          # Validate digest format
+          if [[ ! "${DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Invalid digest format. Must be sha256:..."
+            echo "Received: ${DIGEST}"
+            exit 1
+          fi
+          
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "Using digest: ${DIGEST}"
+
+      - name: Install GitHub CLI
+        run: |
+          type -p curl >/dev/null || (apt update && apt install curl -y)
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+          && apt update \
+          && apt install gh -y
+
+      - name: Verify attestation (must pass)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh attestation verify "oci://${IMAGE_NAME}@${{ steps.digest.outputs.digest }}" --repo "${{ github.repository }}"
+
+      - name: Install cosign (pinned)
+        env:
+          COSIGN_VERSION: "3.0.4"
+          COSIGN_SHA256: "10dab2fd2170b5aa0d5c0673a9a2793304960220b314f6a873bf39c2f08287aa"
+        run: |
+          set -euo pipefail
+          curl -sSfL -o /usr/local/bin/cosign "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-amd64"
+          ACTUAL_SHA256="$(sha256sum /usr/local/bin/cosign | cut -d' ' -f1)"
+          if [ "${ACTUAL_SHA256}" != "${COSIGN_SHA256}" ]; then
+            echo "SHA256 mismatch: expected ${COSIGN_SHA256}, got ${ACTUAL_SHA256}"
+            exit 1
+          fi
+          chmod +x /usr/local/bin/cosign
+          cosign version
+
+      - name: Verify signature (must pass)
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          set -euo pipefail
+          cosign verify \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/.*" \
+            "${IMAGE_NAME}@${{ steps.digest.outputs.digest }}"
+
+      - name: Setup SSH
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          echo "${{ secrets.PROD_EDGE_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.PROD_EDGE_SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy via SSH
+        env:
+          HOST: ${{ secrets.PROD_EDGE_SSH_HOST }}
+          USER: ${{ secrets.PROD_EDGE_SSH_USER }}
+        run: |
+          set -euo pipefail
+          IMAGE_REF="${IMAGE_NAME}@${{ steps.digest.outputs.digest }}"
+          
+          scp -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
+            scripts/deploy/edge/deploy-edge.sh \
+            "$USER@$HOST:/tmp/deploy-edge.sh"
+          
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
+            "$USER@$HOST" \
+            "chmod +x /tmp/deploy-edge.sh && sudo /tmp/deploy-edge.sh '${IMAGE_REF}'"

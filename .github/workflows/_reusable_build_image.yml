@@ -1,0 +1,120 @@
+name: _reusable_build_image
+
+on:
+  workflow_call:
+    inputs:
+      image_name:
+        required: true
+        type: string
+      context:
+        required: true
+        type: string
+      dockerfile:
+        required: true
+        type: string
+      platforms:
+        required: false
+        type: string
+        default: linux/amd64
+    outputs:
+      image_digest:
+        description: "Pushed image digest sha256:..."
+        value: ${{ jobs.build.outputs.image_digest }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      image_digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Login GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Set up buildx
+        run: |
+          docker buildx create --use --name limenbuilder || docker buildx use limenbuilder
+          docker buildx inspect --bootstrap
+
+      - name: Build & Push (digest)
+        id: build
+        run: |
+          set -euo pipefail
+          IMAGE="${{ inputs.image_name }}"
+          TAG="sha-${{ github.sha }}"
+          META="$(mktemp)"
+          docker buildx build \
+            --platform "${{ inputs.platforms }}" \
+            -f "${{ inputs.dockerfile }}" \
+            -t "${IMAGE}:${TAG}" \
+            --push \
+            --metadata-file "${META}" \
+            "${{ inputs.context }}"
+          DIGEST="$(cat "${META}" | jq -r '.["containerimage.digest"]')"
+          if [ -z "${DIGEST}" ] || [ "${DIGEST}" = "null" ]; then
+            echo "Failed to read digest from metadata"; exit 1
+          fi
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Attest Build Provenance
+        uses: actions/attest-build-provenance@6865550d0380db508fc599a58cc87c50c0bba5c5
+        with:
+          subject-name: ${{ inputs.image_name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+
+      - name: Install syft (pinned)
+        env:
+          SYFT_VERSION: "1.40.1"
+          SYFT_SHA256: "c229137c919f22aa926c1c015388db5ec64e99c078e0baac053808e8f36e2e00"
+        run: |
+          set -euo pipefail
+          curl -sSfL -o /tmp/syft.tgz "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          ACTUAL_SHA256="$(sha256sum /tmp/syft.tgz | cut -d' ' -f1)"
+          if [ "${ACTUAL_SHA256}" != "${SYFT_SHA256}" ]; then
+            echo "SHA256 mismatch: expected ${SYFT_SHA256}, got ${ACTUAL_SHA256}"
+            exit 1
+          fi
+          tar -xzf /tmp/syft.tgz -C /usr/local/bin syft
+          syft version
+
+      - name: Generate SBOM (SPDX JSON)
+        run: |
+          set -euo pipefail
+          syft "${{ inputs.image_name }}@${{ steps.build.outputs.digest }}" -o spdx-json=sbom.spdx.json
+
+      - name: Attest SBOM
+        uses: actions/attest-sbom@6cf30ca381902d015a1ba331977ad71315dffb36
+        with:
+          subject-name: ${{ inputs.image_name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: sbom.spdx.json
+
+      - name: Install cosign (pinned)
+        env:
+          COSIGN_VERSION: "3.0.4"
+          COSIGN_SHA256: "10dab2fd2170b5aa0d5c0673a9a2793304960220b314f6a873bf39c2f08287aa"
+        run: |
+          set -euo pipefail
+          curl -sSfL -o /usr/local/bin/cosign "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-amd64"
+          ACTUAL_SHA256="$(sha256sum /usr/local/bin/cosign | cut -d' ' -f1)"
+          if [ "${ACTUAL_SHA256}" != "${COSIGN_SHA256}" ]; then
+            echo "SHA256 mismatch: expected ${COSIGN_SHA256}, got ${ACTUAL_SHA256}"
+            exit 1
+          fi
+          chmod +x /usr/local/bin/cosign
+          cosign version
+
+      - name: Cosign keyless sign (digest only)
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${{ inputs.image_name }}@${{ steps.build.outputs.digest }}"
