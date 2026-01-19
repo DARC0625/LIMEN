@@ -19,6 +19,7 @@
 import { createApiClient } from './apiClient';
 // ✅ P1-Next-Fix-Module-2B: tokenManager는 별도 client 엔트리에서 import
 import { tokenManager } from '../tokenManager.client';
+import type { FetchPort } from '../types/http';
 // ✅ P1-Next-Fix-Module-2C: authAPI는 factory로 생성
 import { createAuthAPI } from './auth';
 // ✅ P1-Next-Fix-Module-3B: factory들을 import
@@ -50,10 +51,12 @@ function getFetch(): typeof fetch {
 }
 
 // ✅ P1-Next-Fix-Module-4E: fetch proxy (호출 시점에만 getFetch() 실행)
-// any 타입 제거, unknown으로 안전하게 처리
-const fetchProxy: typeof fetch = ((input: unknown, init?: unknown) => {
+// ✅ P1-Next-Fix-Module-4F: FetchPort 타입으로 명시
+import type { FetchPort } from '../types/http';
+
+const fetchProxy: FetchPort = ((input: unknown, init?: unknown) => {
   return getFetch()(input as RequestInfo | URL, init as RequestInit | undefined);
-}) as typeof fetch;
+}) as FetchPort;
 
 // ✅ P1-Next-Fix-Module-2C: authAPI를 DI로 생성
 export const authAPI = createAuthAPI({

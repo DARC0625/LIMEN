@@ -12,6 +12,7 @@ import { createMemoryStoragePort } from '../../adapters/memoryStoragePort'
 import { createMemoryClockPort } from '../../adapters/memoryClockPort'
 import { createFakeCryptoPort } from '../../adapters/fakeCryptoPort'
 import { createMemoryLocationPort } from '../../adapters/memoryLocationPort'
+import type { FetchPort } from '../../types/http'
 
 // ✅ P1-Next-Fix-Module-2F: apiRequest를 mock (authAPI는 apiRequest를 주입받음)
 const mockApiRequest = jest.fn()
@@ -47,10 +48,13 @@ function createTestAuthAPI() {
     createMemoryLocationPort('/'),
     mockAuthAPI // ✅ P1-Next-Fix-Module-4E: authAPI 주입
   )
+  // ✅ P1-Next-Fix-Module-4F: FetchPort 타입 사용
+  import type { FetchPort } from '../../types/http';
+  
   const authAPI = createAuthAPI({
     tokenManager,
     apiRequest: mockApiRequest,
-    fetch: global.fetch as typeof fetch,
+    fetch: global.fetch as unknown as FetchPort,
   });
   
   // ✅ P1-Next-Fix-Module-4E: tokenManager에 authAPI 주입

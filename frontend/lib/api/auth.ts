@@ -15,16 +15,18 @@ import type {
   SessionResponse,
   TokenRefreshResponse,
 } from '../types';
+import type { FetchPort } from '../types/http';
 import { AUTH_CONSTANTS } from '../constants';
 import { logger } from '../utils/logger';
 
 /**
  * ✅ P1-Next-Fix-Module-2C: AuthAPI 의존성
+ * ✅ P1-Next-Fix-Module-4F: fetch를 FetchPort 타입으로 변경 (DI 포트 계약)
  */
 export interface AuthAPIDeps {
   tokenManager: TokenManagerPort;
   apiRequest: <T>(endpoint: string, options?: RequestInit & { skipAuth?: boolean; retry?: boolean; timeout?: number }) => Promise<T>;
-  fetch: typeof fetch;
+  fetch: FetchPort;
 }
 
 /**

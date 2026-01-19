@@ -1,16 +1,19 @@
 /**
  * ✅ P1-Next-Fix-4: Typed fetch mock + Response helpers
+ * ✅ P1-Next-Fix-Module-4F: FetchPort 타입 사용
  * 
  * 테스트에서 fetch를 mock할 때 타입 안전성을 보장하고,
  * Response 객체를 정석으로 생성하는 유틸리티
  */
 
+import type { FetchPort } from '../../types/http';
+
 /**
  * Mock fetch 설치 (타입 안전)
- * @returns jest.MockedFunction<typeof fetch>
+ * @returns jest.MockedFunction<FetchPort>
  */
-export function installMockFetch(): jest.MockedFunction<typeof fetch> {
-  const mockFetch = jest.fn<ReturnType<typeof fetch>, Parameters<typeof fetch>>();
+export function installMockFetch(): jest.MockedFunction<FetchPort> {
+  const mockFetch = jest.fn<ReturnType<FetchPort>, Parameters<FetchPort>>();
   // ✅ P1-Next-Fix-4: 타입 안전한 fetch mock 설치
   (globalThis as { fetch?: typeof fetch }).fetch = mockFetch as unknown as typeof fetch;
   return mockFetch;

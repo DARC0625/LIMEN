@@ -55,7 +55,7 @@ export interface AuthDeps {
   clock: {
     now(): number;
   };
-  fetch?: typeof fetch; // ✅ P1-7: fetch도 주입 가능하게 (테스트용)
+  fetch?: import('../types/http').FetchPort; // ✅ P1-7: fetch도 주입 가능하게 (테스트용), FetchPort 타입 사용
 }
 
 /**
